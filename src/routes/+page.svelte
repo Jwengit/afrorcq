@@ -207,15 +207,27 @@
 			<h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-12">
 				Most popular rides
 			</h2>
-			<div class="grid md:grid-cols-3 gap-8">
-				<div class="bg-white p-6 rounded-lg shadow-md">
-					<h3 class="text-xl font-semibold">Utah - Idaho</h3>
+			<div class="grid md:grid-cols-3 gap-8 text-gray-800">
+				<div class="flex flex-col items-center gap-6">
+					<h3 class="text-xl font-semibold">Utah &harr; Idaho</h3>
+					<div class="flex justify-center gap-4">
+						<a href="#publish" class="bg-white text-gray-900 border border-gray-300 px-8 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition">Post</a>
+						<a href="#search" class="text-white px-8 py-3 rounded-lg font-bold text-center transition hover:opacity-90" style="background-color: #2BB573;">Search</a>
+					</div>
 				</div>
-				<div class="bg-white p-6 rounded-lg shadow-md">
-					<h3 class="text-xl font-semibold">Utah - Nevada</h3>
+				<div class="flex flex-col items-center gap-6">
+					<h3 class="text-xl font-semibold">Utah &harr; Nevada</h3>
+					<div class="flex justify-center gap-4">
+						<a href="#publish" class="bg-white text-gray-900 border border-gray-300 px-8 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition">Post</a>
+						<a href="#search" class="text-white px-8 py-3 rounded-lg font-bold text-center transition hover:opacity-90" style="background-color: #2BB573;">Search</a>
+					</div>
 				</div>
-				<div class="bg-white p-6 rounded-lg shadow-md">
-					<h3 class="text-xl font-semibold">Utah - California</h3>
+				<div class="flex flex-col items-center gap-6">
+					<h3 class="text-xl font-semibold">Utah &harr; California</h3>
+					<div class="flex justify-center gap-4">
+						<a href="#publish" class="bg-white text-gray-900 border border-gray-300 px-8 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition">Post</a>
+						<a href="#search" class="text-white px-8 py-3 rounded-lg font-bold text-center transition hover:opacity-90" style="background-color: #2BB573;">Search</a>
+					</div>
 				</div>
 			</div>
 		</div>
