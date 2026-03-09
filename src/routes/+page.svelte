@@ -86,7 +86,7 @@
 				Safety. Simplicity. Saving.
 			</h1>
 			<div class="text-xl md:text-2xl mb-10 text-blue-100 max-w-2xl mx-auto">
-				<p>The long-distance carpooling platform designed for trust.</p>
+				<p>A carpooling platform that connects people.</p>
 				<p>With Hizli it's easy</p>
 			</div>
 
@@ -161,9 +161,7 @@
 					<div
 						class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4 mx-auto text-primary"
 					>
-						<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/>
-						</svg>
+						<img src="/safety.svg" alt="Safety Icon" class="h-8 w-8" />
 					</div>
 					<h3 class="text-xl font-semibold mb-2">Safety First</h3>
 					<p class="text-gray-600">
@@ -177,9 +175,7 @@
 					<div
 						class="w-16 h-16 bg-pink-100 rounded-full flex items-center justify-center mb-4 mx-auto text-secondary"
 					>
-						<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5 4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>
-						</svg>
+						<img src="/girls-only.svg" alt="Girls Only Icon" class="h-8 w-8" />
 					</div>
 					<h3 class="text-xl font-semibold mb-2">Girls Only Option</h3>
 					<p class="text-gray-600">
@@ -193,10 +189,7 @@
 					<div
 						class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4 mx-auto text-green-600"
 					>
-						<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<line x1="12" x2="12" y1="2" y2="22"/>
-							<path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-						</svg>
+						<img src="/save-money.svg" alt="Save Money Icon" class="h-8 w-8" />
 					</div>
 					<h3 class="text-xl font-semibold mb-2">Save Money</h3>
 					<p class="text-gray-600">
@@ -208,85 +201,21 @@
 		</div>
 	</section>
 
-	<!-- How it works / CTA -->
-	<section id="publish" class="py-20 px-4 bg-gray-50">
-		<div class="max-w-7xl mx-auto grid md:grid-cols-2 gap-12 items-center">
-			<div>
-				<h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-6">
-					Simple, Fluid, Reliable.
-				</h2>
-				<p class="text-lg text-gray-600 mb-8">
-					Whether you're driving or riding, Hizli makes long-distance travel easy. No complex
-					logic, just direct connections.
-				</p>
-				<div class="flex flex-col sm:flex-row gap-4">
-					<a
-						href="/publish"
-						class="bg-primary text-white px-8 py-4 rounded-lg font-bold text-center hover:bg-blue-600 transition"
-					>
-						Publish a Ride
-					</a>
-					<a
-						href="#search"
-						class="bg-white text-gray-900 border border-gray-300 px-8 py-4 rounded-lg font-bold text-center hover:bg-gray-100 transition"
-					>
-						Find a Ride
-					</a>
+	<!-- Most Popular Rides Section -->
+	<section id="popular-rides" class="py-20 px-4 bg-gray-50">
+		<div class="max-w-7xl mx-auto text-center">
+			<h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-12">
+				Most popular rides
+			</h2>
+			<div class="grid md:grid-cols-3 gap-8">
+				<div class="bg-white p-6 rounded-lg shadow-md">
+					<h3 class="text-xl font-semibold">Utah - Idaho</h3>
 				</div>
-			</div>
-			<div class="bg-white p-8 rounded-2xl shadow-lg space-y-6">
-				<div class="flex items-center gap-4">
-					<div
-						class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-primary"
-					>
-						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<circle cx="11" cy="11" r="8"/>
-							<path d="m21 21-4.3-4.3"/>
-						</svg>
-					</div>
-					<div>
-						<h4 class="font-bold text-lg">1. Search for a ride</h4>
-						<p class="text-sm text-gray-500">Find the perfect ride for your destination.</p>
-					</div>
+				<div class="bg-white p-6 rounded-lg shadow-md">
+					<h3 class="text-xl font-semibold">Utah - Nevada</h3>
 				</div>
-				<div class="flex items-center gap-4">
-					<div
-						class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-primary"
-					>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							width="24"
-							height="24"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							class="lucide lucide-check-circle"
-							><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg
-						>
-					</div>
-					<div>
-						<h4 class="font-bold text-lg">2. Book your seat</h4>
-						<p class="text-sm text-gray-500">Reserve and pay securely on the platform.</p>
-					</div>
-				</div>
-				<div class="flex items-center gap-4">
-					<div
-						class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-primary"
-					>
-						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/>
-							<circle cx="7" cy="17" r="2"/>
-							<path d="M9 17h6"/>
-							<circle cx="17" cy="17" r="2"/>
-						</svg>
-					</div>
-					<div>
-						<h4 class="font-bold text-lg">3. Travel together</h4>
-						<p class="text-sm text-gray-500">Meet your driver and enjoy the ride.</p>
-					</div>
+				<div class="bg-white p-6 rounded-lg shadow-md">
+					<h3 class="text-xl font-semibold">Utah - California</h3>
 				</div>
 			</div>
 		</div>
@@ -295,7 +224,7 @@
 	<!-- Footer -->
 	<footer class="text-white py-12 mt-auto" style="background-color: #2BB573;">
 		<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-			<div class="grid md:grid-cols-4 gap-8 mb-8">
+			<div class="grid md:grid-cols-5 items-start gap-8 mb-8">
 				<!-- Brand -->
 				<div class="col-span-1 md:col-span-1">
 					<div class="flex items-center gap-2 mb-4">
@@ -303,7 +232,7 @@
 						<span class="text-xl font-bold">Hizli</span>
 					</div>
 					<p class="text-gray-50 text-sm">
-						Safety. Simplicity. Saving. The long-distance carpooling platform designed for trust.
+						A carpooling platform that connects people.
 					</p>
 				</div>
 
@@ -322,7 +251,6 @@
 					<ul class="space-y-2 text-gray-50">
 						<li><a href="/faq" class="hover:text-white transition">FAQ</a></li>
 						<li><a href="/help" class="hover:text-white transition">Help Center</a></li>
-						<li><a href="/contact" class="hover:text-white transition">Contact</a></li>
 					</ul>
 				</div>
 
@@ -333,6 +261,25 @@
 						<li><a href="/privacy" class="hover:text-white transition">Privacy Policy</a></li>
 						<li><a href="/terms" class="hover:text-white transition">Terms of Service</a></li>
 					</ul>
+				</div>
+
+				<!-- Socials -->
+				<div>
+					<h4 class="text-lg font-bold mb-4">Follow Us</h4>
+					<div class="flex space-x-4">
+						<a href="#" class="hover:text-white transition text-gray-50">
+							<span class="sr-only">Facebook</span>
+							<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-facebook"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
+						</a>
+						<a href="#" class="hover:text-white transition text-gray-50">
+							<span class="sr-only">Instagram</span>
+							<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-instagram"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
+						</a>
+						<a href="#" class="hover:text-white transition text-gray-50">
+							<span class="sr-only">YouTube</span>
+							<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-youtube"><path d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17"/><path d="m10 15 5-3-5-3z"/></svg>
+						</a>
+					</div>
 				</div>
 			</div>
 			
