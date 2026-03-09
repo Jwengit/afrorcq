@@ -12,20 +12,16 @@
 		<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 			<div class="flex justify-between h-24">
 				<div class="flex items-center">
-					<a href="/" class="flex items-center gap-3 text-3xl font-bold text-primary">
-						<!-- Logo: Assurez-vous d'avoir un fichier logo.png dans le dossier 'static' -->
-						<img src="/logo.png" alt="Hizli Logo" class="h-20 w-auto object-contain" />
-						<span>Hizli</span>
+					<a href="/" class="flex items-center gap-3 font-bold" style="color: #2BB573; margin-left: -1cm;">
+						<!-- Logo: Assurez-vous d'avoir un fichier "Logo sans phrase.png" dans le dossier 'static' -->
+						<img src="/Logo sans phrase.png" alt="Hizli Logo" class="h-20 w-auto object-contain" />
 					</a>
 				</div>
 
 				<!-- Desktop Menu -->
 				<div class="hidden md:flex items-center space-x-8">
-					<a href="#publish" class="text-gray-600 hover:text-primary transition font-medium"
+					<a href="#publish" class="transition font-medium" style="color: #2BB573;"
 						>Publish a ride</a
-					>
-					<a href="#search" class="text-gray-600 hover:text-primary transition font-medium"
-						>Find a ride</a
 					>
 					<a href="/login" class="p-2 rounded-full hover:bg-gray-100">
 						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-600">
@@ -66,13 +62,8 @@
 				<div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
 					<a
 						href="#publish"
-						class="block px-3 py-2 text-gray-600 hover:text-primary hover:bg-gray-50 rounded-md"
+						class="block px-3 py-2 rounded-md hover:bg-gray-50" style="color: #2BB573;"
 						>Publish a ride</a
-					>
-					<a
-						href="#search"
-						class="block px-3 py-2 text-gray-600 hover:text-primary hover:bg-gray-50 rounded-md"
-						>Find a ride</a
 					>
 					<a
 						href="/login"
