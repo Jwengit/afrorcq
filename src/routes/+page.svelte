@@ -10,7 +10,7 @@
 	<!-- Navbar -->
 	<nav class="bg-white shadow-sm sticky top-0 z-50">
 		<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-			<div class="flex justify-between h-24">
+			<div class="flex items-center justify-between h-24">
 				<div class="flex items-center">
 					<a href="/" class="flex items-center gap-3 font-bold" style="color: #2BB573; margin-left: -1cm;">
 						<!-- Logo: Assurez-vous d'avoir un fichier "Logo sans phrase.png" dans le dossier 'static' -->
@@ -85,10 +85,10 @@
 			<h1 class="text-5xl md:text-7xl font-bold mb-4 tracking-tight">
 				Safety. Simplicity. Saving.
 			</h1>
-			<p class="text-xl md:text-2xl mb-10 text-blue-100 max-w-2xl mx-auto">
-				The long-distance carpooling platform designed for trust. Connect directly, travel safely
-				across the US.
-			</p>
+			<div class="text-xl md:text-2xl mb-10 text-blue-100 max-w-2xl mx-auto">
+				<p>The long-distance carpooling platform designed for trust.</p>
+				<p>With Hizli it's easy</p>
+			</div>
 
 			<!-- Search Box -->
 			<div
@@ -134,7 +134,8 @@
 					/>
 				</div>
 				<button
-					class="bg-secondary text-white px-8 py-3 rounded-lg font-bold hover:bg-pink-600 transition flex items-center justify-center gap-2"
+					class="text-white px-8 py-3 rounded-lg font-bold hover:opacity-90 transition flex items-center justify-center gap-2"
+					style="background-color: #2BB573;"
 				>
 					<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5">
 						<circle cx="11" cy="11" r="8"/>
