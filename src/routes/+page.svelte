@@ -82,13 +82,12 @@
 		<div class="absolute inset-0 bg-black/50"></div>
 		
 		<div class="relative max-w-4xl mx-auto text-center z-10">
-			<h1 class="text-5xl md:text-7xl font-bold mb-4 tracking-tight">
+			<h1 class="text-3xl md:text-5xl font-bold mb-4 tracking-tight">
 				Safety. Simplicity. Saving.
 			</h1>
-			<div class="text-xl md:text-2xl mb-10 text-blue-100 max-w-2xl mx-auto">
+			<di class="text-xl md:text-2xl mb-10 text-blue-100 max-w-2xl mx-auto">
 				<p>A carpooling platform that connects people.</p>
 				<p>With Hizli it's easy</p>
-			</div>
 
 			<!-- Search Box -->
 			<div
