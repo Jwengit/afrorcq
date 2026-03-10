@@ -20,9 +20,7 @@
 
 				<!-- Desktop Menu -->
 				<div class="hidden md:flex items-center space-x-8">
-					<a href="#publish" class="transition font-medium" style="color: #2BB573;"
-						>Publish a ride</a
-					>
+					<a href="#publish" class="transition font-medium" style="color: #2BB573;">Publish a ride</a>
 					<a href="/login" class="p-2 rounded-full hover:bg-gray-100">
 						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-600">
 							<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/>
@@ -85,41 +83,48 @@
 			<h1 class="text-3xl md:text-5xl font-bold mb-4 tracking-tight">
 				Safety. Simplicity. Saving.
 			</h1>
-			<di class="text-xl md:text-2xl mb-10 text-blue-100 max-w-2xl mx-auto">
+			<div class="text-xl md:text-2xl mb-10 text-blue-100 max-w-2xl mx-auto">
 				<p>A carpooling platform that connects people.</p>
-				<p>With Hizli it's easy</p>
+				<p>With Hizli it's easy</p>		
+			</div>
 
 			<!-- Search Box -->
 			<div
-				class="bg-white p-4 rounded-xl shadow-2xl w-full flex flex-col lg:flex-row gap-2 text-gray-900"
+				class="bg-white p-4 rounded-xl shadow-2xl w-full flex flex-wrap gap-2 text-gray-900"
 			>
-				<div class="flex-1 flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50">
-					<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400">
+				<div class="flex-1 flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 min-w-[180px]">
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 h-5 w-5">
 						<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
 						<circle cx="12" cy="10" r="3"/>
 					</svg>
 					<input
 						type="text"
 						placeholder="Leaving from..."
-						class="w-full bg-transparent focus:outline-none"
+						class="w-full min-w-0 bg-transparent focus:outline-none"
 					/>
 				</div>
-				<div class="flex-1 flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50">
-					<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400">
+				<div class="flex-1 flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 min-w-[180px]">
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 h-5 w-5">
 						<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
 						<circle cx="12" cy="10" r="3"/>
 					</svg>
 					<input
 						type="text"
 						placeholder="Going to..."
-						class="w-full bg-transparent focus:outline-none"
+						class="w-full min-w-0 bg-transparent focus:outline-none"
 					/>
 				</div>
-				<div class="flex-1 flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50">
-					<input type="date" class="w-full bg-transparent focus:outline-none text-gray-500" />
+				<div class="flex-1 flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 min-w-[180px]">
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 h-5 w-5">
+						<rect width="18" height="18" x="3" y="4" rx="2" ry="2"/>
+						<line x1="16" x2="16" y1="2" y2="6"/>
+						<line x1="8" x2="8" y1="2" y2="6"/>
+						<line x1="3" x2="21" y1="10" y2="10"/>
+					</svg>
+					<input type="date" class="w-full min-w-0 bg-transparent focus:outline-none text-gray-500" />
 				</div>
 				<div class="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50">
-					<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400">
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 h-5 w-5">
 						<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
 						<circle cx="9" cy="7" r="4"/>
 						<path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
@@ -133,10 +138,10 @@
 					/>
 				</div>
 				<button
-					class="text-white px-8 py-3 rounded-lg font-bold hover:opacity-90 transition flex items-center justify-center gap-2"
+					class="text-white px-6 py-3 rounded-lg font-bold hover:opacity-90 transition flex items-center justify-center gap-2"
 					style="background-color: #2BB573;"
 				>
-					<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5">
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5">
 						<circle cx="11" cy="11" r="8"/>
 						<path d="m21 21-4.3-4.3"/>
 					</svg>
@@ -200,8 +205,47 @@
 		</div>
 	</section>
 
+	<!-- How It Works Section -->
+	<section id="how-it-works" class="pt-10 pb-20 bg-gray-50">
+		<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+			<div class="text-center mb-16">
+				<h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">How it works</h2>
+				<p class="text-xl text-gray-600">Find your perfect ride in just a few clicks.</p>
+			</div>
+
+			<div class="grid md:grid-cols-3 gap-8 text-center">
+				<!-- Step 1: Search -->
+				<div class="p-6">
+					<div class="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mb-6 mx-auto">
+						<img src="/search-ride.svg" alt="Search for a ride" class="h-9 w-9" />
+					</div>
+					<h3 class="text-xl font-semibold mb-2">1. Search for a ride</h3>
+					<p class="text-gray-600">Enter your departure and destination, and your travel date to find rides that match your needs.</p>
+				</div>
+
+				<!-- Step 2: Book -->
+				<div class="p-6">
+					<div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-6 mx-auto">
+						<img src="/book-seat.svg" alt="Book your seat" class="h-9 w-9" />
+					</div>
+					<h3 class="text-xl font-semibold mb-2">2. Book your seat</h3>
+					<p class="text-gray-600">Choose the ride that suits you best and book your seat online. It's fast and secure.</p>
+				</div>
+
+				<!-- Step 3: Travel -->
+				<div class="p-6">
+					<div class="w-20 h-20 bg-purple-100 rounded-full flex items-center justify-center mb-6 mx-auto">
+						<img src="/travel-together.svg" alt="Travel together" class="h-9 w-9" />
+					</div>
+					<h3 class="text-xl font-semibold mb-2">3. Travel together</h3>
+					<p class="text-gray-600">Meet your driver, enjoy the ride, and save money while reducing your carbon footprint.</p>
+				</div>
+			</div>
+		</div>
+	</section>
+
 	<!-- Most Popular Rides Section -->
-	<section id="popular-rides" class="py-20 px-4 bg-gray-50">
+	<section id="popular-rides" class="py-10 px-4 bg-white">
 		<div class="max-w-7xl mx-auto text-center">
 			<h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-12">
 				Most popular rides
