@@ -21,7 +21,7 @@
 				<!-- Desktop Menu -->
 				<div class="hidden md:flex items-center space-x-8">
 					<a href="#publish" class="transition font-medium" style="color: #2BB573;">Publish a ride</a>
-					<a href="/login" class="p-2 rounded-full hover:bg-gray-100">
+					<a href="/auth/login" class="p-2 rounded-full hover:bg-gray-100">
 						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-600">
 							<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/>
 							<circle cx="12" cy="7" r="4"/>
@@ -64,7 +64,7 @@
 						>Publish a ride</a
 					>
 					<a
-						href="/login"
+						href="/auth/login"
 						class="block px-3 py-2 text-gray-600 hover:text-primary hover:bg-gray-50 rounded-md"
 						>Login / Sign Up</a
 					>

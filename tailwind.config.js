@@ -7,7 +7,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        primary: '#3B82F6', // Un bleu de confiance par défaut
+        primary: '#2BB573', // Vert du site
         secondary: '#EC4899', // Pour l'accent "Girls Only" par exemple
       }
     },
