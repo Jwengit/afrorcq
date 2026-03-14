@@ -58,6 +58,17 @@
 			if (signUpError) {
 				error = signUpError.message;
 			} else {
+				// Send welcome email
+				try {
+					await fetch('/api/welcome', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ email, name: '' })
+					});
+				} catch (emailErr) {
+					console.error('Error sending welcome email:', emailErr);
+					// Don't block signup if email fails
+				}
 				// Redirect to profile after signup
 				goto('/profile');
 			}

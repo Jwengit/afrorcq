@@ -76,6 +76,29 @@
 			console.error('Google OAuth setup error:', err);
 		}
 	}
+
+	async function resendConfirmation() {
+		if (!email) {
+			error = 'Please enter your email address first';
+			return;
+		}
+
+		try {
+			const { error: resendError } = await supabase.auth.resend({
+				type: 'signup',
+				email
+			});
+
+			if (resendError) {
+				error = resendError.message;
+			} else {
+				error = 'Confirmation email resent. Check your inbox.';
+			}
+		} catch (err) {
+			error = 'Failed to resend confirmation email.';
+			console.error('Resend error:', err);
+		}
+	}
 </script>
 
 <div class="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -157,6 +180,16 @@
 					class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-semibold rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
 				>
 					{loading ? 'Signing in...' : 'Sign in'}
+				</button>
+			</div>
+
+			<div class="text-center">
+				<button
+					type="button"
+					on:click={resendConfirmation}
+					class="text-sm text-green-600 hover:text-green-700 underline"
+				>
+					Resend confirmation email
 				</button>
 			</div>
 

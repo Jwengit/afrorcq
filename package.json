@@ -134,6 +134,7 @@
 		"prelude-ls": "^1.2.1",
 		"punycode": "^2.3.1",
 		"readdirp": "^4.1.2",
+		"resend": "^6.9.3",
 		"resolve-from": "^4.0.0",
 		"rollup": "^4.57.1",
 		"sade": "^1.8.1",
