@@ -40,7 +40,7 @@
 	"description": "Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).",
 	"main": "eslint.config.js",
 	"dependencies": {
-		"@supabase/supabase-js": "^2.98.0",
+		"@supabase/supabase-js": "^2.99.1",
 		"acorn": "^8.15.0",
 		"acorn-jsx": "^5.3.2",
 		"ajv": "^6.12.6",
