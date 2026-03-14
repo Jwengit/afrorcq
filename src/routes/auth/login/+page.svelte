@@ -33,19 +33,26 @@
 		loading = true;
 		error = '';
 
-		const { data, error: signInError } = await supabase.auth.signInWithPassword({
-			email,
-			password
-		});
+		try {
+			const { data, error: signInError } = await supabase.auth.signInWithPassword({
+				email,
+				password
+			});
 
-		if (signInError) {
-			error = signInError.message;
-		} else {
-			// Redirect to profile or home
-			goto('/profile');
+			console.log('Supabase signIn response:', { data, signInError });
+
+			if (signInError) {
+				error = signInError.message;
+			} else {
+				// Redirect to profile or home
+				goto('/profile');
+			}
+		} catch (err) {
+			console.error('Unexpected signIn error:', err);
+			error = 'Unexpected error during sign in. Check browser console.';
+		} finally {
+			loading = false;
 		}
-
-		loading = false;
 	}
 
 	async function signInWithGoogle() {

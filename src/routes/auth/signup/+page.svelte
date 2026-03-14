@@ -39,25 +39,32 @@
 		loading = true;
 		error = '';
 
-		const { data, error: signUpError } = await supabase.auth.signUp({
-			email,
-			password,
-			options: {
-				data: {
-					status: 'Unverified',
-					recaptcha_token: recaptchaToken
+		try {
+			const { data, error: signUpError } = await supabase.auth.signUp({
+				email,
+				password,
+				options: {
+					data: {
+						status: 'Unverified',
+						recaptcha_token: recaptchaToken
+					}
 				}
+			});
+
+			console.log('Supabase signUp response:', { data, signUpError });
+
+			if (signUpError) {
+				error = signUpError.message;
+			} else {
+				// Redirect to profile after signup
+				goto('/profile');
 			}
-		});
-
-		if (signUpError) {
-			error = signUpError.message;
-		} else {
-			// Redirect to profile after signup
-			goto('/profile');
+		} catch (err) {
+			console.error('Unexpected signUp error:', err);
+			error = 'Unexpected error during sign up. Check browser console.';
+		} finally {
+			loading = false;
 		}
-
-		loading = false;
 	}
 
 	async function signUpWithGoogle() {

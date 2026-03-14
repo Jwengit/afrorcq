@@ -2,9 +2,40 @@
 	import { supabase } from '$lib/supabaseClient';
 	import { user } from '$lib/authStore';
 	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
 	import type { User } from '@supabase/supabase-js';
 
 	let currentUser: User | null = null;
+	let loading = true;
+	let saving = false;
+	let isEditing = false;
+
+	// Profile data
+	let profile = {
+		first_name: '',
+		gender: '',
+		bio: '',
+		languages: [] as string[],
+		ride_preferences: [] as string[],
+		profile_photo_url: ''
+	};
+
+	// Form data
+	let formData = { ...profile, ride_preferences_text: profile.ride_preferences.join(', ') };
+	let selectedFile: File | null = null;
+	let previewUrl = '';
+
+	// Available options
+	const genderOptions = [
+		{ value: 'female', label: 'Female' },
+		{ value: 'male', label: 'Male' },
+		{ value: 'non-binary', label: 'Non-binary' },
+		{ value: 'prefer-not-to-say', label: 'Prefer not to say' }
+	];
+
+	const languageOptions = [
+		'English', 'French', 'Spanish', 'German', 'Italian', 'Portuguese', 'Arabic', 'Chinese', 'Japanese', 'Korean'
+	];
 
 	user.subscribe((u) => {
 		currentUser = u;
@@ -13,36 +44,367 @@
 		}
 	});
 
+	onMount(async () => {
+		if (currentUser) {
+			await loadProfile();
+		}
+		loading = false;
+	});
+
+	async function loadProfile() {
+		try {
+			const { data, error } = await supabase
+				.from('profiles')
+				.select('*')
+				.eq('id', currentUser!.id)
+				.single();
+
+			if (data) {
+				profile = { ...data };
+				formData = { ...data };
+				previewUrl = data.profile_photo_url || '';
+			}
+		} catch (error) {
+			console.log('No profile found, will create one');
+		}
+	}
+
+	function startEditing() {
+		isEditing = true;
+		formData = { ...profile, ride_preferences_text: profile.ride_preferences.join(', ') };
+	}
+
+	function cancelEditing() {
+		isEditing = false;
+		formData = { ...profile, ride_preferences_text: profile.ride_preferences.join(', ') };
+		selectedFile = null;
+		previewUrl = profile.profile_photo_url || '';
+	}
+
+	async function handleFileSelect(event: Event) {
+		const target = event.target as HTMLInputElement;
+		const file = target.files?.[0];
+		if (file) {
+			selectedFile = file;
+			previewUrl = URL.createObjectURL(file);
+		}
+	}
+
+	async function uploadPhoto(file: File): Promise<string | null> {
+		const fileExt = file.name.split('.').pop();
+		const fileName = `${currentUser!.id}_${Date.now()}.${fileExt}`;
+		const filePath = `profile-photos/${fileName}`;
+
+		const { error: uploadError } = await supabase.storage
+			.from('profile-photos')
+			.upload(filePath, file);
+
+		if (uploadError) {
+			console.error('Error uploading file:', uploadError);
+			return null;
+		}
+
+		const { data } = supabase.storage
+			.from('profile-photos')
+			.getPublicUrl(filePath);
+
+		return data.publicUrl;
+	}
+
+	async function saveProfile() {
+		if (!currentUser) return;
+
+		saving = true;
+
+		try {
+			let photoUrl = formData.profile_photo_url;
+
+			// Upload new photo if selected
+			if (selectedFile) {
+				const uploadedUrl = await uploadPhoto(selectedFile);
+				if (uploadedUrl) {
+					photoUrl = uploadedUrl;
+				}
+			}
+
+			const updatedProfile = {
+				...formData,
+				ride_preferences: formData.ride_preferences_text.split(',').map(p => p.trim()).filter(p => p),
+				profile_photo_url: photoUrl,
+				updated_at: new Date().toISOString()
+			};
+
+			const { error } = await supabase
+				.from('profiles')
+				.upsert({
+					id: currentUser.id,
+					first_name: updatedProfile.first_name,
+					gender: updatedProfile.gender,
+					bio: updatedProfile.bio,
+					languages: updatedProfile.languages,
+					ride_preferences: updatedProfile.ride_preferences,
+					profile_photo_url: photoUrl
+				});
+
+			if (error) {
+				console.error('Error saving profile:', error);
+				alert('Error saving profile. Please try again.');
+			} else {
+				profile = { ...updatedProfile };
+				isEditing = false;
+				selectedFile = null;
+				alert('Profile updated successfully!');
+			}
+		} catch (error) {
+			console.error('Error:', error);
+			alert('An error occurred. Please try again.');
+		}
+
+		saving = false;
+	}
+
 	async function signOut() {
 		await supabase.auth.signOut();
 		goto('/auth/login');
 	}
+
+	function toggleLanguage(language: string) {
+		if (formData.languages.includes(language)) {
+			formData.languages = formData.languages.filter(l => l !== language);
+		} else {
+			formData.languages = [...formData.languages, language];
+		}
+	}
 </script>
 
-{#if !currentUser}
+{#if loading}
 	<div class="min-h-screen flex items-center justify-center">
 		<div class="text-center">
-			<div class="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
-			<p class="mt-4 text-gray-600">Loading...</p>
+			<div class="animate-spin rounded-full h-32 w-32 border-b-2 border-green-600"></div>
+			<p class="mt-4 text-gray-600">Loading profile...</p>
+		</div>
+	</div>
+{:else if currentUser}
+	<div class="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
+		<div class="max-w-2xl mx-auto">
+			<!-- Header -->
+			<div class="bg-white rounded-lg shadow-md p-6 mb-6">
+				<div class="flex items-center justify-between">
+					<div>
+						<h1 class="text-3xl font-bold text-gray-900">My Profile</h1>
+						<p class="text-gray-600 mt-1">Manage your account information</p>
+					</div>
+					<button
+						on:click={signOut}
+						class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+					>
+						Sign Out
+					</button>
+				</div>
+			</div>
+
+			<!-- Profile Status -->
+			<div class="bg-white rounded-lg shadow-md p-6 mb-6">
+				<div class="flex items-center justify-between">
+					<div>
+						<h2 class="text-lg font-semibold text-gray-900">Account Status</h2>
+						<p class="text-sm text-gray-600">Email: {currentUser.email}</p>
+						<p class="text-sm text-gray-600">Status: {currentUser.user_metadata?.status || 'Verified'}</p>
+					</div>
+					<div class="text-right">
+						<span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium
+							{profile.first_name && profile.gender ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">
+							{profile.first_name && profile.gender ? 'Complete' : 'Incomplete'}
+						</span>
+					</div>
+				</div>
+			</div>
+
+			<!-- Profile Form -->
+			<div class="bg-white rounded-lg shadow-md p-6">
+				{#if !isEditing}
+					<!-- View Mode -->
+					<div class="space-y-6">
+						<div class="flex items-center justify-between">
+							<h2 class="text-xl font-semibold text-gray-900">Profile Information</h2>
+							<button
+								on:click={startEditing}
+								class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+							>
+								Edit Profile
+							</button>
+						</div>
+
+						<!-- Profile Photo -->
+						<div class="flex items-center space-x-4">
+							<div class="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
+								{#if profile.profile_photo_url}
+									<img src={profile.profile_photo_url} alt="Profile" class="w-full h-full object-cover" />
+								{:else}
+									<svg class="w-8 h-8 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+										<path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z"/>
+									</svg>
+								{/if}
+							</div>
+							<div>
+								<h3 class="text-lg font-medium text-gray-900">{profile.first_name || 'No name set'}</h3>
+								<p class="text-gray-600">{profile.gender ? profile.gender : 'Gender not set'}</p>
+							</div>
+						</div>
+
+						<!-- Profile Details -->
+						<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+							<div>
+								<h4 class="font-medium text-gray-900 mb-2">Bio</h4>
+								<p class="text-gray-600">{profile.bio || 'No bio added yet'}</p>
+							</div>
+							<div>
+								<h4 class="font-medium text-gray-900 mb-2">Languages</h4>
+								<p class="text-gray-600">{profile.languages.length > 0 ? profile.languages.join(', ') : 'No languages specified'}</p>
+							</div>
+							<div class="md:col-span-2">
+								<h4 class="font-medium text-gray-900 mb-2">Ride Preferences</h4>
+								<p class="text-gray-600">{profile.ride_preferences.length > 0 ? profile.ride_preferences.join(', ') : 'No preferences specified'}</p>
+							</div>
+						</div>
+					</div>
+				{:else}
+					<!-- Edit Mode -->
+					<form on:submit|preventDefault={saveProfile} class="space-y-6">
+						<div class="flex items-center justify-between">
+							<h2 class="text-xl font-semibold text-gray-900">Edit Profile</h2>
+							<div class="space-x-2">
+								<button
+									type="button"
+									on:click={cancelEditing}
+									class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+									disabled={saving}
+								>
+									Cancel
+								</button>
+								<button
+									type="submit"
+									disabled={saving}
+									class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+								>
+									{saving ? 'Saving...' : 'Save Changes'}
+								</button>
+							</div>
+						</div>
+
+						<!-- Profile Photo Upload -->
+						<div>
+							<label class="block text-sm font-medium text-gray-700 mb-2">Profile Photo</label>
+							<div class="flex items-center space-x-4">
+								<div class="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
+									{#if previewUrl}
+										<img src={previewUrl} alt="Preview" class="w-full h-full object-cover" />
+									{:else}
+										<svg class="w-8 h-8 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+											<path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z"/>
+										</svg>
+									{/if}
+								</div>
+								<div>
+									<input
+										type="file"
+										accept="image/*"
+										on:change={handleFileSelect}
+										class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+									/>
+									<p class="text-xs text-gray-500 mt-1">JPG, PNG or GIF. Max size 5MB.</p>
+								</div>
+							</div>
+						</div>
+
+						<!-- Required Fields -->
+						<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+							<div>
+								<label for="first_name" class="block text-sm font-medium text-gray-700 mb-2">
+									First Name <span class="text-red-500">*</span>
+								</label>
+								<input
+									type="text"
+									id="first_name"
+									bind:value={formData.first_name}
+									required
+									class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+									placeholder="Enter your first name"
+								/>
+							</div>
+
+							<div>
+								<label for="gender" class="block text-sm font-medium text-gray-700 mb-2">
+									Gender <span class="text-red-500">*</span>
+									{#if profile.gender}
+										<span class="text-xs text-gray-500">(cannot be changed after validation)</span>
+									{/if}
+								</label>
+								<select
+									id="gender"
+									bind:value={formData.gender}
+									required
+									disabled={!!profile.gender}
+									class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+								>
+									<option value="">Select gender</option>
+									{#each genderOptions as option}
+										<option value={option.value}>{option.label}</option>
+									{/each}
+								</select>
+							</div>
+						</div>
+
+						<!-- Optional Fields -->
+						<div>
+							<label for="bio" class="block text-sm font-medium text-gray-700 mb-2">Bio</label>
+							<textarea
+								id="bio"
+								bind:value={formData.bio}
+								rows="3"
+								class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+								placeholder="Tell us about yourself..."
+							></textarea>
+						</div>
+
+						<div>
+							<label class="block text-sm font-medium text-gray-700 mb-2">Languages</label>
+							<div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+								{#each languageOptions as language}
+									<label class="flex items-center">
+										<input
+											type="checkbox"
+											checked={formData.languages.includes(language)}
+											on:change={() => toggleLanguage(language)}
+											class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+										/>
+										<span class="ml-2 text-sm text-gray-700">{language}</span>
+									</label>
+								{/each}
+							</div>
+						</div>
+
+						<div>
+							<label for="ride_preferences" class="block text-sm font-medium text-gray-700 mb-2">Ride Preferences</label>
+							<textarea
+								id="ride_preferences"
+								bind:value={formData.ride_preferences_text}
+								rows="2"
+								class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+								placeholder="Any preferences for your rides? (music, smoking, pets, etc.) - separate with commas"
+							></textarea>
+							<p class="text-xs text-gray-500 mt-1">Separate multiple preferences with commas</p>
+						</div>
+					</form>
+				{/if}
+			</div>
 		</div>
 	</div>
 {:else}
-	<div class="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-		<div class="max-w-md mx-auto bg-white rounded-lg shadow-md p-6">
-			<div class="text-center">
-				<h1 class="text-2xl font-bold text-gray-900 mb-4">Profile</h1>
-				<div class="mb-6">
-					<p class="text-gray-600">Welcome back!</p>
-					<p class="text-sm text-gray-500 mt-2">Email: {currentUser.email}</p>
-					<p class="text-sm text-gray-500">Status: {currentUser.user_metadata?.status || 'Verified'}</p>
-				</div>
-				<button
-					on:click={signOut}
-					class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-				>
-					Sign Out
-				</button>
-			</div>
+	<div class="min-h-screen flex items-center justify-center">
+		<div class="text-center">
+			<p class="text-gray-600">You are not logged in.</p>
+			<a href="/auth/login" class="text-green-600 hover:text-green-700 font-medium">Sign in</a>
 		</div>
 	</div>
 {/if}
