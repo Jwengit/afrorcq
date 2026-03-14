@@ -82,3 +82,42 @@ npm run build
 You can preview the production build with `npm run preview`.
 
 > To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+
+## 🔒 reCAPTCHA Configuration
+
+### 1. **Get reCAPTCHA Keys**
+- Go to [Google reCAPTCHA Admin Console](https://www.google.com/recaptcha/admin)
+- Click "Create" or "+" button
+- Choose **reCAPTCHA v2** > "I'm not a robot" Checkbox
+- Fill in:
+  - **Label**: Your app name
+  - **reCAPTCHA type**: v2 "I'm not a robot" Checkbox
+  - **Domains**: `localhost` (for development) and your production domain
+- Click "Submit"
+- Copy the **Site Key** and **Secret Key**
+
+### 2. **Configure in Your App**
+Replace `YOUR_RECAPTCHA_SITE_KEY` in the following files with your actual Site Key:
+- `src/routes/auth/signup/+page.svelte`
+- `src/routes/auth/login/+page.svelte`
+
+### 3. **Environment Variables (Optional)**
+For production, consider using environment variables:
+```env
+VITE_RECAPTCHA_SITE_KEY=your_site_key_here
+```
+
+Then update the HTML to use the env var:
+```html
+<div class="g-recaptcha" data-sitekey="{import.meta.env.VITE_RECAPTCHA_SITE_KEY}" ...></div>
+```
+
+### 4. **Server-side Verification (Optional)**
+For additional security, verify the reCAPTCHA token on your server. The token is available in `recaptchaToken` variable.
+
+## 🔒 Security Features
+
+- ✅ reCAPTCHA v2 verification on signup/login
+- ✅ Token validation before form submission
+- ✅ Error messages for missing verification
+- ✅ Token expiration handling

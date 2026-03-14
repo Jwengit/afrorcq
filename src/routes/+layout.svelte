@@ -5,5 +5,9 @@
 	let { children } = $props();
 </script>
 
-<svelte:head><link rel="icon" href={favicon} /></svelte:head>
+<svelte:head>
+	<link rel="icon" href={favicon} />
+	<script src="https://www.google.com/recaptcha/api.js" async defer></script>
+</svelte:head>
+
 {@render children()}

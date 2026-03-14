@@ -1,13 +1,35 @@
 <script lang="ts">
 	import { supabase } from '$lib/supabaseClient';
 	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
 
 	let email = '';
 	let password = '';
 	let loading = false;
 	let error = '';
+	let recaptchaToken = '';
+
+	// reCAPTCHA callback
+	function onRecaptchaCallback(token: string) {
+		recaptchaToken = token;
+	}
+
+	function onRecaptchaExpired() {
+		recaptchaToken = '';
+	}
+
+	onMount(() => {
+		// Expose callbacks globally for reCAPTCHA
+		(window as any).onRecaptchaCallback = onRecaptchaCallback;
+		(window as any).onRecaptchaExpired = onRecaptchaExpired;
+	});
 
 	async function signIn() {
+		if (!recaptchaToken) {
+			error = 'Please complete the reCAPTCHA verification';
+			return;
+		}
+
 		loading = true;
 		error = '';
 
@@ -88,6 +110,11 @@
 			{#if error}
 				<div class="text-red-600 text-sm">{error}</div>
 			{/if}
+
+			<!-- reCAPTCHA -->
+			<div class="flex justify-center">
+				<div class="g-recaptcha" data-sitekey="6LdQr38pAAAAANn80cqDW86qzuS6xbveg0b57scK" data-callback="onRecaptchaCallback" data-expired-callback="onRecaptchaExpired"></div>
+			</div>
 
 			<div>
 				<button
