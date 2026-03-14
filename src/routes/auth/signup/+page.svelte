@@ -6,6 +6,8 @@
 	let email = '';
 	let password = '';
 	let confirmPassword = '';
+	let showPassword = false;
+	let showConfirmPassword = false;
 	let loading = false;
 	let error = '';
 	let recaptchaToken = '';
@@ -113,29 +115,81 @@
 				</div>
 				<div>
 					<label for="password" class="sr-only">Password</label>
-					<input
-						id="password"
-						name="password"
-						type="password"
-						autocomplete="new-password"
-						required
-						class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-green-500 focus:border-green-500 focus:z-10 sm:text-sm"
-						placeholder="Password"
-						bind:value={password}
-					/>
+					<div class="relative">
+						<input
+							id="password"
+							name="password"
+							type={showPassword ? 'text' : 'password'}
+							autocomplete="new-password"
+							required
+							class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-green-500 focus:border-green-500 focus:z-10 sm:text-sm"
+							placeholder="Password"
+							bind:value={password}
+						/>
+						<button
+							type="button"
+							on:click|preventDefault|stopPropagation={() => {
+								showPassword = !showPassword;
+								console.log('toggle showPassword', showPassword);
+							}}
+							on:mousedown|preventDefault
+							class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none z-50 pointer-events-auto"
+							aria-label={showPassword ? 'Hide password' : 'Show password'}
+						>
+							{#if showPassword}
+								<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<path d="M17.94 17.94A10.97 10.97 0 0 1 12 20c-5.52 0-10-3.58-12-8 1.1-2.44 2.8-4.53 4.86-5.94"/>
+									<path d="M1 1l22 22"/>
+									<path d="M9.53 9.53a3.5 3.5 0 0 0 4.94 4.94"/>
+									<path d="M14.12 14.12a3.5 3.5 0 0 0-4.94-4.94"/>
+								</svg>
+							{:else}
+								<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+									<circle cx="12" cy="12" r="3"/>
+								</svg>
+							{/if}
+						</button>
+					</div>
 				</div>
 				<div>
 					<label for="confirm-password" class="sr-only">Confirm Password</label>
-					<input
-						id="confirm-password"
-						name="confirm-password"
-						type="password"
-						autocomplete="new-password"
-						required
-						class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-green-500 focus:border-green-500 focus:z-10 sm:text-sm"
-						placeholder="Confirm Password"
-						bind:value={confirmPassword}
-					/>
+					<div class="relative">
+						<input
+							id="confirm-password"
+							name="confirm-password"
+							type={showConfirmPassword ? 'text' : 'password'}
+							autocomplete="new-password"
+							required
+							class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-green-500 focus:border-green-500 focus:z-10 sm:text-sm"
+							placeholder="Confirm Password"
+							bind:value={confirmPassword}
+						/>
+						<button
+							type="button"
+							on:click|preventDefault|stopPropagation={() => {
+								showConfirmPassword = !showConfirmPassword;
+								console.log('toggle showConfirmPassword', showConfirmPassword);
+							}}
+							on:mousedown|preventDefault
+							class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none z-50 pointer-events-auto"
+							aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+						>
+							{#if showConfirmPassword}
+								<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<path d="M17.94 17.94A10.97 10.97 0 0 1 12 20c-5.52 0-10-3.58-12-8 1.1-2.44 2.8-4.53 4.86-5.94"/>
+									<path d="M1 1l22 22"/>
+									<path d="M9.53 9.53a3.5 3.5 0 0 0 4.94 4.94"/>
+									<path d="M14.12 14.12a3.5 3.5 0 0 0-4.94-4.94"/>
+								</svg>
+							{:else}
+								<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+									<circle cx="12" cy="12" r="3"/>
+								</svg>
+							{/if}
+						</button>
+					</div>
 				</div>
 			</div>
 
