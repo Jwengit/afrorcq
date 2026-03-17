@@ -7,6 +7,13 @@
 	type PublicProfile = {
 		first_name: string;
 		last_name: string;
+		car_make: string;
+		car_year: string;
+		phone_number: string;
+		date_of_birth: string;
+		city_of_birth: string;
+		address: string;
+		zip_code: string;
 		gender: string;
 		bio: string;
 		languages: string[];
@@ -18,12 +25,32 @@
 	let profile: PublicProfile = {
 		first_name: '',
 		last_name: '',
+		car_make: '',
+		car_year: '',
+		phone_number: '',
+		date_of_birth: '',
+		city_of_birth: '',
+		address: '',
+		zip_code: '',
 		gender: '',
 		bio: '',
 		languages: [],
 		ride_preferences: [],
 		profile_photo_url: ''
 	};
+
+	const ridePreferenceOptions = [
+		'No smoking',
+		'No pets',
+		'Music',
+		'Talkative',
+		'Air conditioning',
+		'Food allowed'
+	];
+
+	const languageOptions = [
+		'English', 'French', 'Spanish', 'German', 'Italian', 'Portuguese', 'Arabic', 'Chinese', 'Japanese', 'Korean'
+	];
 
 	function cleanArrayItem(value: string): string {
 		return value
@@ -83,6 +110,15 @@
 		return items;
 	}
 
+	function normalizeOptionSelections(
+		value: string[] | string | null | undefined,
+		allowedOptions: string[]
+	): string[] {
+		const normalizedSource = normalizeArrayField(value).join(' | ').toLowerCase();
+
+		return allowedOptions.filter((option) => normalizedSource.includes(option.toLowerCase()));
+	}
+
 	function normalizeArrayField(value: string[] | string | null | undefined): string[] {
 		if (Array.isArray(value)) {
 			return value
@@ -126,7 +162,7 @@
 
 		const { data, error } = await supabase
 			.from('profiles')
-			.select('first_name,last_name,gender,bio,languages,ride_preferences,profile_photo_url')
+			.select('first_name,last_name,car_make,car_year,phone_number,date_of_birth,city_of_birth,address,zip_code,gender,bio,languages,ride_preferences,profile_photo_url')
 			.eq('id', authData.user.id)
 			.maybeSingle();
 
@@ -136,10 +172,17 @@
 			profile = {
 				first_name: data.first_name ?? '',
 				last_name: data.last_name ?? '',
+				car_make: data.car_make ?? '',
+				car_year: data.car_year ? String(data.car_year) : '',
+				phone_number: data.phone_number ?? '',
+				date_of_birth: data.date_of_birth ?? '',
+				city_of_birth: data.city_of_birth ?? '',
+				address: data.address ?? '',
+				zip_code: data.zip_code ?? '',
 				gender: data.gender ?? '',
 				bio: data.bio ?? '',
-				languages: normalizeArrayField(data.languages),
-				ride_preferences: normalizeArrayField(data.ride_preferences),
+				languages: normalizeOptionSelections(data.languages, languageOptions),
+				ride_preferences: normalizeOptionSelections(data.ride_preferences, ridePreferenceOptions),
 				profile_photo_url: data.profile_photo_url ?? ''
 			};
 		}
@@ -204,6 +247,21 @@
 						<p class="text-gray-600">{profile.ride_preferences.length > 0 ? profile.ride_preferences.join(', ') : 'No preferences specified'}</p>
 					</div>
 				</div>
+
+				<div class="border-t border-gray-200 pt-6 mt-6">
+					<h3 class="text-lg font-semibold text-gray-900 mb-4">Car Information</h3>
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+						<div>
+							<h4 class="font-medium text-gray-900 mb-2">Make</h4>
+							<p class="text-gray-600">{profile.car_make || 'Not provided'}</p>
+						</div>
+						<div>
+							<h4 class="font-medium text-gray-900 mb-2">Year</h4>
+							<p class="text-gray-600">{profile.car_year || 'Not provided'}</p>
+						</div>
+					</div>
+				</div>
+
 			</div>
 		</div>
 	</div>

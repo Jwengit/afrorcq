@@ -15,6 +15,11 @@
 		city_of_birth: string;
 		address: string;
 		zip_code: string;
+		car_make: string;
+		car_year: string;
+		insurance_company: string;
+		plate_number: string;
+		proof_of_resident_type: string;
 		gender: string;
 		bio: string;
 		languages: string[];
@@ -38,6 +43,11 @@
 		city_of_birth: '',
 		address: '',
 		zip_code: '',
+		car_make: '',
+		car_year: '',
+		insurance_company: '',
+		plate_number: '',
+		proof_of_resident_type: '',
 		gender: '',
 		bio: '',
 		languages: [] as string[],
@@ -167,6 +177,15 @@
 		return items;
 	}
 
+	function normalizeOptionSelections(
+		value: string[] | string | null | undefined,
+		allowedOptions: string[]
+	): string[] {
+		const normalizedSource = normalizeArrayField(value).join(' | ').toLowerCase();
+
+		return allowedOptions.filter((option) => normalizedSource.includes(option.toLowerCase()));
+	}
+
 	function normalizeArrayField(value: string[] | string | null | undefined): string[] {
 		if (Array.isArray(value)) {
 			return value
@@ -212,10 +231,15 @@
 			city_of_birth: (data?.city_of_birth as string) ?? '',
 			address: (data?.address as string) ?? '',
 			zip_code: (data?.zip_code as string) ?? '',
+			car_make: (data?.car_make as string) ?? '',
+			car_year: data?.car_year ? String(data.car_year) : '',
+			insurance_company: (data?.insurance_company as string) ?? '',
+			plate_number: (data?.plate_number as string) ?? '',
+			proof_of_resident_type: (data?.proof_of_resident_type as string) ?? '',
 			bio: (data?.bio as string) ?? '',
 			gender: data?.gender ?? '',
-			languages: normalizeArrayField(data?.languages),
-			ride_preferences: normalizeArrayField(data?.ride_preferences),
+			languages: normalizeOptionSelections(data?.languages, languageOptions),
+			ride_preferences: normalizeOptionSelections(data?.ride_preferences, ridePreferenceOptions),
 			profile_photo_url: (data?.profile_photo_url as string) ?? '',
 			status: data?.status ?? 'Unverified'
 		};
@@ -304,12 +328,23 @@
 			const trimmedCityOfBirth = formData.city_of_birth.trim();
 			const trimmedAddress = formData.address.trim();
 			const trimmedZipCode = formData.zip_code.trim();
+			const trimmedCarMake = formData.car_make.trim();
+			const trimmedInsuranceCompany = formData.insurance_company.trim();
+			const trimmedPlateNumber = formData.plate_number.trim();
+			const trimmedProofOfResidentType = formData.proof_of_resident_type.trim();
+			const parsedCarYear = Number.parseInt(formData.car_year, 10);
+			const carYear = Number.isNaN(parsedCarYear) ? null : parsedCarYear;
 			if (!trimmedFirstName || !formData.gender) {
 				alert('First name and gender are required.');
 				return;
 			}
 
 			let photoUrl = formData.profile_photo_url;
+			const sanitizedLanguages = normalizeOptionSelections(formData.languages, languageOptions);
+			const sanitizedRidePreferences = normalizeOptionSelections(
+				formData.ride_preferences,
+				ridePreferenceOptions
+			);
 
 			// Upload new photo if selected
 			if (selectedFile) {
@@ -333,10 +368,15 @@
 					city_of_birth: trimmedCityOfBirth || null,
 					address: trimmedAddress || null,
 					zip_code: trimmedZipCode || null,
+					car_make: trimmedCarMake || null,
+					car_year: carYear,
+					insurance_company: trimmedInsuranceCompany || null,
+					plate_number: trimmedPlateNumber || null,
+					proof_of_resident_type: trimmedProofOfResidentType || null,
 					gender: formData.gender,
 					bio: formData.bio || null,
-					languages: formData.languages,
-					ride_preferences: formData.ride_preferences,
+					languages: sanitizedLanguages,
+					ride_preferences: sanitizedRidePreferences,
 					profile_photo_url: photoUrl || null,
 					updated_at: new Date().toISOString()
 				}, { onConflict: 'id' });
@@ -353,10 +393,15 @@
 					city_of_birth: trimmedCityOfBirth,
 					address: trimmedAddress,
 					zip_code: trimmedZipCode,
+					car_make: trimmedCarMake,
+					car_year: carYear ? String(carYear) : '',
+					insurance_company: trimmedInsuranceCompany,
+					plate_number: trimmedPlateNumber,
+					proof_of_resident_type: trimmedProofOfResidentType,
 					gender: formData.gender,
 					bio: formData.bio,
-					languages: formData.languages,
-					ride_preferences: formData.ride_preferences,
+					languages: sanitizedLanguages,
+					ride_preferences: sanitizedRidePreferences,
 					profile_photo_url: photoUrl,
 					status: profile.status
 				});
@@ -509,6 +554,32 @@
 								<div class="md:col-span-2">
 									<h5 class="font-medium text-gray-900 mb-2">Address</h5>
 									<p class="text-gray-600">{profile.address || 'Not provided'}</p>
+								</div>
+							</div>
+						</div>
+
+						<div class="border-t border-gray-200 pt-6">
+							<h4 class="text-lg font-semibold text-gray-900 mb-4">Car Information</h4>
+							<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+								<div>
+									<h5 class="font-medium text-gray-900 mb-2">Make</h5>
+									<p class="text-gray-600">{profile.car_make || 'Not provided'}</p>
+								</div>
+								<div>
+									<h5 class="font-medium text-gray-900 mb-2">Year</h5>
+									<p class="text-gray-600">{profile.car_year || 'Not provided'}</p>
+								</div>
+								<div>
+									<h5 class="font-medium text-gray-900 mb-2">Insurance Company</h5>
+									<p class="text-gray-600">{profile.insurance_company || 'Not provided'}</p>
+								</div>
+								<div>
+									<h5 class="font-medium text-gray-900 mb-2">Plate Number</h5>
+									<p class="text-gray-600">{profile.plate_number || 'Not provided'}</p>
+								</div>
+								<div class="md:col-span-2">
+									<h5 class="font-medium text-gray-900 mb-2">Proof of Resident Type</h5>
+									<p class="text-gray-600">{profile.proof_of_resident_type || 'Not provided'}</p>
 								</div>
 							</div>
 						</div>
@@ -688,6 +759,68 @@
 										bind:value={formData.address}
 										class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
 										placeholder="Enter your address"
+									/>
+								</div>
+							</div>
+						</div>
+
+						<div class="border-t border-gray-200 pt-6">
+							<h3 class="text-lg font-semibold text-gray-900 mb-4">Car Information</h3>
+							<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+								<div>
+									<label for="car_make" class="block text-sm font-medium text-gray-700 mb-2">Make</label>
+									<input
+										type="text"
+										id="car_make"
+										bind:value={formData.car_make}
+										class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+										placeholder="Enter car make"
+									/>
+								</div>
+
+								<div>
+									<label for="car_year" class="block text-sm font-medium text-gray-700 mb-2">Year</label>
+									<input
+										type="number"
+										id="car_year"
+										min="1900"
+										max="2100"
+										bind:value={formData.car_year}
+										class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+										placeholder="Enter car year"
+									/>
+								</div>
+
+								<div>
+									<label for="insurance_company" class="block text-sm font-medium text-gray-700 mb-2">Insurance Company</label>
+									<input
+										type="text"
+										id="insurance_company"
+										bind:value={formData.insurance_company}
+										class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+										placeholder="Enter insurance company"
+									/>
+								</div>
+
+								<div>
+									<label for="plate_number" class="block text-sm font-medium text-gray-700 mb-2">Plate Number</label>
+									<input
+										type="text"
+										id="plate_number"
+										bind:value={formData.plate_number}
+										class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+										placeholder="Enter plate number"
+									/>
+								</div>
+
+								<div class="md:col-span-2">
+									<label for="proof_of_resident_type" class="block text-sm font-medium text-gray-700 mb-2">Proof of Resident Type</label>
+									<input
+										type="text"
+										id="proof_of_resident_type"
+										bind:value={formData.proof_of_resident_type}
+										class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+										placeholder="Enter proof type (e.g. utility bill, residence permit)"
 									/>
 								</div>
 							</div>

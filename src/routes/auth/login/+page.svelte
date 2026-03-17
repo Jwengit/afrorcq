@@ -200,12 +200,12 @@
 						on:click={signInWithGoogle}
 						class="w-full inline-flex justify-center py-3 px-4 border-2 border-gray-300 rounded-lg shadow-md bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-all duration-200 hover:shadow-lg"
 					>
-						<svg class="w-5 h-5 mr-3" viewBox="0 0 24 24">
-						<path fill="#4285F4" d="M21.35 11.1h-9.17v2.92h5.27c-.23 1.3-1.33 3.82-5.27 3.82-3.17 0-5.75-2.62-5.75-5.84s2.58-5.84 5.75-5.84c1.81 0 3.02.78 3.72 1.45l2.55-2.47C17.47 2.3 14.73 1 12 1 6.48 1 2 5.48 2 11s4.48 10 10 10c5.76 0 9.5-4.03 9.5-9.69 0-.65-.07-1.14-.15-1.46z"/>
-						<path fill="#34A853" d="M7.58 14.59c-.49-1.44-.49-2.98 0-4.42V7.39H4.01C3.25 8.94 2.86 10.92 2.86 12.97s.39 4.03 1.15 5.58l3.57-3.96z"/>
-						<path fill="#FBBC05" d="M12 22c2.7 0 4.95-.89 6.6-2.41l-3.15-2.86c-.88.61-2.01.97-3.45.97-2.64 0-4.88-1.77-5.68-4.14H4.01v2.6C5.64 20.9 8.56 22 12 22z"/>
-						<path fill="#EA4335" d="M19.6 6.56l-3.05 2.82c-.86-.82-1.95-1.31-3.12-1.31-1.51 0-2.84.81-3.55 2.02L8.23 8.39C9.41 6.45 10.62 5 12 5c1.5 0 2.78.62 3.65 1.56z"/>
-					</svg>
+						<svg class="w-5 h-5 mr-3" viewBox="0 0 24 24" aria-hidden="true">
+							<path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.2-2.27H12v4.51h6.44a5.5 5.5 0 0 1-2.39 3.61v3h3.87c2.26-2.08 3.57-5.15 3.57-8.85z"/>
+							<path fill="#34A853" d="M12 24c3.24 0 5.96-1.08 7.95-2.91l-3.87-3a7.17 7.17 0 0 1-10.68-3.77H1.4v3.09A12 12 0 0 0 12 24z"/>
+							<path fill="#FBBC05" d="M5.4 14.32a7.2 7.2 0 0 1 0-4.64V6.59H1.4a12 12 0 0 0 0 10.82l4-3.09z"/>
+							<path fill="#EA4335" d="M12 4.77c1.76 0 3.35.61 4.6 1.8l3.43-3.43C17.95 1.08 15.24 0 12 0 7.3 0 3.2 2.69 1.4 6.59l4 3.09A7.2 7.2 0 0 1 12 4.77z"/>
+						</svg>
 					Sign in with Google
 				</button>
 				</div>
