@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { supabase } from '$lib/supabaseClient';
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 
 	let email = '';
@@ -10,6 +11,7 @@
 	let showConfirmPassword = false;
 	let loading = false;
 	let error = '';
+	let successMessage = '';
 	let recaptchaToken = '';
 
 	// reCAPTCHA callback
@@ -23,11 +25,18 @@
 
 	onMount(() => {
 		// Expose callbacks globally for reCAPTCHA
-		(window as any).onRecaptchaCallback = onRecaptchaCallback;
-		(window as any).onRecaptchaExpired = onRecaptchaExpired;
+		const recaptchaWindow = window as Window & {
+			onRecaptchaCallback?: (token: string) => void;
+			onRecaptchaExpired?: () => void;
+		};
+		recaptchaWindow.onRecaptchaCallback = onRecaptchaCallback;
+		recaptchaWindow.onRecaptchaExpired = onRecaptchaExpired;
 	});
 
 	async function signUp() {
+		error = '';
+		successMessage = '';
+
 		if (password !== confirmPassword) {
 			error = 'Passwords do not match';
 			return;
@@ -39,13 +48,13 @@
 		}
 
 		loading = true;
-		error = '';
 
 		try {
 			const { data, error: signUpError } = await supabase.auth.signUp({
 				email,
 				password,
 				options: {
+					emailRedirectTo: `${window.location.origin}/auth/callback`,
 					data: {
 						status: 'Unverified',
 						recaptcha_token: recaptchaToken
@@ -58,6 +67,11 @@
 			if (signUpError) {
 				error = signUpError.message;
 			} else {
+				if (!data.session) {
+					successMessage = 'Account created. Please check your email and click the confirmation link.';
+					return;
+				}
+
 				// Send welcome email
 				try {
 					await fetch('/api/welcome', {
@@ -70,7 +84,7 @@
 					// Don't block signup if email fails
 				}
 				// Redirect to profile after signup
-				goto('/profile');
+				goto(resolve('/profile'));
 			}
 		} catch (err) {
 			console.error('Unexpected signUp error:', err);
@@ -208,6 +222,10 @@
 				<div class="text-red-600 text-sm">{error}</div>
 			{/if}
 
+			{#if successMessage}
+				<div class="text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 text-sm">{successMessage}</div>
+			{/if}
+
 			<!-- reCAPTCHA -->
 			<div class="flex justify-center">
 				<div class="g-recaptcha" data-sitekey="6LdQr38pAAAAANn80cqDW86qzuS6xbveg0b57scK" data-callback="onRecaptchaCallback" data-expired-callback="onRecaptchaExpired"></div>
@@ -226,7 +244,7 @@
 			<div class="mt-6">
 				<div class="relative">
 					<div class="absolute inset-0 flex items-center">
-						<div class="w-full border-t border-gray-300" />
+						<div class="w-full border-t border-gray-300"></div>
 					</div>
 					<div class="relative flex justify-center text-sm">
 						<span class="px-2 bg-gray-50 text-gray-500">Or</span>
@@ -251,7 +269,7 @@
 			</div>
 
 			<div class="text-center">
-				<a href="/auth/login" class="font-medium text-primary hover:text-green-700 transition-colors">
+				<a href={resolve('/auth/login')} class="font-medium text-primary hover:text-green-700 transition-colors">
 					Already have an account? Sign in
 				</a>
 			</div>

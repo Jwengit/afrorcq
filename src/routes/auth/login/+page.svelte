@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { supabase } from '$lib/supabaseClient';
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 
 	let email = '';
@@ -8,6 +9,7 @@
 	let showPassword = false;
 	let loading = false;
 	let error = '';
+	let infoMessage = '';
 	let recaptchaToken = '';
 
 	// reCAPTCHA callback
@@ -21,18 +23,24 @@
 
 	onMount(() => {
 		// Expose callbacks globally for reCAPTCHA
-		(window as any).onRecaptchaCallback = onRecaptchaCallback;
-		(window as any).onRecaptchaExpired = onRecaptchaExpired;
+		const recaptchaWindow = window as Window & {
+			onRecaptchaCallback?: (token: string) => void;
+			onRecaptchaExpired?: () => void;
+		};
+		recaptchaWindow.onRecaptchaCallback = onRecaptchaCallback;
+		recaptchaWindow.onRecaptchaExpired = onRecaptchaExpired;
 	});
 
 	async function signIn() {
+		error = '';
+		infoMessage = '';
+
 		if (!recaptchaToken) {
 			error = 'Please complete the reCAPTCHA verification';
 			return;
 		}
 
 		loading = true;
-		error = '';
 
 		try {
 			const { data, error: signInError } = await supabase.auth.signInWithPassword({
@@ -43,10 +51,14 @@
 			console.log('Supabase signIn response:', { data, signInError });
 
 			if (signInError) {
-				error = signInError.message;
+				if (signInError.message.toLowerCase().includes('email not confirmed')) {
+					error = 'Your email is not confirmed yet. Please check your inbox or resend the confirmation email below.';
+				} else {
+					error = signInError.message;
+				}
 			} else {
 				// Redirect to profile or home
-				goto('/profile');
+				goto(resolve('/profile'));
 			}
 		} catch (err) {
 			console.error('Unexpected signIn error:', err);
@@ -84,15 +96,21 @@
 		}
 
 		try {
+			error = '';
+			infoMessage = '';
+
 			const { error: resendError } = await supabase.auth.resend({
 				type: 'signup',
-				email
+				email,
+				options: {
+					emailRedirectTo: `${window.location.origin}/auth/callback`
+				}
 			});
 
 			if (resendError) {
 				error = resendError.message;
 			} else {
-				error = 'Confirmation email resent. Check your inbox.';
+				infoMessage = 'Confirmation email resent. Check your inbox.';
 			}
 		} catch (err) {
 			error = 'Failed to resend confirmation email.';
@@ -168,6 +186,20 @@
 				<div class="text-red-600 text-sm">{error}</div>
 			{/if}
 
+			{#if infoMessage}
+				<div class="text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 text-sm">{infoMessage}</div>
+			{/if}
+
+			<div class="text-right">
+				<button
+					type="button"
+					on:click={resendConfirmation}
+					class="text-sm font-medium text-green-700 hover:text-green-800"
+				>
+					Resend confirmation email
+				</button>
+			</div>
+
 			<!-- reCAPTCHA -->
 			<div class="flex justify-center">
 				<div class="g-recaptcha" data-sitekey="6LdQr38pAAAAANn80cqDW86qzuS6xbveg0b57scK" data-callback="onRecaptchaCallback" data-expired-callback="onRecaptchaExpired"></div>
@@ -187,7 +219,7 @@
 			<div class="mt-6">
 				<div class="relative">
 					<div class="absolute inset-0 flex items-center">
-						<div class="w-full border-t border-gray-300" />
+						<div class="w-full border-t border-gray-300"></div>
 					</div>
 					<div class="relative flex justify-center text-sm">
 						<span class="px-2 bg-gray-50 text-gray-500">Or</span>
@@ -212,7 +244,7 @@
 			</div>
 
 			<div class="text-center">
-				<a href="/auth/signup" class="font-medium text-primary hover:text-green-700 transition-colors">
+				<a href={resolve('/auth/signup')} class="font-medium text-primary hover:text-green-700 transition-colors">
 					Don't have an account? Sign up
 				</a>
 			</div>

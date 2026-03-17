@@ -2,13 +2,14 @@
 	import { supabase } from '$lib/supabaseClient';
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 
 	onMount(async () => {
 		const { data, error } = await supabase.auth.getSession();
 
 		if (error) {
 			console.error('Error getting session:', error);
-			goto('/auth/login');
+			goto(resolve('/auth/login'));
 		} else if (data.session) {
 			// Check if user is new (created within last 5 minutes)
 			const user = data.session.user;
@@ -28,9 +29,9 @@
 					console.error('Error sending welcome email:', emailErr);
 				}
 			}
-			goto('/profile');
+			goto(resolve('/profile'));
 		} else {
-			goto('/auth/login');
+			goto(resolve('/auth/login'));
 		}
 	});
 </script>
