@@ -2,6 +2,12 @@
 CREATE TABLE profiles (
   id UUID REFERENCES auth.users(id) PRIMARY KEY,
   first_name TEXT NOT NULL,
+  last_name TEXT,
+  phone_number TEXT,
+  date_of_birth DATE,
+  city_of_birth TEXT,
+  address TEXT,
+  zip_code TEXT,
   profile_photo_url TEXT,
   gender TEXT CHECK (gender IN ('female', 'male', 'non-binary', 'prefer-not-to-say')),
   bio TEXT,

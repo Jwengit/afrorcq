@@ -2,17 +2,42 @@
 	import { supabase } from '$lib/supabaseClient';
 	import { user } from '$lib/authStore';
 	import { goto } from '$app/navigation';
-	import { onDestroy } from 'svelte';
+	import { resolve } from '$app/paths';
+	import { browser } from '$app/environment';
+	import { onDestroy, onMount } from 'svelte';
 	import type { User } from '@supabase/supabase-js';
+
+	type Profile = {
+		first_name: string;
+		last_name: string;
+		phone_number: string;
+		date_of_birth: string;
+		city_of_birth: string;
+		address: string;
+		zip_code: string;
+		gender: string;
+		bio: string;
+		languages: string[];
+		ride_preferences: string[];
+		profile_photo_url: string;
+		status: string;
+	};
 
 	let currentUser: User | null = null;
 	let loading = true;
 	let saving = false;
 	let isEditing = false;
 	let profileLoaded = false;
+	let authChecked = false;
 
-	let profile = {
+	const emptyProfile: Profile = {
 		first_name: '',
+		last_name: '',
+		phone_number: '',
+		date_of_birth: '',
+		city_of_birth: '',
+		address: '',
+		zip_code: '',
 		gender: '',
 		bio: '',
 		languages: [] as string[],
@@ -20,6 +45,8 @@
 		profile_photo_url: '',
 		status: 'Unverified'
 	};
+
+	let profile: Profile = { ...emptyProfile };
 
 	// Form data
 	let formData = { ...profile };
@@ -51,9 +78,13 @@
 		if (!u) {
 			loading = false;
 			profileLoaded = false;
-			goto('/auth/login');
+			if (authChecked && browser) {
+				goto(resolve('/auth/login'));
+			}
 			return;
 		}
+
+		authChecked = true;
 
 		// Load profile once per session
 		if (!profileLoaded) {
@@ -66,29 +97,149 @@
 		unsubscribe();
 	});
 
+	onMount(async () => {
+		if (authChecked) return;
+
+		const { data } = await supabase.auth.getUser();
+		authChecked = true;
+
+		if (!data.user && browser) {
+			loading = false;
+			goto(resolve('/auth/login'));
+		}
+	});
+
+	function cleanArrayItem(value: string): string {
+		return value
+			.trim()
+			.replace(/^\{+|\}+$/g, '')
+			.replace(/^\[+|\]+$/g, '')
+			.replace(/^"+|"+$/g, '')
+			.replace(/\\,/g, ',')
+			.replace(/\\\\/g, '\\')
+			.replace(/\\"/g, '"')
+			.trim();
+	}
+
+	function splitEscapedCommaString(value: string): string[] {
+		return value.split(/(?<!\\),/).map(cleanArrayItem).filter(Boolean);
+	}
+
+	function parsePostgresArrayLiteral(value: string): string[] {
+		const content = value.slice(1, -1);
+		const items: string[] = [];
+		let current = '';
+		let inQuotes = false;
+		let escaped = false;
+
+		for (const character of content) {
+			if (escaped) {
+				current += character;
+				escaped = false;
+				continue;
+			}
+
+			if (character === '\\') {
+				escaped = true;
+				current += character;
+				continue;
+			}
+
+			if (character === '"') {
+				inQuotes = !inQuotes;
+				current += character;
+				continue;
+			}
+
+			if (character === ',' && !inQuotes) {
+				const cleaned = cleanArrayItem(current);
+				if (cleaned) items.push(cleaned);
+				current = '';
+				continue;
+			}
+
+			current += character;
+		}
+
+		const cleaned = cleanArrayItem(current);
+		if (cleaned) items.push(cleaned);
+
+		return items;
+	}
+
+	function normalizeArrayField(value: string[] | string | null | undefined): string[] {
+		if (Array.isArray(value)) {
+			return value
+				.flatMap((item) => normalizeArrayField(item))
+				.map(cleanArrayItem)
+				.filter(Boolean);
+		}
+
+		if (typeof value === 'string') {
+			const trimmedValue = value.trim();
+
+			if (!trimmedValue) {
+				return [];
+			}
+
+			if (trimmedValue.startsWith('[') && trimmedValue.endsWith(']')) {
+				try {
+					const parsed = JSON.parse(trimmedValue);
+					return normalizeArrayField(parsed as string[]);
+				} catch {
+					// Fall back to comma-splitting below when stored data is not valid JSON.
+				}
+			}
+
+			if (trimmedValue.startsWith('{') && trimmedValue.endsWith('}')) {
+				return parsePostgresArrayLiteral(trimmedValue);
+			}
+
+			return splitEscapedCommaString(trimmedValue);
+		}
+
+		return [];
+	}
+
+	function normalizeProfile(data?: Partial<Profile> | null): Profile {
+		return {
+			...emptyProfile,
+			...data,
+			first_name: data?.first_name ?? '',
+			last_name: (data?.last_name as string) ?? '',
+			phone_number: (data?.phone_number as string) ?? '',
+			date_of_birth: (data?.date_of_birth as string) ?? '',
+			city_of_birth: (data?.city_of_birth as string) ?? '',
+			address: (data?.address as string) ?? '',
+			zip_code: (data?.zip_code as string) ?? '',
+			bio: (data?.bio as string) ?? '',
+			gender: data?.gender ?? '',
+			languages: normalizeArrayField(data?.languages),
+			ride_preferences: normalizeArrayField(data?.ride_preferences),
+			profile_photo_url: (data?.profile_photo_url as string) ?? '',
+			status: data?.status ?? 'Unverified'
+		};
+	}
+
 	async function loadProfile() {
 		loading = true;
 		try {
-			const { data } = await supabase
+			const { data, error } = await supabase
 				.from('profiles')
 				.select('*')
 				.eq('id', currentUser!.id)
-				.single();
+				.maybeSingle();
+
+			if (error) {
+				throw error;
+			}
 
 			if (data) {
-				profile = { ...profile, ...data };
-				// Convert ride_preferences from string to array if needed
-				if (typeof data.ride_preferences === 'string') {
-					profile.ride_preferences = data.ride_preferences.split(',').map((p: string) => p.trim()).filter((p: string) => p);
-				}
-				// Convert languages from string to array if needed
-				if (typeof data.languages === 'string') {
-					profile.languages = data.languages.split(',').map((l: string) => l.trim()).filter((l: string) => l);
-				}
+				profile = normalizeProfile(data);
 				formData = { ...profile };
 				previewUrl = profile.profile_photo_url || '';
 			}
-		} catch (error) {
+		} catch {
 			console.log('No profile found, will create one');
 		} finally {
 			loading = false;
@@ -107,6 +258,10 @@
 		previewUrl = profile.profile_photo_url || '';
 	}
 
+	function viewPublicProfile() {
+		goto(resolve('/profile/public'));
+	}
+
 	async function handleFileSelect(event: Event) {
 		const target = event.target as HTMLInputElement;
 		const file = target.files?.[0];
@@ -119,7 +274,7 @@
 	async function uploadPhoto(file: File): Promise<string | null> {
 		const fileExt = file.name.split('.').pop();
 		const fileName = `${currentUser!.id}_${Date.now()}.${fileExt}`;
-		const filePath = `profile-photos/${fileName}`;
+		const filePath = `${currentUser!.id}/${fileName}`;
 
 		const { error: uploadError } = await supabase.storage
 			.from('profile-photos')
@@ -143,40 +298,70 @@
 		saving = true;
 
 		try {
+			const trimmedFirstName = formData.first_name.trim();
+			const trimmedLastName = formData.last_name.trim();
+			const trimmedPhoneNumber = formData.phone_number.trim();
+			const trimmedCityOfBirth = formData.city_of_birth.trim();
+			const trimmedAddress = formData.address.trim();
+			const trimmedZipCode = formData.zip_code.trim();
+			if (!trimmedFirstName || !formData.gender) {
+				alert('First name and gender are required.');
+				return;
+			}
+
 			let photoUrl = formData.profile_photo_url;
 
 			// Upload new photo if selected
 			if (selectedFile) {
 				const uploadedUrl = await uploadPhoto(selectedFile);
-				if (uploadedUrl) {
-					photoUrl = uploadedUrl;
+				if (!uploadedUrl) {
+					alert('Error uploading profile photo. Please try again.');
+					return;
 				}
-			}
 
-			const updatedProfile = {
-				...formData,
-				ride_preferences: formData.ride_preferences,
-				profile_photo_url: photoUrl,
-				updated_at: new Date().toISOString()
-			};
+				photoUrl = uploadedUrl;
+			}
 
 			const { error } = await supabase
 				.from('profiles')
 				.upsert({
 					id: currentUser.id,
-					first_name: updatedProfile.first_name,
-					gender: updatedProfile.gender,
-					bio: updatedProfile.bio,
-					languages: updatedProfile.languages.join(', '),
-					ride_preferences: updatedProfile.ride_preferences.join(', '),
-					profile_photo_url: photoUrl
-				});
+					first_name: trimmedFirstName,
+					last_name: trimmedLastName || null,
+					phone_number: trimmedPhoneNumber || null,
+					date_of_birth: formData.date_of_birth || null,
+					city_of_birth: trimmedCityOfBirth || null,
+					address: trimmedAddress || null,
+					zip_code: trimmedZipCode || null,
+					gender: formData.gender,
+					bio: formData.bio || null,
+					languages: formData.languages,
+					ride_preferences: formData.ride_preferences,
+					profile_photo_url: photoUrl || null,
+					updated_at: new Date().toISOString()
+				}, { onConflict: 'id' });
 
 			if (error) {
-				console.error('Erreur détaillée de sauvegarde:', error);
-				alert('Error saving profile. Please try again.');
+				console.error('Erreur detaillee de sauvegarde:', error);
+				alert(error.message || 'Error saving profile. Please try again.');
 			} else {
-				profile = { ...updatedProfile, status: 'Unverified' };
+				profile = normalizeProfile({
+					first_name: trimmedFirstName,
+					last_name: trimmedLastName,
+					phone_number: trimmedPhoneNumber,
+					date_of_birth: formData.date_of_birth,
+					city_of_birth: trimmedCityOfBirth,
+					address: trimmedAddress,
+					zip_code: trimmedZipCode,
+					gender: formData.gender,
+					bio: formData.bio,
+					languages: formData.languages,
+					ride_preferences: formData.ride_preferences,
+					profile_photo_url: photoUrl,
+					status: profile.status
+				});
+				formData = { ...profile };
+				previewUrl = photoUrl || '';
 				isEditing = false;
 				selectedFile = null;
 				alert('Profile updated successfully!');
@@ -184,14 +369,14 @@
 		} catch (error) {
 			console.error('Error:', error);
 			alert('An error occurred. Please try again.');
+		} finally {
+			saving = false;
 		}
-
-		saving = false;
 	}
 
 	async function signOut() {
 		await supabase.auth.signOut();
-		goto('/auth/login');
+		goto(resolve('/auth/login'));
 	}
 
 	function toggleRidePreference(pref: string) {
@@ -247,8 +432,8 @@
 					</div>
 					<div class="text-right">
 						<span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium
-							{profile.first_name && profile.gender ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">
-							{profile.first_name && profile.gender ? 'Complete' : 'Incomplete'}
+							{profile.first_name && profile.last_name && profile.gender ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">
+							{profile.first_name && profile.last_name && profile.gender ? 'Complete' : 'Incomplete'}
 						</span>
 					</div>
 				</div>
@@ -281,7 +466,7 @@
 								{/if}
 							</div>
 							<div>
-								<h3 class="text-lg font-medium text-gray-900">{profile.first_name || 'No name set'}</h3>
+								<h3 class="text-lg font-medium text-gray-900">{(profile.first_name || profile.last_name) ? `${profile.first_name} ${profile.last_name}`.trim() : 'No name set'}</h3>
 								<p class="text-gray-600">{profile.gender ? profile.gender : 'Gender not set'}</p>
 							</div>
 						</div>
@@ -301,6 +486,32 @@
 								<p class="text-gray-600">{profile.ride_preferences.length > 0 ? profile.ride_preferences.join(', ') : 'No preferences specified'}</p>
 							</div>
 						</div>
+
+						<div class="border-t border-gray-200 pt-6">
+							<h4 class="text-lg font-semibold text-gray-900 mb-4">Personal Information</h4>
+							<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+								<div>
+									<h5 class="font-medium text-gray-900 mb-2">Phone Number</h5>
+									<p class="text-gray-600">{profile.phone_number || 'Not provided'}</p>
+								</div>
+								<div>
+									<h5 class="font-medium text-gray-900 mb-2">Date of Birth</h5>
+									<p class="text-gray-600">{profile.date_of_birth || 'Not provided'}</p>
+								</div>
+								<div>
+									<h5 class="font-medium text-gray-900 mb-2">City of Birth</h5>
+									<p class="text-gray-600">{profile.city_of_birth || 'Not provided'}</p>
+								</div>
+								<div>
+									<h5 class="font-medium text-gray-900 mb-2">Zip Code</h5>
+									<p class="text-gray-600">{profile.zip_code || 'Not provided'}</p>
+								</div>
+								<div class="md:col-span-2">
+									<h5 class="font-medium text-gray-900 mb-2">Address</h5>
+									<p class="text-gray-600">{profile.address || 'Not provided'}</p>
+								</div>
+							</div>
+						</div>
 					</div>
 				{:else}
 					<!-- Edit Mode -->
@@ -318,11 +529,11 @@
 								</button>
 								<button
 									type="button"
-									on:click={cancelEditing}
+									on:click={viewPublicProfile}
 									class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
 									disabled={saving}
 								>
-									View my profile
+									View my public profile
 								</button>
 								<button
 									type="submit"
@@ -336,7 +547,7 @@
 
 						<!-- Profile Photo Upload -->
 						<div>
-							<label class="block text-sm font-medium text-gray-700 mb-2">Profile Photo</label>
+							<label for="profile_photo" class="block text-sm font-medium text-gray-700 mb-2">Profile Photo</label>
 							<div class="flex items-center space-x-4">
 								<div class="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
 									{#if previewUrl}
@@ -349,6 +560,7 @@
 								</div>
 								<div>
 									<input
+										id="profile_photo"
 										type="file"
 										accept="image/*"
 										on:change={handleFileSelect}
@@ -360,7 +572,7 @@
 						</div>
 
 						<!-- Required Fields -->
-						<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+						<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
 							<div>
 								<label for="first_name" class="block text-sm font-medium text-gray-700 mb-2">
 									First Name <span class="text-red-500">*</span>
@@ -372,6 +584,19 @@
 									required
 									class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
 									placeholder="Enter your first name"
+								/>
+							</div>
+
+							<div>
+								<label for="last_name" class="block text-sm font-medium text-gray-700 mb-2">
+									Last Name
+								</label>
+								<input
+									type="text"
+									id="last_name"
+									bind:value={formData.last_name}
+									class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+									placeholder="Enter your last name"
 								/>
 							</div>
 
@@ -390,7 +615,7 @@
 									class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
 								>
 									<option value="">Select gender</option>
-									{#each genderOptions as option}
+									{#each genderOptions as option (option.value)}
 										<option value={option.value}>{option.label}</option>
 									{/each}
 								</select>
@@ -409,10 +634,69 @@
 							></textarea>
 						</div>
 
-						<div>
-							<label class="block text-sm font-medium text-gray-700 mb-2">Languages</label>
+						<div class="border-t border-gray-200 pt-6">
+							<h3 class="text-lg font-semibold text-gray-900 mb-4">Personal Information</h3>
+							<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+								<div>
+									<label for="phone_number" class="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
+									<input
+										type="tel"
+										id="phone_number"
+										bind:value={formData.phone_number}
+										class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+										placeholder="Enter your phone number"
+									/>
+								</div>
+
+								<div>
+									<label for="date_of_birth" class="block text-sm font-medium text-gray-700 mb-2">Date of Birth</label>
+									<input
+										type="date"
+										id="date_of_birth"
+										bind:value={formData.date_of_birth}
+										class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+									/>
+								</div>
+
+								<div>
+									<label for="city_of_birth" class="block text-sm font-medium text-gray-700 mb-2">City of Birth</label>
+									<input
+										type="text"
+										id="city_of_birth"
+										bind:value={formData.city_of_birth}
+										class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+										placeholder="Enter your city of birth"
+									/>
+								</div>
+
+								<div>
+									<label for="zip_code" class="block text-sm font-medium text-gray-700 mb-2">Zip Code</label>
+									<input
+										type="text"
+										id="zip_code"
+										bind:value={formData.zip_code}
+										class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+										placeholder="Enter your zip code"
+									/>
+								</div>
+
+								<div class="md:col-span-2">
+									<label for="address" class="block text-sm font-medium text-gray-700 mb-2">Address</label>
+									<input
+										type="text"
+										id="address"
+										bind:value={formData.address}
+										class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+										placeholder="Enter your address"
+									/>
+								</div>
+							</div>
+						</div>
+
+						<fieldset>
+							<legend class="block text-sm font-medium text-gray-700 mb-2">Languages</legend>
 							<div class="grid grid-cols-2 md:grid-cols-3 gap-2">
-								{#each languageOptions as language}
+								{#each languageOptions as language (language)}
 									<label class="flex items-center">
 										<input
 											type="checkbox"
@@ -424,12 +708,12 @@
 									</label>
 								{/each}
 							</div>
-						</div>
+						</fieldset>
 
-						<div>
-							<label class="block text-sm font-medium text-gray-700 mb-2">Ride Preferences</label>
+						<fieldset>
+							<legend class="block text-sm font-medium text-gray-700 mb-2">Ride Preferences</legend>
 							<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-								{#each ridePreferenceOptions as pref}
+								{#each ridePreferenceOptions as pref (pref)}
 									<label class="flex items-center space-x-2">
 										<input
 											type="checkbox"
@@ -442,7 +726,7 @@
 								{/each}
 							</div>
 							<p class="text-xs text-gray-500 mt-1">Choose your ride preferences.</p>
-						</div>
+						</fieldset>
 					</form>
 				{/if}
 			</div>
@@ -452,7 +736,7 @@
 	<div class="min-h-screen flex items-center justify-center">
 		<div class="text-center">
 			<p class="text-gray-600">You are not logged in.</p>
-			<a href="/auth/login" class="text-green-600 hover:text-green-700 font-medium">Sign in</a>
+			<a href={resolve('/auth/login')} class="text-green-600 hover:text-green-700 font-medium">Sign in</a>
 		</div>
 	</div>
 {/if}

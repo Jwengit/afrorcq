@@ -1,0 +1,210 @@
+<script lang="ts">
+	import { supabase } from '$lib/supabaseClient';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import { onMount } from 'svelte';
+
+	type PublicProfile = {
+		first_name: string;
+		last_name: string;
+		gender: string;
+		bio: string;
+		languages: string[];
+		ride_preferences: string[];
+		profile_photo_url: string;
+	};
+
+	let loading = true;
+	let profile: PublicProfile = {
+		first_name: '',
+		last_name: '',
+		gender: '',
+		bio: '',
+		languages: [],
+		ride_preferences: [],
+		profile_photo_url: ''
+	};
+
+	function cleanArrayItem(value: string): string {
+		return value
+			.trim()
+			.replace(/^\{+|\}+$/g, '')
+			.replace(/^\[+|\]+$/g, '')
+			.replace(/^"+|"+$/g, '')
+			.replace(/\\,/g, ',')
+			.replace(/\\\\/g, '\\')
+			.replace(/\\"/g, '"')
+			.trim();
+	}
+
+	function splitEscapedCommaString(value: string): string[] {
+		return value.split(/(?<!\\),/).map(cleanArrayItem).filter(Boolean);
+	}
+
+	function parsePostgresArrayLiteral(value: string): string[] {
+		const content = value.slice(1, -1);
+		const items: string[] = [];
+		let current = '';
+		let inQuotes = false;
+		let escaped = false;
+
+		for (const character of content) {
+			if (escaped) {
+				current += character;
+				escaped = false;
+				continue;
+			}
+
+			if (character === '\\') {
+				escaped = true;
+				current += character;
+				continue;
+			}
+
+			if (character === '"') {
+				inQuotes = !inQuotes;
+				current += character;
+				continue;
+			}
+
+			if (character === ',' && !inQuotes) {
+				const cleaned = cleanArrayItem(current);
+				if (cleaned) items.push(cleaned);
+				current = '';
+				continue;
+			}
+
+			current += character;
+		}
+
+		const cleaned = cleanArrayItem(current);
+		if (cleaned) items.push(cleaned);
+
+		return items;
+	}
+
+	function normalizeArrayField(value: string[] | string | null | undefined): string[] {
+		if (Array.isArray(value)) {
+			return value
+				.flatMap((item) => normalizeArrayField(item))
+				.map(cleanArrayItem)
+				.filter(Boolean);
+		}
+
+		if (typeof value === 'string') {
+			const trimmedValue = value.trim();
+
+			if (!trimmedValue) {
+				return [];
+			}
+
+			if (trimmedValue.startsWith('[') && trimmedValue.endsWith(']')) {
+				try {
+					const parsed = JSON.parse(trimmedValue);
+					return normalizeArrayField(parsed as string[]);
+				} catch {
+					// Fall back to comma-splitting below when stored data is not valid JSON.
+				}
+			}
+
+			if (trimmedValue.startsWith('{') && trimmedValue.endsWith('}')) {
+				return parsePostgresArrayLiteral(trimmedValue);
+			}
+
+			return splitEscapedCommaString(trimmedValue);
+		}
+
+		return [];
+	}
+
+	onMount(async () => {
+		const { data: authData } = await supabase.auth.getUser();
+		if (!authData.user) {
+			goto(resolve('/auth/login'));
+			return;
+		}
+
+		const { data, error } = await supabase
+			.from('profiles')
+			.select('first_name,last_name,gender,bio,languages,ride_preferences,profile_photo_url')
+			.eq('id', authData.user.id)
+			.maybeSingle();
+
+		if (error) {
+			console.error('Error loading public profile preview:', error);
+		} else if (data) {
+			profile = {
+				first_name: data.first_name ?? '',
+				last_name: data.last_name ?? '',
+				gender: data.gender ?? '',
+				bio: data.bio ?? '',
+				languages: normalizeArrayField(data.languages),
+				ride_preferences: normalizeArrayField(data.ride_preferences),
+				profile_photo_url: data.profile_photo_url ?? ''
+			};
+		}
+
+		loading = false;
+	});
+</script>
+
+{#if loading}
+	<div class="min-h-screen flex items-center justify-center">
+		<div class="text-center">
+			<div class="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
+			<p class="mt-3 text-gray-600">Loading public profile...</p>
+		</div>
+	</div>
+{:else}
+	<div class="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
+		<div class="max-w-2xl mx-auto">
+			<div class="bg-white rounded-lg shadow-md p-6 mb-6">
+				<div class="flex items-center justify-between">
+					<div>
+						<h1 class="text-3xl font-bold text-gray-900">Public Profile Preview</h1>
+						<p class="text-gray-600 mt-1">This is how your public profile appears</p>
+					</div>
+					<button
+						onclick={() => goto(resolve('/profile'))}
+						class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+					>
+						Back to edit
+					</button>
+				</div>
+			</div>
+
+			<div class="bg-white rounded-lg shadow-md p-6">
+				<div class="flex items-center space-x-4 mb-6">
+					<div class="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
+						{#if profile.profile_photo_url}
+							<img src={profile.profile_photo_url} alt="Profile" class="w-full h-full object-cover" />
+						{:else}
+							<svg class="w-8 h-8 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+								<path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z"/>
+							</svg>
+						{/if}
+					</div>
+					<div>
+						<h2 class="text-xl font-semibold text-gray-900">{(profile.first_name || profile.last_name) ? `${profile.first_name} ${profile.last_name}`.trim() : 'No name set'}</h2>
+						<p class="text-gray-600 capitalize">{profile.gender || 'Gender not set'}</p>
+					</div>
+				</div>
+
+				<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+					<div>
+						<h3 class="font-medium text-gray-900 mb-2">Bio</h3>
+						<p class="text-gray-600">{profile.bio || 'No bio added yet'}</p>
+					</div>
+					<div>
+						<h3 class="font-medium text-gray-900 mb-2">Languages</h3>
+						<p class="text-gray-600">{profile.languages.length > 0 ? profile.languages.join(', ') : 'No languages specified'}</p>
+					</div>
+					<div class="md:col-span-2">
+						<h3 class="font-medium text-gray-900 mb-2">Ride Preferences</h3>
+						<p class="text-gray-600">{profile.ride_preferences.length > 0 ? profile.ride_preferences.join(', ') : 'No preferences specified'}</p>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+{/if}
