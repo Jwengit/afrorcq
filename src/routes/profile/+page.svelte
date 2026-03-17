@@ -2,81 +2,99 @@
 	import { supabase } from '$lib/supabaseClient';
 	import { user } from '$lib/authStore';
 	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';
+	import { onDestroy } from 'svelte';
 	import type { User } from '@supabase/supabase-js';
 
 	let currentUser: User | null = null;
 	let loading = true;
 	let saving = false;
 	let isEditing = false;
+	let profileLoaded = false;
 
-	// Profile data
 	let profile = {
 		first_name: '',
 		gender: '',
 		bio: '',
 		languages: [] as string[],
 		ride_preferences: [] as string[],
-		profile_photo_url: ''
+		profile_photo_url: '',
+		status: 'Unverified'
 	};
 
 	// Form data
-	let formData = { ...profile, ride_preferences_text: profile.ride_preferences.join(', ') };
+	let formData = { ...profile };
 	let selectedFile: File | null = null;
 	let previewUrl = '';
 
 	// Available options
 	const genderOptions = [
 		{ value: 'female', label: 'Female' },
-		{ value: 'male', label: 'Male' },
-		{ value: 'non-binary', label: 'Non-binary' },
-		{ value: 'prefer-not-to-say', label: 'Prefer not to say' }
+		{ value: 'male', label: 'Male' }
+	];
+
+	const ridePreferenceOptions = [
+		'No smoking',
+		'No pets',
+		'Music',
+		'Talkative',
+		'Air conditioning',
+		'Food allowed'
 	];
 
 	const languageOptions = [
 		'English', 'French', 'Spanish', 'German', 'Italian', 'Portuguese', 'Arabic', 'Chinese', 'Japanese', 'Korean'
 	];
 
-	user.subscribe((u) => {
+	const unsubscribe = user.subscribe((u) => {
 		currentUser = u;
+
 		if (!u) {
+			loading = false;
+			profileLoaded = false;
 			goto('/auth/login');
+			return;
+		}
+
+		// Load profile once per session
+		if (!profileLoaded) {
+			profileLoaded = true;
+			loadProfile();
 		}
 	});
 
-	onMount(async () => {
-		if (currentUser) {
-			await loadProfile();
-		}
-		loading = false;
+	onDestroy(() => {
+		unsubscribe();
 	});
 
 	async function loadProfile() {
+		loading = true;
 		try {
-			const { data, error } = await supabase
+			const { data } = await supabase
 				.from('profiles')
 				.select('*')
 				.eq('id', currentUser!.id)
 				.single();
 
 			if (data) {
-				profile = { ...data };
-				formData = { ...data };
-				previewUrl = data.profile_photo_url || '';
+				profile = { ...profile, ...data };
+				formData = { ...profile };
+				previewUrl = profile.profile_photo_url || '';
 			}
 		} catch (error) {
 			console.log('No profile found, will create one');
+		} finally {
+			loading = false;
 		}
 	}
 
 	function startEditing() {
 		isEditing = true;
-		formData = { ...profile, ride_preferences_text: profile.ride_preferences.join(', ') };
+		formData = { ...profile };
 	}
 
 	function cancelEditing() {
 		isEditing = false;
-		formData = { ...profile, ride_preferences_text: profile.ride_preferences.join(', ') };
+		formData = { ...profile };
 		selectedFile = null;
 		previewUrl = profile.profile_photo_url || '';
 	}
@@ -129,7 +147,7 @@
 
 			const updatedProfile = {
 				...formData,
-				ride_preferences: formData.ride_preferences_text.split(',').map(p => p.trim()).filter(p => p),
+				ride_preferences: formData.ride_preferences,
 				profile_photo_url: photoUrl,
 				updated_at: new Date().toISOString()
 			};
@@ -150,7 +168,7 @@
 				console.error('Error saving profile:', error);
 				alert('Error saving profile. Please try again.');
 			} else {
-				profile = { ...updatedProfile };
+				profile = { ...updatedProfile, status: 'Unverified' };
 				isEditing = false;
 				selectedFile = null;
 				alert('Profile updated successfully!');
@@ -166,6 +184,14 @@
 	async function signOut() {
 		await supabase.auth.signOut();
 		goto('/auth/login');
+	}
+
+	function toggleRidePreference(pref: string) {
+		if (formData.ride_preferences.includes(pref)) {
+			formData.ride_preferences = formData.ride_preferences.filter(p => p !== pref);
+		} else {
+			formData.ride_preferences = [...formData.ride_preferences, pref];
+		}
 	}
 
 	function toggleLanguage(language: string) {
@@ -209,7 +235,7 @@
 					<div>
 						<h2 class="text-lg font-semibold text-gray-900">Account Status</h2>
 						<p class="text-sm text-gray-600">Email: {currentUser.email}</p>
-						<p class="text-sm text-gray-600">Status: {currentUser.user_metadata?.status || 'Verified'}</p>
+						<p class="text-sm text-gray-600">Status: Unverified</p>
 					</div>
 					<div class="text-right">
 						<span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium
@@ -281,6 +307,14 @@
 									disabled={saving}
 								>
 									Cancel
+								</button>
+								<button
+									type="button"
+									on:click={cancelEditing}
+									class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+									disabled={saving}
+								>
+									View my profile
 								</button>
 								<button
 									type="submit"
@@ -385,15 +419,21 @@
 						</div>
 
 						<div>
-							<label for="ride_preferences" class="block text-sm font-medium text-gray-700 mb-2">Ride Preferences</label>
-							<textarea
-								id="ride_preferences"
-								bind:value={formData.ride_preferences_text}
-								rows="2"
-								class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
-								placeholder="Any preferences for your rides? (music, smoking, pets, etc.) - separate with commas"
-							></textarea>
-							<p class="text-xs text-gray-500 mt-1">Separate multiple preferences with commas</p>
+							<label class="block text-sm font-medium text-gray-700 mb-2">Ride Preferences</label>
+							<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+								{#each ridePreferenceOptions as pref}
+									<label class="flex items-center space-x-2">
+										<input
+											type="checkbox"
+											checked={formData.ride_preferences.includes(pref)}
+											on:change={() => toggleRidePreference(pref)}
+											class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+										/>
+										<span class="text-sm text-gray-700">{pref}</span>
+									</label>
+								{/each}
+							</div>
+							<p class="text-xs text-gray-500 mt-1">Choose your ride preferences.</p>
 						</div>
 					</form>
 				{/if}

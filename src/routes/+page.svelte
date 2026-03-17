@@ -1,5 +1,17 @@
-<script>
-	// Script can be removed since header is now global
+<script lang="ts">
+	import { user } from '$lib/authStore';
+	import { goto } from '$app/navigation';
+
+	let currentUser: any = null;
+	user.subscribe((u) => (currentUser = u));
+
+	function handlePublishClick() {
+		if (!currentUser) {
+			goto('/auth/login');
+			return;
+		}
+		goto('/publish');
+	}
 </script>
 
 <div class="min-h-screen flex flex-col font-sans text-gray-900">
@@ -184,21 +196,21 @@
 				<div class="flex flex-col items-center gap-6">
 					<h3 class="text-xl font-semibold">Utah &harr; Idaho</h3>
 					<div class="flex justify-center gap-4">
-						<a href="#publish" class="bg-white text-gray-900 border border-gray-300 px-8 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition">Post</a>
+						<button type="button" on:click={handlePublishClick} class="bg-white text-gray-900 border border-gray-300 px-8 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition">Post</button>
 						<a href="#search" class="text-white px-8 py-3 rounded-lg font-bold text-center transition hover:opacity-90" style="background-color: #2BB573;">Search</a>
 					</div>
 				</div>
 				<div class="flex flex-col items-center gap-6">
 					<h3 class="text-xl font-semibold">Utah &harr; Nevada</h3>
 					<div class="flex justify-center gap-4">
-						<a href="#publish" class="bg-white text-gray-900 border border-gray-300 px-8 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition">Post</a>
+						<button type="button" on:click={handlePublishClick} class="bg-white text-gray-900 border border-gray-300 px-8 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition">Post</button>
 						<a href="#search" class="text-white px-8 py-3 rounded-lg font-bold text-center transition hover:opacity-90" style="background-color: #2BB573;">Search</a>
 					</div>
 				</div>
 				<div class="flex flex-col items-center gap-6">
 					<h3 class="text-xl font-semibold">Utah &harr; California</h3>
 					<div class="flex justify-center gap-4">
-						<a href="#publish" class="bg-white text-gray-900 border border-gray-300 px-8 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition">Post</a>
+						<button type="button" on:click={handlePublishClick} class="bg-white text-gray-900 border border-gray-300 px-8 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition">Post</button>
 						<a href="#search" class="text-white px-8 py-3 rounded-lg font-bold text-center transition hover:opacity-90" style="background-color: #2BB573;">Search</a>
 					</div>
 				</div>

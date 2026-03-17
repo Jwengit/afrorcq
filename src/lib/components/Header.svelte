@@ -15,6 +15,14 @@
 		isMenuOpen = !isMenuOpen;
 	}
 
+	function handlePublishClick() {
+		if (!currentUser) {
+			goto('/auth/login');
+			return;
+		}
+		goto('/publish');
+	}
+
 	async function signOut() {
 		await supabase.auth.signOut();
 		goto('/');
@@ -34,7 +42,14 @@
 
 			<!-- Desktop Menu -->
 			<div class="hidden md:flex items-center space-x-8">
-				<a href="#publish" class="transition font-medium" style="color: #2BB573;">Publish a ride</a>
+				<button
+					type="button"
+					on:click={handlePublishClick}
+					class="transition font-medium text-left"
+					style="color: #2BB573;"
+				>
+					Publish a ride
+				</button>
 
 				{#if currentUser}
 					<!-- User is logged in -->
@@ -43,7 +58,7 @@
 							<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/>
 							<circle cx="12" cy="7" r="4"/>
 						</svg>
-						Profile
+						View my profile
 					</a>
 					<button
 						on:click={signOut}
@@ -92,18 +107,21 @@
 	{#if isMenuOpen}
 		<div class="md:hidden bg-white border-t">
 			<div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-				<a
-					href="#publish"
-					class="block px-3 py-2 rounded-md hover:bg-gray-50" style="color: #2BB573;"
-					>Publish a ride</a
+				<button
+					type="button"
+					on:click={handlePublishClick}
+					class="block w-full text-left px-3 py-2 rounded-md hover:bg-gray-50"
+					style="color: #2BB573;"
 				>
+					Publish a ride
+				</button>
 
 				{#if currentUser}
 					<!-- User is logged in -->
 					<a
 						href="/profile"
 						class="block px-3 py-2 text-gray-600 hover:text-primary hover:bg-gray-50 rounded-md"
-						>Profile</a
+						>View my profile</a
 					>
 					<button
 						on:click={signOut}
