@@ -58,7 +58,7 @@
 							<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/>
 							<circle cx="12" cy="7" r="4"/>
 						</svg>
-						View my profile
+						Profile
 					</a>
 					<button
 						on:click={signOut}
@@ -121,7 +121,7 @@
 					<a
 						href="/profile"
 						class="block px-3 py-2 text-gray-600 hover:text-primary hover:bg-gray-50 rounded-md"
-						>View my profile</a
+						>Profile</a
 					>
 					<button
 						on:click={signOut}

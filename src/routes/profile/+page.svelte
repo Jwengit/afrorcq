@@ -77,6 +77,14 @@
 
 			if (data) {
 				profile = { ...profile, ...data };
+				// Convert ride_preferences from string to array if needed
+				if (typeof data.ride_preferences === 'string') {
+					profile.ride_preferences = data.ride_preferences.split(',').map((p: string) => p.trim()).filter((p: string) => p);
+				}
+				// Convert languages from string to array if needed
+				if (typeof data.languages === 'string') {
+					profile.languages = data.languages.split(',').map((l: string) => l.trim()).filter((l: string) => l);
+				}
 				formData = { ...profile };
 				previewUrl = profile.profile_photo_url || '';
 			}
@@ -159,13 +167,13 @@
 					first_name: updatedProfile.first_name,
 					gender: updatedProfile.gender,
 					bio: updatedProfile.bio,
-					languages: updatedProfile.languages,
-					ride_preferences: updatedProfile.ride_preferences,
+					languages: updatedProfile.languages.join(', '),
+					ride_preferences: updatedProfile.ride_preferences.join(', '),
 					profile_photo_url: photoUrl
 				});
 
 			if (error) {
-				console.error('Error saving profile:', error);
+				console.error('Erreur détaillée de sauvegarde:', error);
 				alert('Error saving profile. Please try again.');
 			} else {
 				profile = { ...updatedProfile, status: 'Unverified' };
