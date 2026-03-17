@@ -2,12 +2,17 @@ import { json } from '@sveltejs/kit';
 import { Resend } from 'resend';
 import { env } from '$env/dynamic/private';
 
-const resend = new Resend(env.RESEND_API_KEY);
-
 export async function POST({ request }) {
 	const { email, name } = await request.json();
 
 	try {
+		if (!env.RESEND_API_KEY) {
+			console.warn('RESEND_API_KEY is not set. Skipping welcome email.');
+			return json({ success: true, skipped: true });
+		}
+
+		const resend = new Resend(env.RESEND_API_KEY);
+
 		const { data, error } = await resend.emails.send({
 			from: 'support@hizli-carpooling.com',
 			to: email,
