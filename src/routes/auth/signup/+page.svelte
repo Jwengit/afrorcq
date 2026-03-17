@@ -240,16 +240,13 @@
 						class="w-full inline-flex justify-center py-3 px-4 border-2 border-gray-300 rounded-lg shadow-md bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-all duration-200 hover:shadow-lg"
 					>
 						<svg class="w-5 h-5 mr-3" viewBox="0 0 24 24">
-							<path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-							<path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-							<path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-							<path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-						</svg>
-						Sign up with Google
-					</button>
-					<p class="mt-2 text-xs text-gray-500 text-center">
-						Google OAuth must be configured in Supabase dashboard
-					</p>
+						<path fill="#4285F4" d="M21.35 11.1h-9.17v2.92h5.27c-.23 1.3-1.33 3.82-5.27 3.82-3.17 0-5.75-2.62-5.75-5.84s2.58-5.84 5.75-5.84c1.81 0 3.02.78 3.72 1.45l2.55-2.47C17.47 2.3 14.73 1 12 1 6.48 1 2 5.48 2 11s4.48 10 10 10c5.76 0 9.5-4.03 9.5-9.69 0-.65-.07-1.14-.15-1.46z"/>
+						<path fill="#34A853" d="M7.58 14.59c-.49-1.44-.49-2.98 0-4.42V7.39H4.01C3.25 8.94 2.86 10.92 2.86 12.97s.39 4.03 1.15 5.58l3.57-3.96z"/>
+						<path fill="#FBBC05" d="M12 22c2.7 0 4.95-.89 6.6-2.41l-3.15-2.86c-.88.61-2.01.97-3.45.97-2.64 0-4.88-1.77-5.68-4.14H4.01v2.6C5.64 20.9 8.56 22 12 22z"/>
+						<path fill="#EA4335" d="M19.6 6.56l-3.05 2.82c-.86-.82-1.95-1.31-3.12-1.31-1.51 0-2.84.81-3.55 2.02L8.23 8.39C9.41 6.45 10.62 5 12 5c1.5 0 2.78.62 3.65 1.56z"/>
+					</svg>
+					Sign up with Google
+				</button>
 				</div>
 			</div>
 
