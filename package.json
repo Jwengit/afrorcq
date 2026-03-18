@@ -16,7 +16,7 @@
 	"devDependencies": {
 		"@eslint/compat": "^2.0.2",
 		"@eslint/js": "^9.39.2",
-		"@sveltejs/adapter-auto": "^7.0.0",
+		"@sveltejs/adapter-vercel": "^6.3.3",
 		"@sveltejs/kit": "^2.50.2",
 		"@sveltejs/vite-plugin-svelte": "^6.2.4",
 		"@tailwindcss/forms": "^0.5.11",
@@ -40,6 +40,7 @@
 	"description": "Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).",
 	"main": "eslint.config.js",
 	"dependencies": {
+		"@react-email/render": "^2.0.4",
 		"@supabase/supabase-js": "^2.99.1",
 		"acorn": "^8.15.0",
 		"acorn-jsx": "^5.3.2",
@@ -134,7 +135,6 @@
 		"prelude-ls": "^1.2.1",
 		"punycode": "^2.3.1",
 		"readdirp": "^4.1.2",
-		"resend": "^6.9.3",
 		"resolve-from": "^4.0.0",
 		"rollup": "^4.57.1",
 		"sade": "^1.8.1",

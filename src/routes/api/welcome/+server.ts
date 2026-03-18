@@ -1,5 +1,4 @@
 import { json } from '@sveltejs/kit';
-import { Resend } from 'resend';
 import { env } from '$env/dynamic/private';
 
 export async function POST({ request }) {
@@ -11,21 +10,27 @@ export async function POST({ request }) {
 			return json({ success: true, skipped: true });
 		}
 
-		const resend = new Resend(env.RESEND_API_KEY);
-
-		const { data, error } = await resend.emails.send({
-			from: 'support@hizli-carpooling.com',
-			to: email,
-			subject: 'Welcome to Hizli Carpooling!',
-			html: `
-				<h1>Welcome ${name || 'User'}!</h1>
-				<p>Thank you for signing up to Hizli Carpooling. We're excited to have you join our community.</p>
-				<p>Please complete your profile to get started.</p>
-				<a href="https://hizli-carpooling.com/">Visit Hizli Carpooling</a>
-			`
+		const response = await fetch('https://api.resend.com/emails', {
+			method: 'POST',
+			headers: {
+				Authorization: `Bearer ${env.RESEND_API_KEY}`,
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({
+				from: 'support@hizli-carpooling.com',
+				to: email,
+				subject: 'Welcome to Hizli Carpooling!',
+				html: `
+					<h1>Welcome ${name || 'User'}!</h1>
+					<p>Thank you for signing up to Hizli Carpooling. We're excited to have you join our community.</p>
+					<p>Please complete your profile to get started.</p>
+					<a href="https://hizli-carpooling.com/">Visit Hizli Carpooling</a>
+				`
+			})
 		});
 
-		if (error) {
+		if (!response.ok) {
+			const error = await response.text();
 			console.error('Error sending welcome email:', error);
 			return json({ error: 'Failed to send email' }, { status: 500 });
 		}

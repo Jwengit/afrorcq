@@ -17,11 +17,11 @@ let pages = [
 <h2>Hizli Admin</h2>
 
 <nav>
-<a>Users</a>
-<a>Rides</a>
-<a>Reviews</a>
-<a>Reports</a>
-<a>Documents</a>
+<button type="button" class="nav-link">Users</button>
+<button type="button" class="nav-link">Rides</button>
+<button type="button" class="nav-link">Reviews</button>
+<button type="button" class="nav-link">Reports</button>
+<button type="button" class="nav-link">Documents</button>
 </nav>
 
 <div class="divider"></div>
@@ -115,13 +115,17 @@ gap:12px;
 margin-bottom:20px;
 }
 
-.sidebar nav a{
+.nav-link{
+background:none;
+border:none;
+padding:0;
+text-align:left;
 cursor:pointer;
 color:#333;
 font-weight:500;
 }
 
-.sidebar nav a:hover{
+.nav-link:hover{
 color:#2BB573;
 }
 
