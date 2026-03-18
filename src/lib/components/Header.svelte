@@ -53,6 +53,9 @@
 
 				{#if currentUser}
 					<!-- User is logged in -->
+					<a href="/dashboard" class="text-gray-600 hover:text-gray-900 transition-colors">
+						Dashboard
+					</a>
 					<a href="/profile" class="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors">
 						<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 							<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/>
@@ -118,6 +121,11 @@
 
 				{#if currentUser}
 					<!-- User is logged in -->
+					<a
+						href="/dashboard"
+						class="block px-3 py-2 text-gray-600 hover:text-primary hover:bg-gray-50 rounded-md"
+						>Dashboard</a
+					>
 					<a
 						href="/profile"
 						class="block px-3 py-2 text-gray-600 hover:text-primary hover:bg-gray-50 rounded-md"

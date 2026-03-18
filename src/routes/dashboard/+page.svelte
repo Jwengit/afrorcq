@@ -101,11 +101,6 @@
 								My bookings
 							</a>
 						</li>
-						<li>
-							<a href="#profile" class="inline-flex items-center px-4 py-2 rounded-full bg-amber-100 text-amber-800 text-sm font-medium hover:bg-amber-200">
-								Profile
-							</a>
-						</li>
 					</ul>
 				</nav>
 			</section>
@@ -113,7 +108,7 @@
 			<section id="my-rides" class="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
 				<h2 class="text-xl font-semibold text-gray-900 mb-4">My rides</h2>
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-					{#each myRides as ride}
+					{#each myRides as ride (`${ride.from}-${ride.to}-${ride.date}`)}
 						<article class="rounded-lg border border-gray-200 p-4">
 							<p class="text-sm text-gray-500">{ride.date}</p>
 							<h3 class="text-base font-semibold text-gray-900 mt-1">{ride.from} to {ride.to}</h3>
@@ -130,7 +125,7 @@
 			<section id="my-bookings" class="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
 				<h2 class="text-xl font-semibold text-gray-900 mb-4">My bookings</h2>
 				<div class="space-y-3">
-					{#each myBookings as booking}
+					{#each myBookings as booking (`${booking.route}-${booking.date}`)}
 						<article class="rounded-lg border border-gray-200 p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
 							<div>
 								<h3 class="text-base font-semibold text-gray-900">{booking.route}</h3>
@@ -144,19 +139,6 @@
 				</div>
 			</section>
 
-			<section id="profile" class="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-				<h2 class="text-xl font-semibold text-gray-900 mb-2">Profile</h2>
-				<p class="text-gray-600 mb-4">
-					Keep your profile complete to increase trust and make ride matching easier.
-				</p>
-				<button
-					type="button"
-					on:click={goToProfile}
-					class="px-4 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700"
-				>
-					Update profile
-				</button>
-			</section>
 		</div>
 	</div>
 {/if}
