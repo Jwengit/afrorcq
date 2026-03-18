@@ -460,7 +460,7 @@
 					</div>
 					<button
 						on:click={signOut}
-						class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+						class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer"
 					>
 						Sign Out
 					</button>

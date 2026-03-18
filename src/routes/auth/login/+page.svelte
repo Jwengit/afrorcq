@@ -9,8 +9,12 @@
 	let showPassword = false;
 	let loading = false;
 	let error = '';
-	let infoMessage = '';
 	let recaptchaToken = '';
+	let recaptchaContainer: HTMLDivElement;
+	let recaptchaWidgetId: number | null = null;
+
+	const RECAPTCHA_SCRIPT_SRC = 'https://www.google.com/recaptcha/api.js?render=explicit';
+	const RECAPTCHA_SITE_KEY = '6LdQr38pAAAAANn80cqDW86qzuS6xbveg0b57scK';
 
 	// reCAPTCHA callback
 	function onRecaptchaCallback(token: string) {
@@ -21,6 +25,58 @@
 		recaptchaToken = '';
 	}
 
+	async function ensureRecaptchaScriptLoaded() {
+		if ((window as Window & { grecaptcha?: unknown }).grecaptcha) {
+			return;
+		}
+
+		await new Promise<void>((resolvePromise, rejectPromise) => {
+			const existingScript = document.querySelector(
+				`script[src^="https://www.google.com/recaptcha/api.js"]`
+			) as HTMLScriptElement | null;
+
+			if (existingScript) {
+				existingScript.addEventListener('load', () => resolvePromise(), { once: true });
+				existingScript.addEventListener('error', () => rejectPromise(new Error('Failed to load reCAPTCHA script')), { once: true });
+				return;
+			}
+
+			const script = document.createElement('script');
+			script.src = RECAPTCHA_SCRIPT_SRC;
+			script.async = true;
+			script.defer = true;
+			script.onload = () => resolvePromise();
+			script.onerror = () => rejectPromise(new Error('Failed to load reCAPTCHA script'));
+			document.head.appendChild(script);
+		});
+	}
+
+	function renderRecaptchaWidget() {
+		const recaptchaWindow = window as Window & {
+			grecaptcha?: {
+				ready: (cb: () => void) => void;
+				render: (container: HTMLElement, params: Record<string, unknown>) => number;
+				reset: (widgetId?: number) => void;
+			};
+		};
+
+		if (!recaptchaWindow.grecaptcha || !recaptchaContainer) {
+			return;
+		}
+
+		recaptchaWindow.grecaptcha.ready(() => {
+			if (recaptchaWidgetId === null) {
+				recaptchaWidgetId = recaptchaWindow.grecaptcha!.render(recaptchaContainer, {
+					sitekey: RECAPTCHA_SITE_KEY,
+					callback: onRecaptchaCallback,
+					'expired-callback': onRecaptchaExpired
+				});
+			} else {
+				recaptchaWindow.grecaptcha!.reset(recaptchaWidgetId);
+			}
+		});
+	}
+
 	onMount(() => {
 		// Expose callbacks globally for reCAPTCHA
 		const recaptchaWindow = window as Window & {
@@ -29,11 +85,23 @@
 		};
 		recaptchaWindow.onRecaptchaCallback = onRecaptchaCallback;
 		recaptchaWindow.onRecaptchaExpired = onRecaptchaExpired;
+
+		ensureRecaptchaScriptLoaded()
+			.then(() => {
+				renderRecaptchaWidget();
+			})
+			.catch((err) => {
+				console.error('reCAPTCHA load error:', err);
+				error = 'Failed to load reCAPTCHA. Please refresh the page.';
+			});
+
+		return () => {
+			recaptchaToken = '';
+		};
 	});
 
 	async function signIn() {
 		error = '';
-		infoMessage = '';
 
 		if (!recaptchaToken) {
 			error = 'Please complete the reCAPTCHA verification';
@@ -51,11 +119,7 @@
 			console.log('Supabase signIn response:', { data, signInError });
 
 			if (signInError) {
-				if (signInError.message.toLowerCase().includes('email not confirmed')) {
-					error = 'Your email is not confirmed yet. Please check your inbox or resend the confirmation email below.';
-				} else {
-					error = signInError.message;
-				}
+				error = signInError.message;
 			} else {
 				// Redirect to profile or home
 				goto(resolve('/profile'));
@@ -89,34 +153,6 @@
 		}
 	}
 
-	async function resendConfirmation() {
-		if (!email) {
-			error = 'Please enter your email address first';
-			return;
-		}
-
-		try {
-			error = '';
-			infoMessage = '';
-
-			const { error: resendError } = await supabase.auth.resend({
-				type: 'signup',
-				email,
-				options: {
-					emailRedirectTo: `${window.location.origin}/auth/callback`
-				}
-			});
-
-			if (resendError) {
-				error = resendError.message;
-			} else {
-				infoMessage = 'Confirmation email resent. Check your inbox.';
-			}
-		} catch (err) {
-			error = 'Failed to resend confirmation email.';
-			console.error('Resend error:', err);
-		}
-	}
 </script>
 
 <div class="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -186,23 +222,9 @@
 				<div class="text-red-600 text-sm">{error}</div>
 			{/if}
 
-			{#if infoMessage}
-				<div class="text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 text-sm">{infoMessage}</div>
-			{/if}
-
-			<div class="text-right">
-				<button
-					type="button"
-					on:click={resendConfirmation}
-					class="text-sm font-medium text-green-700 hover:text-green-800"
-				>
-					Resend confirmation email
-				</button>
-			</div>
-
 			<!-- reCAPTCHA -->
 			<div class="flex justify-center">
-				<div class="g-recaptcha" data-sitekey="6LdQr38pAAAAANn80cqDW86qzuS6xbveg0b57scK" data-callback="onRecaptchaCallback" data-expired-callback="onRecaptchaExpired"></div>
+				<div bind:this={recaptchaContainer}></div>
 			</div>
 
 			<div>

@@ -45,7 +45,7 @@
 				<button
 					type="button"
 					on:click={handlePublishClick}
-					class="transition font-medium text-left"
+					class="transition font-medium text-left cursor-pointer"
 					style="color: #2BB573;"
 				>
 					Publish a ride
@@ -62,7 +62,7 @@
 					</a>
 					<button
 						on:click={signOut}
-						class="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
+						class="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors cursor-pointer"
 					>
 						Sign Out
 					</button>
@@ -110,7 +110,7 @@
 				<button
 					type="button"
 					on:click={handlePublishClick}
-					class="block w-full text-left px-3 py-2 rounded-md hover:bg-gray-50"
+					class="block w-full text-left px-3 py-2 rounded-md hover:bg-gray-50 cursor-pointer"
 					style="color: #2BB573;"
 				>
 					Publish a ride
@@ -125,7 +125,7 @@
 					>
 					<button
 						on:click={signOut}
-						class="block w-full text-left px-3 py-2 text-gray-600 hover:text-primary hover:bg-gray-50 rounded-md"
+						class="block w-full text-left px-3 py-2 text-gray-600 hover:text-primary hover:bg-gray-50 rounded-md cursor-pointer"
 					>
 						Sign Out
 					</button>

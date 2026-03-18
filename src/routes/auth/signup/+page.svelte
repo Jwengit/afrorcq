@@ -13,6 +13,11 @@
 	let error = '';
 	let successMessage = '';
 	let recaptchaToken = '';
+	let recaptchaContainer: HTMLDivElement;
+	let recaptchaWidgetId: number | null = null;
+
+	const RECAPTCHA_SCRIPT_SRC = 'https://www.google.com/recaptcha/api.js?render=explicit';
+	const RECAPTCHA_SITE_KEY = '6LdQr38pAAAAANn80cqDW86qzuS6xbveg0b57scK';
 
 	// reCAPTCHA callback
 	function onRecaptchaCallback(token: string) {
@@ -23,6 +28,58 @@
 		recaptchaToken = '';
 	}
 
+	async function ensureRecaptchaScriptLoaded() {
+		if ((window as Window & { grecaptcha?: unknown }).grecaptcha) {
+			return;
+		}
+
+		await new Promise<void>((resolvePromise, rejectPromise) => {
+			const existingScript = document.querySelector(
+				`script[src^="https://www.google.com/recaptcha/api.js"]`
+			) as HTMLScriptElement | null;
+
+			if (existingScript) {
+				existingScript.addEventListener('load', () => resolvePromise(), { once: true });
+				existingScript.addEventListener('error', () => rejectPromise(new Error('Failed to load reCAPTCHA script')), { once: true });
+				return;
+			}
+
+			const script = document.createElement('script');
+			script.src = RECAPTCHA_SCRIPT_SRC;
+			script.async = true;
+			script.defer = true;
+			script.onload = () => resolvePromise();
+			script.onerror = () => rejectPromise(new Error('Failed to load reCAPTCHA script'));
+			document.head.appendChild(script);
+		});
+	}
+
+	function renderRecaptchaWidget() {
+		const recaptchaWindow = window as Window & {
+			grecaptcha?: {
+				ready: (cb: () => void) => void;
+				render: (container: HTMLElement, params: Record<string, unknown>) => number;
+				reset: (widgetId?: number) => void;
+			};
+		};
+
+		if (!recaptchaWindow.grecaptcha || !recaptchaContainer) {
+			return;
+		}
+
+		recaptchaWindow.grecaptcha.ready(() => {
+			if (recaptchaWidgetId === null) {
+				recaptchaWidgetId = recaptchaWindow.grecaptcha!.render(recaptchaContainer, {
+					sitekey: RECAPTCHA_SITE_KEY,
+					callback: onRecaptchaCallback,
+					'expired-callback': onRecaptchaExpired
+				});
+			} else {
+				recaptchaWindow.grecaptcha!.reset(recaptchaWidgetId);
+			}
+		});
+	}
+
 	onMount(() => {
 		// Expose callbacks globally for reCAPTCHA
 		const recaptchaWindow = window as Window & {
@@ -31,6 +88,19 @@
 		};
 		recaptchaWindow.onRecaptchaCallback = onRecaptchaCallback;
 		recaptchaWindow.onRecaptchaExpired = onRecaptchaExpired;
+
+		ensureRecaptchaScriptLoaded()
+			.then(() => {
+				renderRecaptchaWidget();
+			})
+			.catch((err) => {
+				console.error('reCAPTCHA load error:', err);
+				error = 'Failed to load reCAPTCHA. Please refresh the page.';
+			});
+
+		return () => {
+			recaptchaToken = '';
+		};
 	});
 
 	async function signUp() {
@@ -54,8 +124,7 @@
 				email,
 				password,
 				options: {
-					emailRedirectTo: `${window.location.origin}/auth/callback`,
-					data: {
+				data: {
 						status: 'Unverified',
 						recaptcha_token: recaptchaToken
 					}
@@ -67,11 +136,6 @@
 			if (signUpError) {
 				error = signUpError.message;
 			} else {
-				if (!data.session) {
-					successMessage = 'Account created. Please check your email and click the confirmation link.';
-					return;
-				}
-
 				// Send welcome email
 				try {
 					await fetch('/api/welcome', {
@@ -228,7 +292,7 @@
 
 			<!-- reCAPTCHA -->
 			<div class="flex justify-center">
-				<div class="g-recaptcha" data-sitekey="6LdQr38pAAAAANn80cqDW86qzuS6xbveg0b57scK" data-callback="onRecaptchaCallback" data-expired-callback="onRecaptchaExpired"></div>
+				<div bind:this={recaptchaContainer}></div>
 			</div>
 
 			<div>
