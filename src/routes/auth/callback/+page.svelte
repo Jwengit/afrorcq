@@ -16,8 +16,9 @@
 			const createdAt = new Date(user.created_at);
 			const now = new Date();
 			const diffMinutes = (now.getTime() - createdAt.getTime()) / (1000 * 60);
+			const provider = user.app_metadata?.provider;
 
-			if (diffMinutes < 5) {
+			if (diffMinutes < 5 && provider === 'google') {
 				// Send welcome email for new user
 				try {
 					await fetch('/api/welcome', {

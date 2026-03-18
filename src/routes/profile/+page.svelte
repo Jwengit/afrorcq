@@ -495,14 +495,14 @@
 								<button
 									type="button"
 									on:click={viewPublicProfile}
-									class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+									class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer"
 								>
 									View my public profile
 								</button>
 								<button
 									type="button"
 									on:click={startEditing}
-									class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+									class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors cursor-pointer"
 								>
 									Edit Profile
 								</button>
@@ -603,7 +603,7 @@
 								<button
 									type="button"
 									on:click={cancelEditing}
-									class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+									class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer disabled:cursor-not-allowed"
 									disabled={saving}
 								>
 									Cancel
@@ -611,7 +611,7 @@
 								<button
 									type="button"
 									on:click={viewPublicProfile}
-									class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+									class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer disabled:cursor-not-allowed"
 									disabled={saving}
 								>
 									View my public profile
@@ -619,7 +619,7 @@
 								<button
 									type="submit"
 									disabled={saving}
-									class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+									class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
 								>
 									{saving ? 'Saving...' : 'Save Changes'}
 								</button>

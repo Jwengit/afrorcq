@@ -142,26 +142,31 @@
 				error = signUpError.message;
 			} else {
 				let welcomeEmailError = false;
+				const welcomeEmailPayload = JSON.stringify({
+					email: data.user?.email ?? email,
+					name:
+						(data.user?.user_metadata?.full_name as string | undefined) ||
+						(data.user?.user_metadata?.name as string | undefined) ||
+						''
+				});
 
-				// Send welcome email only when a session is already created.
-				// If email confirmation is required, callback page handles it later.
-				if (data.session) {
-					try {
-						const welcomeResponse = await fetch('/api/welcome', {
-							method: 'POST',
-							headers: { 'Content-Type': 'application/json' },
-							body: JSON.stringify({ email, name: '' })
-						});
+				try {
+					const welcomeResponse = await fetch('/api/welcome', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: welcomeEmailPayload
+					});
 
-						if (!welcomeResponse.ok) {
-							welcomeEmailError = true;
-							console.error('Welcome email request failed with status:', welcomeResponse.status);
-						}
-					} catch (emailErr) {
+					if (!welcomeResponse.ok) {
 						welcomeEmailError = true;
-						console.error('Error sending welcome email:', emailErr);
+						console.error('Welcome email request failed with status:', welcomeResponse.status);
 					}
+				} catch (emailErr) {
+					welcomeEmailError = true;
+					console.error('Error sending welcome email:', emailErr);
+				}
 
+				if (data.session) {
 					goto(resolve('/profile'));
 					return;
 				}
