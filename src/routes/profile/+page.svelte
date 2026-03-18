@@ -491,12 +491,22 @@
 					<div class="space-y-6">
 						<div class="flex items-center justify-between">
 							<h2 class="text-xl font-semibold text-gray-900">Profile Information</h2>
-							<button
-								on:click={startEditing}
-								class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
-							>
-								Edit Profile
-							</button>
+							<div class="space-x-2">
+								<button
+									type="button"
+									on:click={viewPublicProfile}
+									class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+								>
+									View my public profile
+								</button>
+								<button
+									type="button"
+									on:click={startEditing}
+									class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+								>
+									Edit Profile
+								</button>
+							</div>
 						</div>
 
 						<!-- Profile Photo -->
@@ -522,14 +532,6 @@
 								<h4 class="font-medium text-gray-900 mb-2">Bio</h4>
 								<p class="text-gray-600">{profile.bio || 'No bio added yet'}</p>
 							</div>
-							<div>
-								<h4 class="font-medium text-gray-900 mb-2">Languages</h4>
-								<p class="text-gray-600">{profile.languages.length > 0 ? profile.languages.join(', ') : 'No languages specified'}</p>
-							</div>
-							<div class="md:col-span-2">
-								<h4 class="font-medium text-gray-900 mb-2">Ride Preferences</h4>
-								<p class="text-gray-600">{profile.ride_preferences.length > 0 ? profile.ride_preferences.join(', ') : 'No preferences specified'}</p>
-							</div>
 						</div>
 
 						<div class="border-t border-gray-200 pt-6">
@@ -554,6 +556,14 @@
 								<div class="md:col-span-2">
 									<h5 class="font-medium text-gray-900 mb-2">Address</h5>
 									<p class="text-gray-600">{profile.address || 'Not provided'}</p>
+								</div>
+								<div>
+									<h5 class="font-medium text-gray-900 mb-2">Languages Spoken</h5>
+									<p class="text-gray-600">{profile.languages.length > 0 ? profile.languages.join(', ') : 'No languages specified'}</p>
+								</div>
+								<div>
+									<h5 class="font-medium text-gray-900 mb-2">Ride Preferences</h5>
+									<p class="text-gray-600">{profile.ride_preferences.length > 0 ? profile.ride_preferences.join(', ') : 'No preferences specified'}</p>
 								</div>
 							</div>
 						</div>
@@ -761,6 +771,41 @@
 										placeholder="Enter your address"
 									/>
 								</div>
+
+								<fieldset class="md:col-span-2">
+									<legend class="block text-sm font-medium text-gray-700 mb-2">Languages Spoken</legend>
+									<div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+										{#each languageOptions as language (language)}
+											<label class="flex items-center">
+												<input
+													type="checkbox"
+													checked={formData.languages.includes(language)}
+													on:change={() => toggleLanguage(language)}
+													class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+												/>
+												<span class="ml-2 text-sm text-gray-700">{language}</span>
+											</label>
+										{/each}
+									</div>
+								</fieldset>
+
+								<fieldset class="md:col-span-2">
+									<legend class="block text-sm font-medium text-gray-700 mb-2">Ride Preferences</legend>
+									<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+										{#each ridePreferenceOptions as pref (pref)}
+											<label class="flex items-center space-x-2">
+												<input
+													type="checkbox"
+													checked={formData.ride_preferences.includes(pref)}
+													on:change={() => toggleRidePreference(pref)}
+													class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+												/>
+												<span class="text-sm text-gray-700">{pref}</span>
+											</label>
+										{/each}
+									</div>
+									<p class="text-xs text-gray-500 mt-1">Choose your ride preferences.</p>
+								</fieldset>
 							</div>
 						</div>
 
@@ -826,40 +871,6 @@
 							</div>
 						</div>
 
-						<fieldset>
-							<legend class="block text-sm font-medium text-gray-700 mb-2">Languages</legend>
-							<div class="grid grid-cols-2 md:grid-cols-3 gap-2">
-								{#each languageOptions as language (language)}
-									<label class="flex items-center">
-										<input
-											type="checkbox"
-											checked={formData.languages.includes(language)}
-											on:change={() => toggleLanguage(language)}
-											class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
-										/>
-										<span class="ml-2 text-sm text-gray-700">{language}</span>
-									</label>
-								{/each}
-							</div>
-						</fieldset>
-
-						<fieldset>
-							<legend class="block text-sm font-medium text-gray-700 mb-2">Ride Preferences</legend>
-							<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-								{#each ridePreferenceOptions as pref (pref)}
-									<label class="flex items-center space-x-2">
-										<input
-											type="checkbox"
-											checked={formData.ride_preferences.includes(pref)}
-											on:change={() => toggleRidePreference(pref)}
-											class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
-										/>
-										<span class="text-sm text-gray-700">{pref}</span>
-									</label>
-								{/each}
-							</div>
-							<p class="text-xs text-gray-500 mt-1">Choose your ride preferences.</p>
-						</fieldset>
 					</form>
 				{/if}
 			</div>

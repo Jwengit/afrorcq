@@ -28,6 +28,10 @@
 		recaptchaToken = '';
 	}
 
+	function getAuthCallbackUrl() {
+		return `${window.location.origin}/auth/callback`;
+	}
+
 	async function ensureRecaptchaScriptLoaded() {
 		if ((window as Window & { grecaptcha?: unknown }).grecaptcha) {
 			return;
@@ -124,7 +128,8 @@
 				email,
 				password,
 				options: {
-				data: {
+					emailRedirectTo: getAuthCallbackUrl(),
+					data: {
 						status: 'Unverified',
 						recaptcha_token: recaptchaToken
 					}
@@ -136,19 +141,35 @@
 			if (signUpError) {
 				error = signUpError.message;
 			} else {
-				// Send welcome email
-				try {
-					await fetch('/api/welcome', {
-						method: 'POST',
-						headers: { 'Content-Type': 'application/json' },
-						body: JSON.stringify({ email, name: '' })
-					});
-				} catch (emailErr) {
-					console.error('Error sending welcome email:', emailErr);
-					// Don't block signup if email fails
+				let welcomeEmailError = false;
+
+				// Send welcome email only when a session is already created.
+				// If email confirmation is required, callback page handles it later.
+				if (data.session) {
+					try {
+						const welcomeResponse = await fetch('/api/welcome', {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' },
+							body: JSON.stringify({ email, name: '' })
+						});
+
+						if (!welcomeResponse.ok) {
+							welcomeEmailError = true;
+							console.error('Welcome email request failed with status:', welcomeResponse.status);
+						}
+					} catch (emailErr) {
+						welcomeEmailError = true;
+						console.error('Error sending welcome email:', emailErr);
+					}
+
+					goto(resolve('/profile'));
+					return;
 				}
-				// Redirect to profile after signup
-				goto(resolve('/profile'));
+
+				successMessage = 'Account created. Please check your inbox to confirm your email before signing in.';
+				if (welcomeEmailError) {
+					successMessage += ' Welcome email could not be sent right now.';
+				}
 			}
 		} catch (err) {
 			console.error('Unexpected signUp error:', err);
@@ -163,7 +184,7 @@
 			const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
 				provider: 'google',
 				options: {
-					redirectTo: `${window.location.origin}/auth/callback`
+					redirectTo: getAuthCallbackUrl()
 				}
 			});
 

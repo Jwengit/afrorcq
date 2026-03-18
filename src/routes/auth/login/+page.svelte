@@ -25,6 +25,10 @@
 		recaptchaToken = '';
 	}
 
+	function getAuthCallbackUrl() {
+		return `${window.location.origin}/auth/callback`;
+	}
+
 	async function ensureRecaptchaScriptLoaded() {
 		if ((window as Window & { grecaptcha?: unknown }).grecaptcha) {
 			return;
@@ -137,7 +141,7 @@
 			const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
 				provider: 'google',
 				options: {
-					redirectTo: `${window.location.origin}/auth/callback`
+					redirectTo: getAuthCallbackUrl()
 				}
 			});
 
