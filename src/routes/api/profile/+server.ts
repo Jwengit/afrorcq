@@ -1,8 +1,9 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
+import { env } from '$env/dynamic/public';
 
-const supabaseUrl = process.env.VITE_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseUrl = env.VITE_PUBLIC_SUPABASE_URL || '';
+const supabaseKey = env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
 
 export const POST: RequestHandler = async ({ request }) => {
 	try {
