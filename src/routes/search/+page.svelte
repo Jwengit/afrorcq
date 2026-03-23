@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
+	import { resolve } from '$app/paths';
 	import { supabase } from '$lib/supabaseClient';
 
 	type Ride = {
@@ -161,31 +162,30 @@
 				{#if results.length === 0}
 					<p class="text-center text-gray-500 py-10">No rides found for this route.</p>
 				{:else}
-					<p class="text-sm text-gray-500">{results.length} ride{results.length !== 1 ? 's' : ''} found</p>
-					{#each results as ride (ride.id)}
-						<article class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-							<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-								<div>
-									<h2 class="text-base font-semibold text-gray-900">
-										{ride.departure} → {ride.arrival}
-									</h2>
-									<p class="text-sm text-gray-500 mt-0.5">
-										{new Date(ride.ride_date).toLocaleString()}
-									</p>
-									<p class="text-sm text-gray-600 mt-1">
-										Pickup: {ride.pickup} · Drop-off: {ride.dropoff}
-									</p>
-								</div>
-								<div class="flex flex-col items-start sm:items-end gap-1">
-									<span class="text-lg font-bold text-green-700">${ride.price}</span>
-									<span class="text-sm text-gray-500">{ride.seats} seat{ride.seats !== 1 ? 's' : ''} left</span>
-									{#if ride.girls_only}
-										<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-pink-100 text-pink-700 text-xs font-medium">Girls Only</span>
-									{/if}
-								</div>
+				{#each results as ride (ride.id)}
+					<a href={resolve(`/ride/${ride.id}`)} class="block bg-white rounded-xl border border-gray-200 shadow-sm p-5 hover:shadow-md hover:border-green-300 transition-all">
+						<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+							<div>
+								<h2 class="text-base font-semibold text-gray-900">
+									{ride.departure} → {ride.arrival}
+								</h2>
+								<p class="text-sm text-gray-500 mt-0.5">
+									{new Date(ride.ride_date).toLocaleString()}
+								</p>
+								<p class="text-sm text-gray-600 mt-1">
+									Pickup: {ride.pickup} · Drop-off: {ride.dropoff}
+								</p>
 							</div>
-						</article>
-					{/each}
+							<div class="flex flex-col items-start sm:items-end gap-1">
+								<span class="text-lg font-bold text-green-700">${ride.price}</span>
+								<span class="text-sm text-gray-500">{ride.seats} seat{ride.seats !== 1 ? 's' : ''} left</span>
+								{#if ride.girls_only}
+									<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-pink-100 text-pink-700 text-xs font-medium">Girls Only</span>
+								{/if}
+							</div>
+						</div>
+					</a>
+				{/each}
 				{/if}
 			</div>
 		{/if}

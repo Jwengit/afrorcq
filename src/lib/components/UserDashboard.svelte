@@ -67,9 +67,9 @@
 	const bookings: BookingItem[] = [
 		{
 			trip: 'Quebec City weekend return',
-			seat: '1 seat confirmed',
-			status: 'Confirmed',
-			note: 'Departure details shared with the driver.'
+			seat: '1 seat requested',
+			status: 'Pending',
+			note: 'Waiting for the driver to confirm your request.'
 		},
 		{
 			trip: 'Airport pickup ride',

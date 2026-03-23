@@ -18,15 +18,39 @@
 
 	type Booking = {
 		id: string;
-		route: string;
-		date: string;
-		status: 'Confirmed' | 'Pending' | 'Cancelled';
+		ride_id: string;
+		seat_booked: number;
+		status: 'Confirmed' | 'Pending' | 'Cancelled' | 'Rejected';
+		ride: {
+			departure: string;
+			arrival: string;
+			ride_date: string;
+			price: number;
+		};
+	};
+
+	type DriverBookingRequest = {
+		id: string;
+		passenger_id: string;
+		seats_booked: number;
+		status: 'Confirmed' | 'Pending' | 'Cancelled' | 'Rejected';
+		ride: {
+			id: string;
+			departure: string;
+			arrival: string;
+			ride_date: string;
+			price: number;
+		};
 	};
 
 	let currentUser: User | null = null;
 	let loading = true;
 	let myRides: Ride[] = [];
 	let ridesLoading = false;
+	let myBookings: Booking[] = [];
+	let bookingsLoading = false;
+	let incomingRequests: DriverBookingRequest[] = [];
+	let incomingRequestsLoading = false;
 	let editingRideId: string | null = null;
 	let savingRide = false;
 	let deletingRideId: string | null = null;
@@ -35,6 +59,8 @@
 	let bookingToCancelId: string | null = null;
 	let cancellingBookingId: string | null = null;
 	let bookingActionMessage = '';
+	let requestActionMessage = '';
+	let requestActionBookingId: string | null = null;
 
 	let editRideForm = {
 		departure: '',
@@ -44,11 +70,6 @@
 		price: 0,
 		girlsOnly: false
 	};
-
-	let myBookings: Booking[] = [
-		{ id: 'bk-1', route: 'Salt Lake City to Logan', date: '2026-03-23 09:15', status: 'Confirmed' },
-		{ id: 'bk-2', route: 'Provo to Ogden', date: '2026-03-25 17:00', status: 'Pending' }
-	];
 
 	onMount(async () => {
 		const {
@@ -64,6 +85,8 @@
 		}
 
 		await loadMyRides(user!.id);
+		await loadMyBookings(user!.id);
+		await loadIncomingBookingRequests(user!.id);
 		loading = false;
 	});
 
@@ -81,8 +104,168 @@
 		ridesLoading = false;
 	}
 
-	function goToProfile() {
-		goto(resolve('/profile'));
+	async function loadMyBookings(userId: string) {
+		bookingsLoading = true;
+		const { data, error } = await supabase
+			.from('bookings')
+			.select('id, ride_id, seats_booked, status, ride:rides!bookings_ride_id_fkey(departure, arrival, ride_date, price)')
+			.eq('passenger_id', userId)
+			.order('created_at', { ascending: false });
+
+		if (error) {
+			console.error('Bookings load error:', error);
+			bookingActionMessage = 'Could not load ride details for your bookings.';
+			bookingsLoading = false;
+			return;
+		}
+
+		if (data) {
+				const rows = data as unknown as Array<{
+					id: string;
+					ride_id: string;
+					seats_booked: number;
+					status: Booking['status'];
+				ride:
+					| {
+							departure: string;
+							arrival: string;
+							ride_date: string;
+							price: number;
+					  }
+					| Array<{
+						departure: string;
+						arrival: string;
+						ride_date: string;
+						price: number;
+				  }>
+					| null;
+				}>;
+
+				myBookings = rows.map((b) => {
+				const rideInfo = Array.isArray(b.ride) ? b.ride[0] : b.ride;
+
+					return {
+						id: b.id,
+						ride_id: b.ride_id,
+						seat_booked: b.seats_booked,
+						status: b.status,
+						ride: {
+						departure: rideInfo?.departure || 'Ride unavailable',
+						arrival: rideInfo?.arrival || '',
+							ride_date: rideInfo?.ride_date || '',
+							price: rideInfo?.price || 0
+						}
+					};
+				});
+		}
+		bookingsLoading = false;
+	}
+
+	async function loadIncomingBookingRequests(userId: string) {
+		incomingRequestsLoading = true;
+		const { data, error } = await supabase
+			.from('bookings')
+			.select(
+				'id, passenger_id, seats_booked, status, ride:rides!bookings_ride_id_fkey!inner(id, driver_id, departure, arrival, ride_date, price)'
+			)
+			.eq('ride.driver_id', userId)
+			.order('created_at', { ascending: false });
+
+		if (error) {
+			console.error('Incoming requests load error:', error);
+			requestActionMessage = 'Could not load requests for your rides.';
+			incomingRequestsLoading = false;
+			return;
+		}
+
+		if (data) {
+			const rows = data as unknown as Array<{
+				id: string;
+				passenger_id: string;
+				seats_booked: number;
+				status: DriverBookingRequest['status'];
+				ride:
+					| {
+							id: string;
+							driver_id: string;
+							departure: string;
+							arrival: string;
+							ride_date: string;
+							price: number;
+					  }
+					| Array<{
+							id: string;
+							driver_id: string;
+							departure: string;
+							arrival: string;
+							ride_date: string;
+							price: number;
+					  }>
+					| null;
+			}>;
+
+			incomingRequests = rows.map((row) => {
+				const rideInfo = Array.isArray(row.ride) ? row.ride[0] : row.ride;
+
+				return {
+					id: row.id,
+					passenger_id: row.passenger_id,
+					seats_booked: row.seats_booked,
+					status: row.status,
+					ride: {
+						id: rideInfo?.id || '',
+						departure: rideInfo?.departure || 'Ride unavailable',
+						arrival: rideInfo?.arrival || '',
+						ride_date: rideInfo?.ride_date || '',
+						price: rideInfo?.price || 0
+					}
+				};
+			});
+		}
+
+		incomingRequestsLoading = false;
+	}
+
+	async function updateIncomingRequestStatus(
+		bookingId: string,
+		status: 'Confirmed' | 'Rejected'
+	) {
+		requestActionBookingId = bookingId;
+		requestActionMessage = '';
+
+		const { error } = await supabase
+			.from('bookings')
+			.update({ status })
+			.eq('id', bookingId);
+
+		if (error) {
+			console.error('Incoming request update error:', error);
+			requestActionMessage = 'Could not update this booking request. Please try again.';
+			requestActionBookingId = null;
+			return;
+		}
+
+		incomingRequests = incomingRequests.map((request) =>
+			request.id === bookingId ? { ...request, status } : request
+		);
+		requestActionBookingId = null;
+		requestActionMessage =
+			status === 'Confirmed'
+				? 'Booking request confirmed.'
+				: 'Booking request rejected.';
+	}
+
+	function formatRideDate(dateValue: string) {
+		if (!dateValue) {
+			return 'Date unavailable';
+		}
+
+		const parsed = new Date(dateValue);
+		if (Number.isNaN(parsed.getTime())) {
+			return 'Date unavailable';
+		}
+
+		return parsed.toLocaleString();
 	}
 
 	async function signOut() {
@@ -225,10 +408,26 @@
 	}
 
 	async function confirmCancelBooking(bookingId: string) {
+		if (!currentUser) {
+			return;
+		}
+
 		cancellingBookingId = bookingId;
 		bookingActionMessage = '';
 
-		// Placeholder flow until bookings are persisted in DB.
+		const { error } = await supabase
+			.from('bookings')
+			.update({ status: 'Cancelled' })
+			.eq('id', bookingId)
+			.eq('passenger_id', currentUser.id);
+
+		if (error) {
+			console.error('Booking cancellation error:', error);
+			bookingActionMessage = 'Could not cancel this booking. Please try again.';
+			cancellingBookingId = null;
+			return;
+		}
+
 		myBookings = myBookings.map((booking) =>
 			booking.id === bookingId ? { ...booking, status: 'Cancelled' } : booking
 		);
@@ -271,6 +470,11 @@
 						<li>
 							<a href="#my-rides" class="inline-flex items-center px-4 py-2 rounded-full bg-green-100 text-green-800 text-sm font-medium hover:bg-green-200">
 								My rides
+							</a>
+						</li>
+						<li>
+							<a href="#ride-requests" class="inline-flex items-center px-4 py-2 rounded-full bg-amber-100 text-amber-800 text-sm font-medium hover:bg-amber-200">
+								Ride requests
 							</a>
 						</li>
 						<li>
@@ -411,23 +615,93 @@
 				{/if}
 			</section>
 
+			<section id="ride-requests" class="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+				<h2 class="text-xl font-semibold text-gray-900 mb-4">Requests on my rides</h2>
+				{#if requestActionMessage}
+					<p class="mb-3 text-sm text-green-700">{requestActionMessage}</p>
+				{/if}
+				{#if incomingRequestsLoading}
+					<p class="text-sm text-gray-500">Loading ride requests...</p>
+				{:else if incomingRequests.length === 0}
+					<p class="text-sm text-gray-500">No requests yet for your rides.</p>
+				{:else}
+					<div class="space-y-3">
+						{#each incomingRequests as request (request.id)}
+							<article class="rounded-lg border border-gray-200 p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+								<div>
+									<h3 class="text-base font-semibold text-gray-900">
+										{request.ride.arrival
+											? `${request.ride.departure} → ${request.ride.arrival}`
+											: request.ride.departure}
+									</h3>
+									<p class="text-sm text-gray-500 mt-1">{formatRideDate(request.ride.ride_date)}</p>
+									<p class="text-sm text-gray-600 mt-1">
+										Passenger: {request.passenger_id.slice(0, 8)}...
+									</p>
+									<p class="text-sm text-gray-600 mt-1">
+										{request.seats_booked} seat{request.seats_booked !== 1 ? 's' : ''}
+										· {request.ride.price > 0 ? `$${request.ride.price}` : 'Price unavailable'}
+									</p>
+								</div>
+								<div class="flex flex-wrap items-center gap-2">
+									<span class="inline-flex items-center px-2.5 py-1 rounded-full bg-gray-100 text-gray-700 text-sm w-fit">
+										{request.status}
+									</span>
+									{#if request.status === 'Pending'}
+										<button
+											type="button"
+											on:click={() => updateIncomingRequestStatus(request.id, 'Confirmed')}
+											disabled={requestActionBookingId === request.id}
+											class="px-3 py-2 rounded-md bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-60"
+										>
+											{requestActionBookingId === request.id ? 'Updating...' : 'Confirm'}
+										</button>
+										<button
+											type="button"
+											on:click={() => updateIncomingRequestStatus(request.id, 'Rejected')}
+											disabled={requestActionBookingId === request.id}
+											class="px-3 py-2 rounded-md border border-red-300 text-red-700 text-sm font-medium hover:bg-red-50 disabled:opacity-60"
+										>
+											{requestActionBookingId === request.id ? 'Updating...' : 'Reject'}
+										</button>
+									{/if}
+								</div>
+							</article>
+						{/each}
+					</div>
+				{/if}
+			</section>
+
 			<section id="my-bookings" class="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
 				<h2 class="text-xl font-semibold text-gray-900 mb-4">My bookings</h2>
 				{#if bookingActionMessage}
 					<p class="mb-3 text-sm text-green-700">{bookingActionMessage}</p>
 				{/if}
-				<div class="space-y-3">
-					{#each myBookings as booking (booking.id)}
-						<article class="rounded-lg border border-gray-200 p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-							<div>
-								<h3 class="text-base font-semibold text-gray-900">{booking.route}</h3>
-								<p class="text-sm text-gray-500">{booking.date}</p>
-							</div>
-							<div class="flex flex-wrap items-center gap-2">
+				{#if bookingsLoading}
+					<p class="text-sm text-gray-500">Loading bookings...</p>
+				{:else if myBookings.length === 0}
+					<p class="text-sm text-gray-500">You haven't booked any rides yet.</p>
+				{:else}
+					<div class="space-y-3">
+						{#each myBookings as booking (booking.id)}
+							<article class="rounded-lg border border-gray-200 p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+								<div>
+									<h3 class="text-base font-semibold text-gray-900">
+										{booking.ride.arrival
+											? `${booking.ride.departure} → ${booking.ride.arrival}`
+											: booking.ride.departure}
+									</h3>
+									<p class="text-sm text-gray-500 mt-1">{formatRideDate(booking.ride.ride_date)}</p>
+									<p class="text-sm text-gray-600 mt-1">
+										{booking.seat_booked} seat{booking.seat_booked !== 1 ? 's' : ''}
+										· {booking.ride.price > 0 ? `$${booking.ride.price}` : 'Price unavailable'}
+									</p>
+								</div>
+								<div class="flex flex-wrap items-center gap-2">
 								<span class="inline-flex items-center px-2.5 py-1 rounded-full bg-gray-100 text-gray-700 text-sm w-fit">
 									{booking.status}
 								</span>
-								{#if booking.status !== 'Cancelled'}
+								{#if booking.status === 'Pending' || booking.status === 'Confirmed'}
 									{#if bookingToCancelId === booking.id}
 										<button
 											type="button"
@@ -458,6 +732,7 @@
 						</article>
 					{/each}
 				</div>
+				{/if}
 			</section>
 
 		</div>
