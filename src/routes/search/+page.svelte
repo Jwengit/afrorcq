@@ -24,6 +24,7 @@
 	let searched = false;
 	let loading = false;
 	let errorMessage = '';
+	let isFemaleUser = false;
 
 	async function searchRides() {
 		const dep = departure.trim();
@@ -76,7 +77,9 @@
 
 				const seatsMatch = ride.seats >= seatsFilter;
 
-				return routeMatches && dateMatches && seatsMatch;
+				const girlsOnlyMatch = ride.girls_only ? isFemaleUser : true;
+
+				return routeMatches && dateMatches && seatsMatch && girlsOnlyMatch;
 			});
 		}
 
@@ -85,6 +88,16 @@
 	}
 
 	onMount(async () => {
+		const { data: { user } } = await supabase.auth.getUser();
+		if (user) {
+			const { data: profile } = await supabase
+				.from('profiles')
+				.select('gender')
+				.eq('id', user.id)
+				.maybeSingle();
+			isFemaleUser = (profile?.gender ?? '').toLowerCase() === 'female';
+		}
+
 		const dep = $page.url.searchParams.get('departure') ?? '';
 		const arr = $page.url.searchParams.get('arrival') ?? '';
 		const date = $page.url.searchParams.get('date') ?? '';

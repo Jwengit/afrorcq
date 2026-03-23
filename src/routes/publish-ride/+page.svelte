@@ -283,22 +283,18 @@
 						/>
 					</div>
 
+					{#if isFemaleDriver}
 					<div class="rounded-md border border-gray-200 p-3">
 						<label class="inline-flex items-center gap-2 text-sm text-gray-700">
 							<input
 								type="checkbox"
 								bind:checked={form.girlsOnly}
-								disabled={!isFemaleDriver}
-								class="rounded border-gray-300 text-green-600 focus:ring-green-500 disabled:opacity-60"
+								class="rounded border-gray-300 text-green-600 focus:ring-green-500"
 							/>
 							Girls Only
 						</label>
-						{#if !isFemaleDriver}
-							<p class="mt-1 text-xs text-gray-500">
-								Available for female drivers only.
-							</p>
-						{/if}
 					</div>
+				{/if}
 
 					<button
 						type="submit"
