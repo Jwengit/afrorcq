@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS rides (
   pickup TEXT NOT NULL,
   dropoff TEXT NOT NULL,
   ride_date TIMESTAMP WITH TIME ZONE NOT NULL,
-  seats INTEGER NOT NULL CHECK (seats > 0),
+  seats INTEGER NOT NULL CHECK (seats >= 0),
   price NUMERIC(10, 2) NOT NULL CHECK (price >= 0),
   girls_only BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,

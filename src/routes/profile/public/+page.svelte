@@ -2,6 +2,7 @@
 	import { supabase } from '$lib/supabaseClient';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 
 	type PublicProfile = {
@@ -22,6 +23,7 @@
 	};
 
 	let loading = true;
+	let viewingOwnProfile = true;
 	let profile: PublicProfile = {
 		first_name: '',
 		last_name: '',
@@ -160,14 +162,18 @@
 			return;
 		}
 
+		const requestedProfileId = $page.url.searchParams.get('id');
+		const profileId = requestedProfileId || authData.user.id;
+		viewingOwnProfile = profileId === authData.user.id;
+
 		const { data, error } = await supabase
 			.from('profiles')
 			.select('first_name,last_name,car_make,car_year,phone_number,date_of_birth,city_of_birth,address,zip_code,gender,bio,languages,ride_preferences,profile_photo_url')
-			.eq('id', authData.user.id)
+			.eq('id', profileId)
 			.maybeSingle();
 
 		if (error) {
-			console.error('Error loading public profile preview:', error);
+			console.error('Error loading public profile:', error);
 		} else if (data) {
 			profile = {
 				first_name: data.first_name ?? '',
@@ -204,14 +210,18 @@
 			<div class="bg-white rounded-lg shadow-md p-6 mb-6">
 				<div class="flex items-center justify-between">
 					<div>
-						<h1 class="text-3xl font-bold text-gray-900">Public Profile Preview</h1>
-						<p class="text-gray-600 mt-1">This is how your public profile appears</p>
+						<h1 class="text-3xl font-bold text-gray-900">Public Profile</h1>
+						<p class="text-gray-600 mt-1">
+							{viewingOwnProfile
+								? 'This is how your public profile appears to other users'
+								: 'Visible information for drivers and passengers'}
+						</p>
 					</div>
 					<button
-						onclick={() => goto(resolve('/profile'))}
+						onclick={() => goto(resolve(viewingOwnProfile ? '/profile' : '/dashboard'))}
 						class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
 					>
-						Back to edit
+						{viewingOwnProfile ? 'Back to edit' : 'Back to dashboard'}
 					</button>
 				</div>
 			</div>

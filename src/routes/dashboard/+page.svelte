@@ -34,6 +34,10 @@
 		passenger_id: string;
 		seats_booked: number;
 		status: 'Confirmed' | 'Pending' | 'Cancelled' | 'Rejected';
+		passenger: {
+			first_name: string;
+			last_name: string;
+		};
 		ride: {
 			id: string;
 			departure: string;
@@ -204,14 +208,40 @@
 					| null;
 			}>;
 
+			const passengerIds = Array.from(new Set(rows.map((row) => row.passenger_id)));
+			const passengerProfiles: Record<string, { first_name: string; last_name: string }> = {};
+
+			if (passengerIds.length > 0) {
+				const { data: profileRows, error: profileError } = await supabase
+					.from('profiles')
+					.select('id, first_name, last_name')
+					.in('id', passengerIds);
+
+				if (profileError) {
+					console.error('Passenger profiles load error:', profileError);
+				} else if (profileRows) {
+					for (const profile of profileRows) {
+						passengerProfiles[profile.id] = {
+							first_name: profile.first_name ?? '',
+							last_name: profile.last_name ?? ''
+						};
+					}
+				}
+			}
+
 			incomingRequests = rows.map((row) => {
 				const rideInfo = Array.isArray(row.ride) ? row.ride[0] : row.ride;
+				const passengerProfile = passengerProfiles[row.passenger_id];
 
 				return {
 					id: row.id,
 					passenger_id: row.passenger_id,
 					seats_booked: row.seats_booked,
 					status: row.status,
+					passenger: {
+						first_name: passengerProfile?.first_name || '',
+						last_name: passengerProfile?.last_name || ''
+					},
 					ride: {
 						id: rideInfo?.id || '',
 						departure: rideInfo?.departure || 'Ride unavailable',
@@ -304,8 +334,8 @@
 			return;
 		}
 
-		if (editRideForm.seats < 1) {
-			rideActionError = 'Seats must be at least 1.';
+		if (editRideForm.seats < 0) {
+			rideActionError = 'Seats cannot be negative.';
 			return;
 		}
 
@@ -474,7 +504,7 @@
 						</li>
 						<li>
 							<a href="#ride-requests" class="inline-flex items-center px-4 py-2 rounded-full bg-amber-100 text-amber-800 text-sm font-medium hover:bg-amber-200">
-								Ride requests
+								Booking requests
 							</a>
 						</li>
 						<li>
@@ -526,7 +556,7 @@
 											/>
 											<input
 												type="number"
-												min="1"
+												min="0"
 												step="1"
 												bind:value={editRideForm.seats}
 												class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
@@ -616,14 +646,14 @@
 			</section>
 
 			<section id="ride-requests" class="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-				<h2 class="text-xl font-semibold text-gray-900 mb-4">Requests on my rides</h2>
+				<h2 class="text-xl font-semibold text-gray-900 mb-4">Booking requests</h2>
 				{#if requestActionMessage}
 					<p class="mb-3 text-sm text-green-700">{requestActionMessage}</p>
 				{/if}
 				{#if incomingRequestsLoading}
-					<p class="text-sm text-gray-500">Loading ride requests...</p>
+					<p class="text-sm text-gray-500">Loading booking requests...</p>
 				{:else if incomingRequests.length === 0}
-					<p class="text-sm text-gray-500">No requests yet for your rides.</p>
+					<p class="text-sm text-gray-500">No booking requests yet for your rides.</p>
 				{:else}
 					<div class="space-y-3">
 						{#each incomingRequests as request (request.id)}
@@ -635,9 +665,15 @@
 											: request.ride.departure}
 									</h3>
 									<p class="text-sm text-gray-500 mt-1">{formatRideDate(request.ride.ride_date)}</p>
-									<p class="text-sm text-gray-600 mt-1">
-										Passenger: {request.passenger_id.slice(0, 8)}...
-									</p>
+									<div class="mt-1 flex flex-wrap items-center gap-2 text-sm text-gray-600">
+										<span>Passenger:</span>
+										<a
+											href={resolve(`/profile/public?id=${request.passenger_id}`)}
+											class="inline-flex items-center font-medium text-green-700 hover:text-green-800"
+										>
+											View public profile
+										</a>
+									</div>
 									<p class="text-sm text-gray-600 mt-1">
 										{request.seats_booked} seat{request.seats_booked !== 1 ? 's' : ''}
 										· {request.ride.price > 0 ? `$${request.ride.price}` : 'Price unavailable'}

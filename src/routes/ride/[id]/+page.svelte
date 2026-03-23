@@ -80,9 +80,17 @@
 
 			if (error) {
 				console.error('Booking error:', error);
-				errorMessage = error.message || 'Failed to complete booking.';
+				errorMessage =
+					error.message === 'Not enough seats available for this ride.'
+						? 'There are no longer enough seats available for this ride.'
+						: error.message || 'Failed to complete booking.';
 				return;
 			}
+
+			ride = {
+				...ride,
+				seats: Math.max(0, ride.seats - bookingSeats)
+			};
 
 			successMessage = 'Booking request sent. Waiting for driver confirmation.';
 			setTimeout(() => {
@@ -167,7 +175,7 @@
 					</div>
 				{/if}
 
-				{#if currentUser && currentUser.id !== ride.driver_id}
+				{#if currentUser && currentUser.id !== ride.driver_id && ride.seats > 0}
 					<form class="mt-8 space-y-4 border-t border-gray-200 pt-6" on:submit|preventDefault={submitBooking}>
 						<div>
 							<label for="seats" class="block text-sm font-medium text-gray-700 mb-2">Number of seats</label>
@@ -194,6 +202,10 @@
 							{submitting ? 'Booking...' : 'Book this ride'}
 						</button>
 					</form>
+				{:else if currentUser?.id !== ride.driver_id && ride.seats === 0}
+					<div class="mt-8 rounded-md border border-amber-200 bg-amber-50 p-4">
+						<p class="text-sm text-amber-800">This ride is currently sold out.</p>
+					</div>
 				{:else if currentUser?.id === ride.driver_id}
 					<div class="mt-8 rounded-md border border-blue-200 bg-blue-50 p-4">
 						<p class="text-sm text-blue-800">This is your ride. You cannot book your own ride.</p>
