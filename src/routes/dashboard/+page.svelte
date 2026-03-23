@@ -20,6 +20,7 @@
 		id: string;
 		ride_id: string;
 		seat_booked: number;
+		updated_at: string;
 		status: 'Confirmed' | 'Pending' | 'Cancelled' | 'Rejected';
 		ride: {
 			departure: string;
@@ -33,6 +34,7 @@
 		id: string;
 		passenger_id: string;
 		seats_booked: number;
+		updated_at: string;
 		status: 'Confirmed' | 'Pending' | 'Cancelled' | 'Rejected';
 		passenger: {
 			first_name: string;
@@ -65,6 +67,11 @@
 	let bookingActionMessage = '';
 	let requestActionMessage = '';
 	let requestActionBookingId: string | null = null;
+
+	let myArchivedRides: Ride[] = [];
+	let myArchivedBookings: Booking[] = [];
+	let archivedRequests: DriverBookingRequest[] = [];
+	let showArchive = false;
 
 	let editRideForm = {
 		departure: '',
@@ -103,7 +110,9 @@
 			.order('ride_date', { ascending: true });
 
 		if (!error && data) {
-			myRides = data as Ride[];
+			const all = data as Ride[];
+			myRides = all.filter((r) => !isOlderThan3Days(r.ride_date));
+			myArchivedRides = all.filter((r) => isOlderThan3Days(r.ride_date));
 		}
 		ridesLoading = false;
 	}
@@ -112,7 +121,7 @@
 		bookingsLoading = true;
 		const { data, error } = await supabase
 			.from('bookings')
-			.select('id, ride_id, seats_booked, status, ride:rides!bookings_ride_id_fkey(departure, arrival, ride_date, price)')
+			.select('id, ride_id, seats_booked, status, updated_at, ride:rides!bookings_ride_id_fkey(departure, arrival, ride_date, price)')
 			.eq('passenger_id', userId)
 			.order('created_at', { ascending: false });
 
@@ -129,6 +138,7 @@
 					ride_id: string;
 					seats_booked: number;
 					status: Booking['status'];
+					updated_at: string;
 				ride:
 					| {
 							departure: string;
@@ -145,21 +155,31 @@
 					| null;
 				}>;
 
-				myBookings = rows.map((b) => {
-				const rideInfo = Array.isArray(b.ride) ? b.ride[0] : b.ride;
-
+				const allBookings = rows.map((b) => {
+					const rideInfo = Array.isArray(b.ride) ? b.ride[0] : b.ride;
 					return {
 						id: b.id,
 						ride_id: b.ride_id,
 						seat_booked: b.seats_booked,
+						updated_at: b.updated_at,
 						status: b.status,
 						ride: {
-						departure: rideInfo?.departure || 'Ride unavailable',
-						arrival: rideInfo?.arrival || '',
+							departure: rideInfo?.departure || 'Ride unavailable',
+							arrival: rideInfo?.arrival || '',
 							ride_date: rideInfo?.ride_date || '',
 							price: rideInfo?.price || 0
 						}
 					};
+				});
+				myBookings = allBookings.filter((b) => {
+					if (isOlderThan3Days(b.ride.ride_date)) return false;
+					if (['Cancelled', 'Rejected'].includes(b.status) && isOlderThan3Days(b.updated_at)) return false;
+					return true;
+				});
+				myArchivedBookings = allBookings.filter((b) => {
+					if (isOlderThan3Days(b.ride.ride_date)) return true;
+					if (['Cancelled', 'Rejected'].includes(b.status) && isOlderThan3Days(b.updated_at)) return true;
+					return false;
 				});
 		}
 		bookingsLoading = false;
@@ -170,7 +190,7 @@
 		const { data, error } = await supabase
 			.from('bookings')
 			.select(
-				'id, passenger_id, seats_booked, status, ride:rides!bookings_ride_id_fkey!inner(id, driver_id, departure, arrival, ride_date, price)'
+				'id, passenger_id, seats_booked, status, updated_at, ride:rides!bookings_ride_id_fkey!inner(id, driver_id, departure, arrival, ride_date, price)'
 			)
 			.eq('ride.driver_id', userId)
 			.order('created_at', { ascending: false });
@@ -188,6 +208,7 @@
 				passenger_id: string;
 				seats_booked: number;
 				status: DriverBookingRequest['status'];
+				updated_at: string;
 				ride:
 					| {
 							id: string;
@@ -229,14 +250,14 @@
 				}
 			}
 
-			incomingRequests = rows.map((row) => {
+			const allRequests = rows.map((row) => {
 				const rideInfo = Array.isArray(row.ride) ? row.ride[0] : row.ride;
 				const passengerProfile = passengerProfiles[row.passenger_id];
-
 				return {
 					id: row.id,
 					passenger_id: row.passenger_id,
 					seats_booked: row.seats_booked,
+					updated_at: row.updated_at,
 					status: row.status,
 					passenger: {
 						first_name: passengerProfile?.first_name || '',
@@ -250,6 +271,16 @@
 						price: rideInfo?.price || 0
 					}
 				};
+			});
+			incomingRequests = allRequests.filter((r) => {
+				if (isOlderThan3Days(r.ride.ride_date)) return false;
+				if (['Cancelled', 'Rejected'].includes(r.status) && isOlderThan3Days(r.updated_at)) return false;
+				return true;
+			});
+			archivedRequests = allRequests.filter((r) => {
+				if (isOlderThan3Days(r.ride.ride_date)) return true;
+				if (['Cancelled', 'Rejected'].includes(r.status) && isOlderThan3Days(r.updated_at)) return true;
+				return false;
 			});
 		}
 
@@ -283,6 +314,12 @@
 			status === 'Confirmed'
 				? 'Booking request confirmed.'
 				: 'Booking request rejected.';
+	}
+
+	function isOlderThan3Days(dateStr: string): boolean {
+		if (!dateStr) return false;
+		const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+		return Date.now() - Date.parse(dateStr) > THREE_DAYS_MS;
 	}
 
 	function formatRideDate(dateValue: string) {
@@ -513,6 +550,12 @@
 							</a>
 						</li>
 					</ul>
+					{#if myArchivedRides.length > 0 || myArchivedBookings.length > 0 || archivedRequests.length > 0}
+					<a href="#archive" class="mt-3 inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600">
+						<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
+						View archive ({myArchivedRides.length + myArchivedBookings.length + archivedRequests.length})
+					</a>
+					{/if}
 				</nav>
 			</section>
 
@@ -770,6 +813,84 @@
 				</div>
 				{/if}
 			</section>
+
+		{#if myArchivedRides.length > 0 || myArchivedBookings.length > 0 || archivedRequests.length > 0}
+		<section id="archive" class="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+			<div class="flex items-center justify-between">
+				<h2 class="text-xl font-semibold text-gray-900 flex items-center gap-2">
+					<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
+					Archive
+					<span class="text-sm font-normal text-gray-400">({myArchivedRides.length + myArchivedBookings.length + archivedRequests.length})</span>
+				</h2>
+				<button
+					type="button"
+					on:click={() => (showArchive = !showArchive)}
+					class="text-sm font-medium text-gray-500 hover:text-gray-700"
+				>
+					{showArchive ? 'Hide' : 'Show'}
+				</button>
+			</div>
+
+			{#if showArchive}
+				{#if myArchivedRides.length > 0}
+					<div class="mt-5">
+						<h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Rides</h3>
+						<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+							{#each myArchivedRides as ride (ride.id)}
+								<article class="rounded-lg border border-gray-100 bg-gray-50 p-4 opacity-70">
+									<p class="text-xs text-gray-400">{new Date(ride.ride_date).toLocaleString()}</p>
+									<h4 class="text-base font-semibold text-gray-700 mt-1">{ride.departure} → {ride.arrival}</h4>
+									<p class="mt-1 text-sm text-gray-500">{ride.seats} seat{ride.seats !== 1 ? 's' : ''} · ${ride.price}</p>
+								</article>
+							{/each}
+						</div>
+					</div>
+				{/if}
+
+				{#if archivedRequests.length > 0}
+					<div class="mt-5">
+						<h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Booking requests</h3>
+						<div class="space-y-3">
+							{#each archivedRequests as request (request.id)}
+								<article class="rounded-lg border border-gray-100 bg-gray-50 p-4 opacity-70">
+									<p class="text-xs text-gray-400">{formatRideDate(request.ride.ride_date)}</p>
+									<h4 class="text-base font-semibold text-gray-700 mt-1">
+										{request.ride.departure} → {request.ride.arrival}
+									</h4>
+									<p class="text-sm text-gray-500 mt-1">
+										{request.seats_booked} seat{request.seats_booked !== 1 ? 's' : ''}
+										· {request.ride.price > 0 ? `$${request.ride.price}` : 'Price unavailable'}
+									</p>
+									<span class="mt-2 inline-flex items-center px-2 py-0.5 rounded-full bg-gray-200 text-gray-600 text-xs">{request.status}</span>
+								</article>
+							{/each}
+						</div>
+					</div>
+				{/if}
+
+				{#if myArchivedBookings.length > 0}
+					<div class="mt-5">
+						<h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">My bookings</h3>
+						<div class="space-y-3">
+							{#each myArchivedBookings as booking (booking.id)}
+								<article class="rounded-lg border border-gray-100 bg-gray-50 p-4 opacity-70">
+									<p class="text-xs text-gray-400">{formatRideDate(booking.ride.ride_date)}</p>
+									<h4 class="text-base font-semibold text-gray-700 mt-1">
+										{booking.ride.departure} → {booking.ride.arrival}
+									</h4>
+									<p class="text-sm text-gray-500 mt-1">
+										{booking.seat_booked} seat{booking.seat_booked !== 1 ? 's' : ''}
+										· {booking.ride.price > 0 ? `$${booking.ride.price}` : 'Price unavailable'}
+									</p>
+									<span class="mt-2 inline-flex items-center px-2 py-0.5 rounded-full bg-gray-200 text-gray-600 text-xs">{booking.status}</span>
+								</article>
+							{/each}
+						</div>
+					</div>
+				{/if}
+			{/if}
+		</section>
+		{/if}
 
 		</div>
 	</div>
