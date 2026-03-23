@@ -42,9 +42,6 @@
 
 			<!-- Desktop Menu -->
 			<div class="hidden md:flex items-center space-x-8">
-				<a href="/search" class="transition font-medium text-gray-600 hover:text-gray-900">
-					Find a ride
-				</a>
 				<button
 					type="button"
 					on:click={handlePublishClick}
@@ -121,12 +118,6 @@
 				>
 					Publish a ride
 				</button>
-
-				<a
-					href="/search"
-					class="block px-3 py-2 text-gray-600 hover:text-primary hover:bg-gray-50 rounded-md"
-					>Find a ride</a
-				>
 
 				{#if currentUser}
 					<!-- User is logged in -->

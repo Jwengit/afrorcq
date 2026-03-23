@@ -3,6 +3,10 @@
 	import { goto } from '$app/navigation';
 
 	let currentUser: any = null;
+	let searchDeparture = '';
+	let searchArrival = '';
+	let searchDate = '';
+	let searchSeats = 1;
 	user.subscribe((u) => (currentUser = u));
 
 	function handlePublishClick() {
@@ -11,6 +15,24 @@
 			return;
 		}
 		goto('/publish-ride');
+	}
+
+	function handleSearchSubmit() {
+		const params = new URLSearchParams();
+		if (searchDeparture.trim()) {
+			params.set('departure', searchDeparture.trim());
+		}
+		if (searchArrival.trim()) {
+			params.set('arrival', searchArrival.trim());
+		}
+		if (searchDate) {
+			params.set('date', searchDate);
+		}
+		if (searchSeats > 0) {
+			params.set('seats', String(searchSeats));
+		}
+
+		goto(`/search${params.toString() ? `?${params.toString()}` : ''}`);
 	}
 </script>
 
@@ -31,10 +53,11 @@
 			</div>
 
 			<!-- Search Box -->
-			<div
+			<form
+				on:submit|preventDefault={handleSearchSubmit}
 				class="bg-white p-4 rounded-xl shadow-2xl w-full flex flex-wrap gap-2 text-gray-900"
 			>
-				<div class="flex-1 flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 min-w-[180px]">
+				<div class="flex-1 flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 min-w-45">
 					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 h-5 w-5">
 						<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
 						<circle cx="12" cy="10" r="3"/>
@@ -42,10 +65,11 @@
 					<input
 						type="text"
 						placeholder="Leaving from..."
+						bind:value={searchDeparture}
 						class="w-full min-w-0 bg-transparent focus:outline-none"
 					/>
 				</div>
-				<div class="flex-1 flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 min-w-[180px]">
+				<div class="flex-1 flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 min-w-45">
 					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 h-5 w-5">
 						<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
 						<circle cx="12" cy="10" r="3"/>
@@ -53,17 +77,18 @@
 					<input
 						type="text"
 						placeholder="Going to..."
+						bind:value={searchArrival}
 						class="w-full min-w-0 bg-transparent focus:outline-none"
 					/>
 				</div>
-				<div class="flex-1 flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 min-w-[180px]">
+				<div class="flex-1 flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 min-w-45">
 					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 h-5 w-5">
 						<rect width="18" height="18" x="3" y="4" rx="2" ry="2"/>
 						<line x1="16" x2="16" y1="2" y2="6"/>
 						<line x1="8" x2="8" y1="2" y2="6"/>
 						<line x1="3" x2="21" y1="10" y2="10"/>
 					</svg>
-					<input type="date" class="w-full min-w-0 bg-transparent focus:outline-none text-gray-500" />
+					<input type="date" bind:value={searchDate} class="w-full min-w-0 bg-transparent focus:outline-none text-gray-500" />
 				</div>
 				<div class="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50">
 					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 h-5 w-5">
@@ -75,12 +100,13 @@
 					<input
 						type="number"
 						min="1"
-						value="1"
+						bind:value={searchSeats}
 						class="w-16 bg-transparent focus:outline-none"
 					/>
 				</div>
 				<button
-					class="text-white px-6 py-3 rounded-lg font-bold hover:opacity-90 transition flex items-center justify-center gap-2"
+					type="submit"
+					class="text-white px-6 py-3 rounded-lg font-bold hover:opacity-90 transition flex items-center justify-center gap-2 cursor-pointer"
 					style="background-color: #2BB573;"
 				>
 					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5">
@@ -89,7 +115,7 @@
 					</svg>
 					<span>Search</span>
 				</button>
-			</div>
+			</form>
 		</div>
 	</section>
 

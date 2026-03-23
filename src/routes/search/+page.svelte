@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
 	import { supabase } from '$lib/supabaseClient';
 
 	type Ride = {
@@ -17,6 +18,8 @@
 
 	let departure = '';
 	let arrival = '';
+	let dateFilter = '';
+	let seatsFilter = 1;
 	let results: Ride[] = [];
 	let searched = false;
 	let loading = false;
@@ -35,30 +38,67 @@
 		loading = true;
 		searched = false;
 
-		let query = supabase
+		const { data, error } = await supabase
 			.from('rides')
 			.select('id, departure, arrival, pickup, dropoff, ride_date, seats, price, girls_only, driver_id')
 			.order('ride_date', { ascending: true });
-
-		if (dep) {
-			query = query.ilike('departure', `%${dep}%`);
-		}
-		if (arr) {
-			query = query.ilike('arrival', `%${arr}%`);
-		}
-
-		const { data, error } = await query;
 
 		if (error) {
 			console.error('Search error:', error);
 			errorMessage = 'Search failed. Please try again.';
 		} else {
-			results = (data as Ride[]) ?? [];
+			const allRides = (data as Ride[]) ?? [];
+			const depLower = dep.toLowerCase();
+			const arrLower = arr.toLowerCase();
+
+			results = allRides.filter((ride) => {
+				const rideDeparture = ride.departure.toLowerCase();
+				const rideArrival = ride.arrival.toLowerCase();
+
+				let routeMatches = true;
+				if (depLower && arrLower) {
+					const directMatch =
+						rideDeparture.includes(depLower) && rideArrival.includes(arrLower);
+					const reverseMatch =
+						rideDeparture.includes(arrLower) && rideArrival.includes(depLower);
+					routeMatches = directMatch || reverseMatch;
+				} else if (depLower) {
+					routeMatches =
+						rideDeparture.includes(depLower) || rideArrival.includes(depLower);
+				} else if (arrLower) {
+					routeMatches =
+						rideDeparture.includes(arrLower) || rideArrival.includes(arrLower);
+				}
+
+				const dateMatches = !dateFilter
+					? true
+					: new Date(ride.ride_date).toLocaleDateString('en-CA') === dateFilter;
+
+				const seatsMatch = ride.seats >= seatsFilter;
+
+				return routeMatches && dateMatches && seatsMatch;
+			});
 		}
 
 		loading = false;
 		searched = true;
 	}
+
+	onMount(async () => {
+		const dep = $page.url.searchParams.get('departure') ?? '';
+		const arr = $page.url.searchParams.get('arrival') ?? '';
+		const date = $page.url.searchParams.get('date') ?? '';
+		const seats = Number($page.url.searchParams.get('seats') ?? '1');
+
+		departure = dep;
+		arrival = arr;
+		dateFilter = date;
+		seatsFilter = Number.isFinite(seats) && seats > 0 ? seats : 1;
+
+		if (dep || arr || dateFilter || seatsFilter > 1) {
+			await searchRides();
+		}
+	});
 </script>
 
 <div class="min-h-screen bg-gray-50 py-10 px-4 sm:px-6 lg:px-8">
@@ -124,7 +164,7 @@
 									</p>
 								</div>
 								<div class="flex flex-col items-start sm:items-end gap-1">
-									<span class="text-lg font-bold text-green-700">{ride.price} MAD</span>
+									<span class="text-lg font-bold text-green-700">${ride.price}</span>
 									<span class="text-sm text-gray-500">{ride.seats} seat{ride.seats !== 1 ? 's' : ''} left</span>
 									{#if ride.girls_only}
 										<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-pink-100 text-pink-700 text-xs font-medium">Girls Only</span>
