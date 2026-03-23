@@ -17,21 +17,15 @@ CREATE TABLE IF NOT EXISTS rides (
 ALTER TABLE rides ENABLE ROW LEVEL SECURITY;
 
 -- Drivers can read their own rides
-CREATE POLICY "Drivers can read their own rides" ON rides
+CREATE POLICY "Authenticated users can read all rides" ON rides
   FOR SELECT
-  USING (auth.uid() = driver_id);
+  USING (auth.uid() IS NOT NULL);
 
--- Drivers can publish rides only if they are verified
-CREATE POLICY "Verified drivers can publish rides" ON rides
+-- Drivers can publish rides
+CREATE POLICY "Drivers can publish rides" ON rides
   FOR INSERT
   WITH CHECK (
     auth.uid() = driver_id
-    AND EXISTS (
-      SELECT 1
-      FROM profiles p
-      WHERE p.id = auth.uid()
-      AND p.is_verified = TRUE
-    )
   );
 
 -- Drivers can update their own rides

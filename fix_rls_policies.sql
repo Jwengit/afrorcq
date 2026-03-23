@@ -16,3 +16,18 @@ CREATE POLICY "Enable update for own profile" ON profiles
 CREATE POLICY "Enable select for own profile" ON profiles
   FOR SELECT 
   USING (auth.uid() = id);
+
+-- Fix rides INSERT policy: remove is_verified requirement
+DROP POLICY IF EXISTS "Verified drivers can publish rides" ON rides;
+
+CREATE POLICY "Drivers can publish rides" ON rides
+  FOR INSERT
+  WITH CHECK (auth.uid() = driver_id);
+
+-- Allow all authenticated users to read rides (needed for search)
+DROP POLICY IF EXISTS "Drivers can read their own rides" ON rides;
+DROP POLICY IF EXISTS "Authenticated users can read all rides" ON rides;
+
+CREATE POLICY "Authenticated users can read all rides" ON rides
+  FOR SELECT
+  USING (auth.uid() IS NOT NULL);

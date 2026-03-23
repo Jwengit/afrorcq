@@ -7,10 +7,13 @@
 	import type { User } from '@supabase/supabase-js';
 
 	type Ride = {
-		from: string;
-		to: string;
-		date: string;
-		status: 'Published' | 'Draft' | 'Completed';
+		id: string;
+		departure: string;
+		arrival: string;
+		ride_date: string;
+		seats: number;
+		price: number;
+		girls_only: boolean;
 	};
 
 	type Booking = {
@@ -21,11 +24,8 @@
 
 	let currentUser: User | null = null;
 	let loading = true;
-
-	const myRides: Ride[] = [
-		{ from: 'Salt Lake City', to: 'Provo', date: '2026-03-22 08:00', status: 'Published' },
-		{ from: 'Ogden', to: 'Salt Lake City', date: '2026-03-24 18:30', status: 'Draft' }
-	];
+	let myRides: Ride[] = [];
+	let ridesLoading = false;
 
 	const myBookings: Booking[] = [
 		{ route: 'Salt Lake City to Logan', date: '2026-03-23 09:15', status: 'Confirmed' },
@@ -38,12 +38,30 @@
 		} = await supabase.auth.getUser();
 
 		currentUser = user;
-		loading = false;
 
 		if (!user && browser) {
 			goto(resolve('/auth/login'));
+			loading = false;
+			return;
 		}
+
+		await loadMyRides(user!.id);
+		loading = false;
 	});
+
+	async function loadMyRides(userId: string) {
+		ridesLoading = true;
+		const { data, error } = await supabase
+			.from('rides')
+			.select('id, departure, arrival, ride_date, seats, price, girls_only')
+			.eq('driver_id', userId)
+			.order('ride_date', { ascending: true });
+
+		if (!error && data) {
+			myRides = data as Ride[];
+		}
+		ridesLoading = false;
+	}
 
 	function goToProfile() {
 		goto(resolve('/profile'));
@@ -107,19 +125,26 @@
 
 			<section id="my-rides" class="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
 				<h2 class="text-xl font-semibold text-gray-900 mb-4">My rides</h2>
-				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-					{#each myRides as ride (`${ride.from}-${ride.to}-${ride.date}`)}
-						<article class="rounded-lg border border-gray-200 p-4">
-							<p class="text-sm text-gray-500">{ride.date}</p>
-							<h3 class="text-base font-semibold text-gray-900 mt-1">{ride.from} to {ride.to}</h3>
-							<p class="mt-2 text-sm">
-								<span class="inline-flex items-center px-2.5 py-1 rounded-full bg-gray-100 text-gray-700">
-									{ride.status}
-								</span>
-							</p>
-						</article>
-					{/each}
-				</div>
+				{#if ridesLoading}
+					<p class="text-sm text-gray-500">Loading rides...</p>
+				{:else if myRides.length === 0}
+					<p class="text-sm text-gray-500">You haven't published any rides yet.</p>
+				{:else}
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+						{#each myRides as ride (ride.id)}
+							<article class="rounded-lg border border-gray-200 p-4">
+								<p class="text-xs text-gray-400">{new Date(ride.ride_date).toLocaleString()}</p>
+								<h3 class="text-base font-semibold text-gray-900 mt-1">{ride.departure} → {ride.arrival}</h3>
+								<p class="mt-2 text-sm text-gray-600">
+									{ride.seats} seat{ride.seats !== 1 ? 's' : ''} · {ride.price} MAD
+									{#if ride.girls_only}
+										<span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full bg-pink-100 text-pink-700 text-xs">Girls Only</span>
+									{/if}
+								</p>
+							</article>
+						{/each}
+					</div>
+				{/if}
 			</section>
 
 			<section id="my-bookings" class="bg-white rounded-lg shadow-sm border border-gray-100 p-6">

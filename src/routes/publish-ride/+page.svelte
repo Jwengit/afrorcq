@@ -9,8 +9,6 @@
 
 	type DriverProfile = {
 		gender?: string | null;
-		status?: string | null;
-		is_verified?: boolean | null;
 	};
 
 	type RideForm = {
@@ -66,19 +64,6 @@
 		loading = false;
 	});
 
-	function isDriverVerified(profile: DriverProfile | null): boolean {
-		if (!profile) {
-			return false;
-		}
-
-		if (profile.is_verified === true) {
-			return true;
-		}
-
-		const status = (profile.status ?? '').toLowerCase();
-		return status === 'verified' || status === 'validated' || status === 'approved';
-	}
-
 	async function ensureAuthenticatedUser() {
 		if (currentUser) {
 			return;
@@ -104,18 +89,14 @@
 
 		if (error) {
 			console.error('Profile fetch error:', error);
-			errorMessage = 'Impossible de verifier ton profil pour le moment. Reessaie dans un instant.';
+			errorMessage = 'Could not load your profile. Please try again.';
 			allowedToPublish = false;
 			return;
 		}
 
 		const profile = (data as DriverProfile | null) ?? null;
 		isFemaleDriver = (profile?.gender ?? '').toLowerCase() === 'female';
-		allowedToPublish = isDriverVerified(profile);
-
-		if (!allowedToPublish) {
-			errorMessage = 'Seuls les conducteurs valides peuvent publier un ride.';
-		}
+		allowedToPublish = true;
 
 		if (!isFemaleDriver) {
 			form.girlsOnly = false;
@@ -136,23 +117,23 @@
 		const dropoff = form.dropoff.trim();
 
 		if (!departure || !arrival || !pickup || !dropoff || !form.rideDate) {
-			errorMessage = 'Tous les champs sont obligatoires.';
+			errorMessage = 'All fields are required.';
 			return;
 		}
 
 		if (form.seats < 1) {
-			errorMessage = 'Le nombre de places doit etre au moins 1.';
+			errorMessage = 'Seats must be at least 1.';
 			return;
 		}
 
 		if (form.price < 0) {
-			errorMessage = 'Le prix doit etre positif ou nul.';
+			errorMessage = 'Price must be zero or positive.';
 			return;
 		}
 
 		const rideDateIso = new Date(form.rideDate).toISOString();
 		if (Number.isNaN(new Date(rideDateIso).getTime())) {
-			errorMessage = 'La date du ride est invalide.';
+			errorMessage = 'Invalid ride date.';
 			return;
 		}
 
@@ -173,11 +154,11 @@
 
 			if (error) {
 				console.error('Ride insert error:', error);
-				errorMessage = error.message || 'La publication a echoue.';
+				errorMessage = error.message || 'Failed to publish the ride.';
 				return;
 			}
 
-			successMessage = 'Ride publie avec succes.';
+			successMessage = 'Ride published successfully.';
 			form = {
 				departure: '',
 				arrival: '',
@@ -190,7 +171,7 @@
 			};
 		} catch (error) {
 			console.error('Unexpected publish error:', error);
-			errorMessage = 'Une erreur inattendue est survenue.';
+			errorMessage = 'An unexpected error occurred.';
 		} finally {
 			submitting = false;
 		}
@@ -201,14 +182,14 @@
 	<div class="min-h-screen flex items-center justify-center">
 		<div class="text-center">
 			<div class="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600 mx-auto"></div>
-			<p class="mt-4 text-gray-600">Chargement...</p>
+			<p class="mt-4 text-gray-600">Loading...</p>
 		</div>
 	</div>
 {:else}
 	<div class="min-h-screen bg-gray-50 py-10 px-4 sm:px-6 lg:px-8">
 		<div class="max-w-2xl mx-auto bg-white rounded-xl shadow-md p-6 sm:p-8">
-			<h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Publish ride</h1>
-			<p class="mt-2 text-gray-600">Publie ton trajet en quelques secondes.</p>
+			<h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Publish a ride</h1>
+			<p class="mt-2 text-gray-600">Post your trip in seconds.</p>
 
 			{#if errorMessage}
 				<div class="mt-5 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
@@ -226,7 +207,7 @@
 				<form class="mt-6 space-y-5" on:submit|preventDefault={submitRide}>
 					<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 						<div>
-							<label for="departure" class="block text-sm font-medium text-gray-700 mb-1">Depart</label>
+							<label for="departure" class="block text-sm font-medium text-gray-700 mb-1">Departure</label>
 							<input
 								id="departure"
 								type="text"
@@ -236,7 +217,7 @@
 							/>
 						</div>
 						<div>
-							<label for="arrival" class="block text-sm font-medium text-gray-700 mb-1">Arrivee</label>
+							<label for="arrival" class="block text-sm font-medium text-gray-700 mb-1">Arrival</label>
 							<input
 								id="arrival"
 								type="text"
@@ -246,7 +227,7 @@
 							/>
 						</div>
 						<div>
-							<label for="pickup" class="block text-sm font-medium text-gray-700 mb-1">Pickup</label>
+							<label for="pickup" class="block text-sm font-medium text-gray-700 mb-1">Pickup Point</label>
 							<input
 								id="pickup"
 								type="text"
@@ -256,7 +237,7 @@
 							/>
 						</div>
 						<div>
-							<label for="dropoff" class="block text-sm font-medium text-gray-700 mb-1">Dropoff</label>
+							<label for="dropoff" class="block text-sm font-medium text-gray-700 mb-1">Drop-off Point</label>
 							<input
 								id="dropoff"
 								type="text"
@@ -276,7 +257,7 @@
 							/>
 						</div>
 						<div>
-							<label for="seats" class="block text-sm font-medium text-gray-700 mb-1">Places</label>
+							<label for="seats" class="block text-sm font-medium text-gray-700 mb-1">Seats available</label>
 							<input
 								id="seats"
 								type="number"
@@ -290,7 +271,7 @@
 					</div>
 
 					<div>
-						<label for="price" class="block text-sm font-medium text-gray-700 mb-1">Prix</label>
+						<label for="price" class="block text-sm font-medium text-gray-700 mb-1">Price</label>
 						<input
 							id="price"
 							type="number"
@@ -314,7 +295,7 @@
 						</label>
 						{#if !isFemaleDriver}
 							<p class="mt-1 text-xs text-gray-500">
-								Disponible uniquement pour les utilisatrices conductrices.
+								Available for female drivers only.
 							</p>
 						{/if}
 					</div>
@@ -324,13 +305,9 @@
 						disabled={submitting}
 						class="w-full rounded-md bg-green-600 text-white font-medium py-2.5 hover:bg-green-700 transition-colors disabled:opacity-60"
 					>
-						{submitting ? 'Publication...' : 'Publier le ride'}
+						{submitting ? 'Publishing...' : 'Publish ride'}
 					</button>
 				</form>
-			{:else}
-				<div class="mt-6 rounded-md border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
-					Ton compte conducteur doit etre valide pour publier un ride.
-				</div>
 			{/if}
 		</div>
 	</div>
