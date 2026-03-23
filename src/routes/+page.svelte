@@ -10,7 +10,7 @@
 			goto('/auth/login');
 			return;
 		}
-		goto('/publish');
+		goto('/publish-ride');
 	}
 </script>
 

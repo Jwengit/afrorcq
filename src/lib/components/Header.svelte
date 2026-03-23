@@ -20,7 +20,7 @@
 			goto('/auth/login');
 			return;
 		}
-		goto('/publish');
+		goto('/publish-ride');
 	}
 
 	async function signOut() {
