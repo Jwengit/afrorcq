@@ -157,6 +157,24 @@
 		return [];
 	}
 
+	function hasSavedSearchUrl() {
+		if (typeof sessionStorage === 'undefined') {
+			return false;
+		}
+
+		const saved = sessionStorage.getItem('lastSearchUrl');
+		return !!saved && saved.startsWith(resolve('/search'));
+	}
+
+	function goBackFromPublicProfile() {
+		if (hasSavedSearchUrl() && !viewingOwnProfile) {
+			goto(resolve('/search'));
+			return;
+		}
+
+		goto(resolve(viewingOwnProfile ? '/profile' : '/dashboard'));
+	}
+
 	onMount(async () => {
 		const { data: authData } = await supabase.auth.getUser();
 		if (!authData.user) {
@@ -221,10 +239,14 @@
 						</p>
 					</div>
 					<button
-						on:click={() => goto(resolve(viewingOwnProfile ? '/profile' : '/dashboard'))}
+						on:click={goBackFromPublicProfile}
 						class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
 					>
-						{viewingOwnProfile ? 'Back to edit' : 'Back to dashboard'}
+						{#if !viewingOwnProfile && hasSavedSearchUrl()}
+							← Back to search results
+						{:else}
+							{viewingOwnProfile ? 'Back to edit' : 'Back to dashboard'}
+						{/if}
 					</button>
 				</div>
 			</div>

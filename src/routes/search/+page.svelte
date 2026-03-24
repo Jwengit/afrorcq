@@ -27,6 +27,23 @@
 	let errorMessage = '';
 	let isFemaleUser = false;
 
+	function persistSearchState() {
+		const params = new URLSearchParams();
+		if (departure.trim()) params.set('departure', departure.trim());
+		if (arrival.trim()) params.set('arrival', arrival.trim());
+		if (dateFilter) params.set('date', dateFilter);
+		if (seatsFilter > 1) params.set('seats', String(seatsFilter));
+
+		const qs = params.toString();
+		const searchUrl = resolve('/search') + (qs ? '?' + qs : '');
+
+		history.replaceState({}, '', searchUrl);
+		if (typeof sessionStorage !== 'undefined') {
+			sessionStorage.setItem('lastSearchUrl', searchUrl);
+			sessionStorage.setItem('lastSearchParams', qs);
+		}
+	}
+
 	function driverPublicProfileHref(driverId: string): string {
 		return `${resolve('/profile/public')}?id=${encodeURIComponent(driverId)}`;
 	}
@@ -90,14 +107,7 @@
 
 		loading = false;
 		searched = true;
-
-		const params = new URLSearchParams();
-		if (departure.trim()) params.set('departure', departure.trim());
-		if (arrival.trim()) params.set('arrival', arrival.trim());
-		if (dateFilter) params.set('date', dateFilter);
-		if (seatsFilter > 1) params.set('seats', String(seatsFilter));
-		const qs = params.toString();
-		history.replaceState({}, '', resolve('/search') + (qs ? '?' + qs : ''));
+		persistSearchState();
 	}
 
 	onMount(async () => {
@@ -115,13 +125,26 @@
 		const arr = $page.url.searchParams.get('arrival') ?? '';
 		const date = $page.url.searchParams.get('date') ?? '';
 		const seats = Number($page.url.searchParams.get('seats') ?? '1');
+		const hasUrlFilters = dep || arr || date || seats > 1;
 
 		departure = dep;
 		arrival = arr;
 		dateFilter = date;
 		seatsFilter = Number.isFinite(seats) && seats > 0 ? seats : 1;
 
-		if (dep || arr || dateFilter || seatsFilter > 1) {
+		if (!hasUrlFilters && typeof sessionStorage !== 'undefined') {
+			const savedParams = sessionStorage.getItem('lastSearchParams');
+			if (savedParams) {
+				const savedSearchParams = new URLSearchParams(savedParams);
+				departure = savedSearchParams.get('departure') ?? '';
+				arrival = savedSearchParams.get('arrival') ?? '';
+				dateFilter = savedSearchParams.get('date') ?? '';
+				const savedSeats = Number(savedSearchParams.get('seats') ?? '1');
+				seatsFilter = Number.isFinite(savedSeats) && savedSeats > 0 ? savedSeats : 1;
+			}
+		}
+
+		if (departure || arrival || dateFilter || seatsFilter > 1) {
 			await searchRides();
 		}
 	});
@@ -199,12 +222,14 @@
 						<div class="mt-4 flex flex-col sm:flex-row gap-2">
 							<a
 								href={resolve(`/ride/${ride.id}`)}
+								on:click={persistSearchState}
 								class="inline-flex items-center justify-center rounded-md bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700"
 							>
 								View ride details
 							</a>
 							<a
 								href={driverPublicProfileHref(ride.driver_id)}
+								on:click={persistSearchState}
 								class="inline-flex items-center justify-center rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
 							>
 								View driver profile
