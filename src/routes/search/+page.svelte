@@ -27,6 +27,10 @@
 	let errorMessage = '';
 	let isFemaleUser = false;
 
+	function driverPublicProfileHref(driverId: string): string {
+		return `${resolve('/profile/public')}?id=${encodeURIComponent(driverId)}`;
+	}
+
 	async function searchRides() {
 		const dep = departure.trim();
 		const arr = arrival.trim();
@@ -86,6 +90,14 @@
 
 		loading = false;
 		searched = true;
+
+		const params = new URLSearchParams();
+		if (departure.trim()) params.set('departure', departure.trim());
+		if (arrival.trim()) params.set('arrival', arrival.trim());
+		if (dateFilter) params.set('date', dateFilter);
+		if (seatsFilter > 1) params.set('seats', String(seatsFilter));
+		const qs = params.toString();
+		history.replaceState({}, '', resolve('/search') + (qs ? '?' + qs : ''));
 	}
 
 	onMount(async () => {
@@ -163,7 +175,7 @@
 					<p class="text-center text-gray-500 py-10">No rides found for this route.</p>
 				{:else}
 				{#each results as ride (ride.id)}
-					<a href={resolve(`/ride/${ride.id}`)} class="block bg-white rounded-xl border border-gray-200 shadow-sm p-5 hover:shadow-md hover:border-green-300 transition-all">
+					<div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5 hover:shadow-md hover:border-green-300 transition-all">
 						<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
 							<div>
 								<h2 class="text-base font-semibold text-gray-900">
@@ -184,7 +196,21 @@
 								{/if}
 							</div>
 						</div>
-					</a>
+						<div class="mt-4 flex flex-col sm:flex-row gap-2">
+							<a
+								href={resolve(`/ride/${ride.id}`)}
+								class="inline-flex items-center justify-center rounded-md bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700"
+							>
+								View ride details
+							</a>
+							<a
+								href={driverPublicProfileHref(ride.driver_id)}
+								class="inline-flex items-center justify-center rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+							>
+								View driver profile
+							</a>
+						</div>
+					</div>
 				{/each}
 				{/if}
 			</div>

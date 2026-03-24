@@ -163,11 +163,20 @@
 {:else}
 	<div class="min-h-screen bg-gray-50 py-10 px-4 sm:px-6 lg:px-8">
 		<div class="max-w-2xl mx-auto">
-			<button on:click={() => goto(resolve('/search'))} class="mb-6 inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900">Back to search</button>
+			<button on:click={() => history.back()} class="mb-6 inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900">← Back to search results</button>
 
 			<div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 sm:p-8">
 				<h1 class="text-3xl font-bold text-gray-900">{ride.departure} to {ride.arrival}</h1>
 				<p class="mt-2 text-gray-600">{new Date(ride.ride_date).toLocaleString()}</p>
+				<div class="mt-4">
+					<button
+						type="button"
+						on:click={() => ride && goto(resolve(`/profile/public?id=${encodeURIComponent(ride.driver_id)}`))}
+						class="inline-flex items-center rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+					>
+						View driver public profile
+					</button>
+				</div>
 
 				<div class="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-4">
 					<div><p class="text-sm text-gray-500">Pickup</p><p class="text-base font-semibold text-gray-900">{ride.pickup}</p></div>
