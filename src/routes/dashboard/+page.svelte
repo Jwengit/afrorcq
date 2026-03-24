@@ -513,45 +513,46 @@
 		</div>
 	</div>
 {:else if currentUser}
-	<div class="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
-		<div class="max-w-6xl mx-auto space-y-6">
-			<section class="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+	<div class="min-h-screen dashboard-bg py-10 px-4 sm:px-6 lg:px-8 relative">
+		<div class="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.2),transparent_58%)]"></div>
+		<div class="max-w-6xl mx-auto space-y-6 relative z-10">
+			<section class="rounded-2xl bg-linear-to-r from-emerald-600 via-emerald-500 to-teal-500 p-6 shadow-xl border border-emerald-300/30 text-white">
 				<div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
 					<div>
-						<p class="text-sm text-gray-500">Connected as {currentUser.email}</p>
-						<h1 class="text-3xl font-bold text-gray-900 mt-1">Dashboard</h1>
+						<p class="text-sm text-emerald-50/90">Connected as {currentUser.email}</p>
+						<h1 class="text-3xl font-bold mt-1 tracking-tight">Dashboard</h1>
 					</div>
 					<div class="flex gap-3">
 						<button
 							type="button"
 							on:click={signOut}
-							class="px-4 py-2 bg-gray-900 text-white rounded-md text-sm font-medium hover:bg-black"
+							class="px-4 py-2 bg-white text-emerald-700 rounded-lg text-sm font-semibold hover:bg-emerald-50 transition-colors"
 						>
 							Sign out
 						</button>
 					</div>
 				</div>
 
-				<nav class="mt-6 border-t border-gray-100 pt-4" aria-label="User dashboard navigation">
+				<nav class="mt-6 border-t border-white/30 pt-4" aria-label="User dashboard navigation">
 					<ul class="flex flex-wrap gap-2">
 						<li>
-							<a href="#my-rides" class="inline-flex items-center px-4 py-2 rounded-full bg-green-100 text-green-800 text-sm font-medium hover:bg-green-200">
+							<a href="#my-rides" class="inline-flex items-center px-4 py-2 rounded-full bg-white/90 text-emerald-700 text-sm font-semibold hover:bg-white transition-colors">
 								My rides
 							</a>
 						</li>
 						<li>
-							<a href="#ride-requests" class="inline-flex items-center px-4 py-2 rounded-full bg-amber-100 text-amber-800 text-sm font-medium hover:bg-amber-200">
+							<a href="#ride-requests" class="inline-flex items-center px-4 py-2 rounded-full bg-white/90 text-amber-700 text-sm font-semibold hover:bg-white transition-colors">
 								Booking requests
 							</a>
 						</li>
 						<li>
-							<a href="#my-bookings" class="inline-flex items-center px-4 py-2 rounded-full bg-blue-100 text-blue-800 text-sm font-medium hover:bg-blue-200">
+							<a href="#my-bookings" class="inline-flex items-center px-4 py-2 rounded-full bg-white/90 text-sky-700 text-sm font-semibold hover:bg-white transition-colors">
 								My bookings
 							</a>
 						</li>
 					</ul>
 					{#if myArchivedRides.length > 0 || myArchivedBookings.length > 0 || archivedRequests.length > 0}
-					<a href="#archive" class="mt-3 inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600">
+					<a href="#archive" class="mt-3 inline-flex items-center gap-1.5 text-xs text-emerald-50/90 hover:text-white">
 						<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
 						View archive ({myArchivedRides.length + myArchivedBookings.length + archivedRequests.length})
 					</a>
@@ -559,7 +560,7 @@
 				</nav>
 			</section>
 
-			<section id="my-rides" class="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+			<section id="my-rides" class="dashboard-card p-6 scroll-mt-28">
 				<h2 class="text-xl font-semibold text-gray-900 mb-4">My rides</h2>
 				{#if rideActionError}
 					<p class="mb-3 text-sm text-red-600">{rideActionError}</p>
@@ -574,7 +575,7 @@
 				{:else}
 					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 						{#each myRides as ride (ride.id)}
-							<article class="rounded-lg border border-gray-200 p-4">
+							<article class="surface-card p-4">
 								{#if editingRideId === ride.id}
 									<div class="space-y-3">
 										<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -688,7 +689,7 @@
 				{/if}
 			</section>
 
-			<section id="ride-requests" class="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+			<section id="ride-requests" class="dashboard-card p-6 scroll-mt-28">
 				<h2 class="text-xl font-semibold text-gray-900 mb-4">Booking requests</h2>
 				{#if requestActionMessage}
 					<p class="mb-3 text-sm text-green-700">{requestActionMessage}</p>
@@ -700,7 +701,7 @@
 				{:else}
 					<div class="space-y-3">
 						{#each incomingRequests as request (request.id)}
-							<article class="rounded-lg border border-gray-200 p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+							<article class="surface-card p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
 								<div>
 									<h3 class="text-base font-semibold text-gray-900">
 										{request.ride.arrival
@@ -723,7 +724,7 @@
 									</p>
 								</div>
 								<div class="flex flex-wrap items-center gap-2">
-									<span class="inline-flex items-center px-2.5 py-1 rounded-full bg-gray-100 text-gray-700 text-sm w-fit">
+									<span class="inline-flex items-center px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-sm w-fit border border-slate-200">
 										{request.status}
 									</span>
 									{#if request.status === 'Pending'}
@@ -751,7 +752,7 @@
 				{/if}
 			</section>
 
-			<section id="my-bookings" class="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+			<section id="my-bookings" class="dashboard-card p-6 scroll-mt-28">
 				<h2 class="text-xl font-semibold text-gray-900 mb-4">My bookings</h2>
 				{#if bookingActionMessage}
 					<p class="mb-3 text-sm text-green-700">{bookingActionMessage}</p>
@@ -763,7 +764,7 @@
 				{:else}
 					<div class="space-y-3">
 						{#each myBookings as booking (booking.id)}
-							<article class="rounded-lg border border-gray-200 p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+							<article class="surface-card p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
 								<div>
 									<h3 class="text-base font-semibold text-gray-900">
 										{booking.ride.arrival
@@ -777,7 +778,7 @@
 									</p>
 								</div>
 								<div class="flex flex-wrap items-center gap-2">
-								<span class="inline-flex items-center px-2.5 py-1 rounded-full bg-gray-100 text-gray-700 text-sm w-fit">
+									<span class="inline-flex items-center px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-sm w-fit border border-slate-200">
 									{booking.status}
 								</span>
 								{#if booking.status === 'Pending' || booking.status === 'Confirmed'}
@@ -815,7 +816,7 @@
 			</section>
 
 		{#if myArchivedRides.length > 0 || myArchivedBookings.length > 0 || archivedRequests.length > 0}
-		<section id="archive" class="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+		<section id="archive" class="dashboard-card p-6">
 			<div class="flex items-center justify-between">
 				<h2 class="text-xl font-semibold text-gray-900 flex items-center gap-2">
 					<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
@@ -837,7 +838,7 @@
 						<h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Rides</h3>
 						<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 							{#each myArchivedRides as ride (ride.id)}
-								<article class="rounded-lg border border-gray-100 bg-gray-50 p-4 opacity-70">
+								<article class="subtle-card p-4 opacity-75">
 									<p class="text-xs text-gray-400">{new Date(ride.ride_date).toLocaleString()}</p>
 									<h4 class="text-base font-semibold text-gray-700 mt-1">{ride.departure} → {ride.arrival}</h4>
 									<p class="mt-1 text-sm text-gray-500">{ride.seats} seat{ride.seats !== 1 ? 's' : ''} · ${ride.price}</p>
@@ -852,7 +853,7 @@
 						<h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Booking requests</h3>
 						<div class="space-y-3">
 							{#each archivedRequests as request (request.id)}
-								<article class="rounded-lg border border-gray-100 bg-gray-50 p-4 opacity-70">
+								<article class="subtle-card p-4 opacity-75">
 									<p class="text-xs text-gray-400">{formatRideDate(request.ride.ride_date)}</p>
 									<h4 class="text-base font-semibold text-gray-700 mt-1">
 										{request.ride.departure} → {request.ride.arrival}
@@ -873,7 +874,7 @@
 						<h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">My bookings</h3>
 						<div class="space-y-3">
 							{#each myArchivedBookings as booking (booking.id)}
-								<article class="rounded-lg border border-gray-100 bg-gray-50 p-4 opacity-70">
+								<article class="subtle-card p-4 opacity-75">
 									<p class="text-xs text-gray-400">{formatRideDate(booking.ride.ride_date)}</p>
 									<h4 class="text-base font-semibold text-gray-700 mt-1">
 										{booking.ride.departure} → {booking.ride.arrival}
@@ -895,3 +896,33 @@
 		</div>
 	</div>
 {/if}
+
+<style>
+	.dashboard-bg {
+		background:
+			radial-gradient(circle at 12% 10%, rgba(16, 185, 129, 0.08), transparent 28%),
+			radial-gradient(circle at 92% 18%, rgba(14, 165, 233, 0.08), transparent 32%),
+			linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+	}
+
+	.dashboard-card {
+		background: rgba(255, 255, 255, 0.94);
+		border: 1px solid rgba(148, 163, 184, 0.24);
+		border-radius: 1rem;
+		box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+		backdrop-filter: blur(2px);
+	}
+
+	.surface-card {
+		border-radius: 0.85rem;
+		border: 1px solid #e2e8f0;
+		background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+		box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+	}
+
+	.subtle-card {
+		border-radius: 0.85rem;
+		border: 1px solid #e2e8f0;
+		background: #f8fafc;
+	}
+</style>

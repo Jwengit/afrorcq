@@ -226,13 +226,14 @@
 		</div>
 	</div>
 {:else}
-	<div class="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
-		<div class="max-w-2xl mx-auto">
-			<div class="bg-white rounded-lg shadow-md p-6 mb-6">
+	<div class="min-h-screen public-profile-bg py-10 px-4 sm:px-6 lg:px-8">
+		<div class="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.18),transparent_58%)]"></div>
+		<div class="max-w-4xl mx-auto relative z-10">
+			<div class="rounded-2xl bg-linear-to-r from-emerald-600 via-emerald-500 to-teal-500 p-7 shadow-xl mb-6 text-white border border-emerald-300/30">
 				<div class="flex items-center justify-between">
 					<div>
-						<h1 class="text-3xl font-bold text-gray-900">Public Profile</h1>
-						<p class="text-gray-600 mt-1">
+						<h1 class="text-3xl font-bold tracking-tight">Public Profile</h1>
+						<p class="text-emerald-50/95 mt-1">
 							{viewingOwnProfile
 								? 'This is how your public profile appears to other users'
 								: 'Visible information for drivers and passengers'}
@@ -240,7 +241,7 @@
 					</div>
 					<button
 						on:click={goBackFromPublicProfile}
-						class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+						class="px-4 py-2 rounded-lg text-sm font-semibold text-emerald-700 bg-white hover:bg-emerald-50 transition-colors"
 					>
 						{#if !viewingOwnProfile && hasSavedSearchUrl()}
 							← Back to search results
@@ -251,9 +252,9 @@
 				</div>
 			</div>
 
-			<div class="bg-white rounded-lg shadow-md p-6">
-				<div class="flex items-center space-x-4 mb-6">
-					<div class="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
+			<div class="profile-card p-7">
+				<div class="flex items-center space-x-4 mb-6 rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4">
+					<div class="w-24 h-24 rounded-full bg-slate-200 flex items-center justify-center overflow-hidden ring-4 ring-white shadow-md">
 						{#if profile.profile_photo_url}
 							<img src={profile.profile_photo_url} alt="Profile" class="w-full h-full object-cover" />
 						{:else}
@@ -263,36 +264,52 @@
 						{/if}
 					</div>
 					<div>
-						<h2 class="text-xl font-semibold text-gray-900">{(profile.first_name || profile.last_name) ? `${profile.first_name} ${profile.last_name}`.trim() : 'No name set'}</h2>
-						<p class="text-gray-600 capitalize">{profile.gender || 'Gender not set'}</p>
+						<h2 class="text-2xl font-semibold text-slate-900">{(profile.first_name || profile.last_name) ? `${profile.first_name} ${profile.last_name}`.trim() : 'No name set'}</h2>
+						<p class="text-slate-600 capitalize">{profile.gender || 'Gender not set'}</p>
 					</div>
 				</div>
 
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 					<div>
-						<h3 class="font-medium text-gray-900 mb-2">Bio</h3>
-						<p class="text-gray-600">{profile.bio || 'No bio added yet'}</p>
+						<h3 class="font-medium text-slate-900 mb-2">Bio</h3>
+						<p class="text-slate-600">{profile.bio || 'No bio added yet'}</p>
 					</div>
 					<div>
-						<h3 class="font-medium text-gray-900 mb-2">Languages</h3>
-						<p class="text-gray-600">{profile.languages.length > 0 ? profile.languages.join(', ') : 'No languages specified'}</p>
+						<h3 class="font-medium text-slate-900 mb-2">Languages</h3>
+						{#if profile.languages.length > 0}
+							<div class="flex flex-wrap gap-2">
+								{#each profile.languages as lang (lang)}
+									<span class="chip chip-emerald">{lang}</span>
+								{/each}
+							</div>
+						{:else}
+							<p class="text-slate-600">No languages specified</p>
+						{/if}
 					</div>
 					<div class="md:col-span-2">
-						<h3 class="font-medium text-gray-900 mb-2">Ride Preferences</h3>
-						<p class="text-gray-600">{profile.ride_preferences.length > 0 ? profile.ride_preferences.join(', ') : 'No preferences specified'}</p>
+						<h3 class="font-medium text-slate-900 mb-2">Ride Preferences</h3>
+						{#if profile.ride_preferences.length > 0}
+							<div class="flex flex-wrap gap-2">
+								{#each profile.ride_preferences as pref (pref)}
+									<span class="chip chip-sky">{pref}</span>
+								{/each}
+							</div>
+						{:else}
+							<p class="text-slate-600">No preferences specified</p>
+						{/if}
 					</div>
 				</div>
 
-				<div class="border-t border-gray-200 pt-6 mt-6">
-					<h3 class="text-lg font-semibold text-gray-900 mb-4">Car Information</h3>
+				<div class="border-t border-slate-200 pt-6 mt-6">
+					<h3 class="text-lg font-semibold text-slate-900 mb-4">Car Information</h3>
 					<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 						<div>
-							<h4 class="font-medium text-gray-900 mb-2">Make</h4>
-							<p class="text-gray-600">{profile.car_make || 'Not provided'}</p>
+							<h4 class="font-medium text-slate-900 mb-2">Make</h4>
+							<p class="text-slate-600">{profile.car_make || 'Not provided'}</p>
 						</div>
 						<div>
-							<h4 class="font-medium text-gray-900 mb-2">Year</h4>
-							<p class="text-gray-600">{profile.car_year || 'Not provided'}</p>
+							<h4 class="font-medium text-slate-900 mb-2">Year</h4>
+							<p class="text-slate-600">{profile.car_year || 'Not provided'}</p>
 						</div>
 					</div>
 				</div>
@@ -303,3 +320,39 @@
 		</div>
 	</div>
 {/if}
+
+<style>
+	.public-profile-bg {
+		background:
+			radial-gradient(circle at 12% 10%, rgba(16, 185, 129, 0.08), transparent 28%),
+			radial-gradient(circle at 92% 18%, rgba(14, 165, 233, 0.08), transparent 32%),
+			linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+	}
+
+	.profile-card {
+		background: rgba(255, 255, 255, 0.94);
+		border: 1px solid rgba(148, 163, 184, 0.24);
+		border-radius: 1rem;
+		box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+		backdrop-filter: blur(2px);
+	}
+
+	.chip {
+		display: inline-flex;
+		align-items: center;
+		padding: 0.2rem 0.6rem;
+		border-radius: 9999px;
+		font-size: 0.75rem;
+		font-weight: 600;
+	}
+
+	.chip-emerald {
+		background: #d1fae5;
+		color: #065f46;
+	}
+
+	.chip-sky {
+		background: #e0f2fe;
+		color: #075985;
+	}
+</style>
