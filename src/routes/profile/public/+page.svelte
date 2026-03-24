@@ -4,6 +4,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
+	import ReviewsSection from '$lib/components/ReviewsSection.svelte';
 
 	type PublicProfile = {
 		first_name: string;
@@ -24,6 +25,7 @@
 
 	let loading = true;
 	let viewingOwnProfile = true;
+	let viewedProfileId = '';
 	let profile: PublicProfile = {
 		first_name: '',
 		last_name: '',
@@ -164,6 +166,7 @@
 
 		const requestedProfileId = $page.url.searchParams.get('id');
 		const profileId = requestedProfileId || authData.user.id;
+		viewedProfileId = profileId;
 		viewingOwnProfile = profileId === authData.user.id;
 
 		const { data, error } = await supabase
@@ -218,7 +221,7 @@
 						</p>
 					</div>
 					<button
-						onclick={() => goto(resolve(viewingOwnProfile ? '/profile' : '/dashboard'))}
+						on:click={() => goto(resolve(viewingOwnProfile ? '/profile' : '/dashboard'))}
 						class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
 					>
 						{viewingOwnProfile ? 'Back to edit' : 'Back to dashboard'}
@@ -273,6 +276,8 @@
 				</div>
 
 			</div>
+
+			<ReviewsSection userId={viewedProfileId} userName={`${profile.first_name} ${profile.last_name}`.trim()} />
 		</div>
 	</div>
 {/if}
