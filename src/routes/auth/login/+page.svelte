@@ -107,14 +107,24 @@
 	async function signIn() {
 		error = '';
 
+		// reCAPTCHA check
 		if (!recaptchaToken) {
 			error = 'Please complete the reCAPTCHA verification';
+			return;
+		}
+
+		if (!email || !password) {
+			error = 'Please enter email and password';
 			return;
 		}
 
 		loading = true;
 
 		try {
+			// Ensure Supabase client is ready
+			const { data: sessionData } = await supabase.auth.getSession();
+			console.log('Session check:', sessionData);
+
 			const { data, error: signInError } = await supabase.auth.signInWithPassword({
 				email,
 				password
@@ -124,13 +134,15 @@
 
 			if (signInError) {
 				error = signInError.message;
-			} else {
+			} else if (data?.session) {
 				// Redirect to profile or home
 				goto(resolve('/profile'));
+			} else {
+				error = 'Sign in successful but no session created. Please try again.';
 			}
 		} catch (err) {
 			console.error('Unexpected signIn error:', err);
-			error = 'Unexpected error during sign in. Check browser console.';
+			error = err instanceof Error ? err.message : 'Unexpected error during sign in. Check browser console.';
 		} finally {
 			loading = false;
 		}

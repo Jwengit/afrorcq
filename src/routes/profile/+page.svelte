@@ -458,21 +458,31 @@
 			const token = sessionData?.session?.access_token;
 			if (!token) {
 				deleteError = 'Session expired. Please sign in again.';
+				console.error('No token available');
 				return;
 			}
+			console.log('Starting account deletion...');
 			const response = await fetch('/api/profile', {
 				method: 'DELETE',
-				headers: { Authorization: `Bearer ${token}` }
+				headers: { 
+					Authorization: `Bearer ${token}`,
+					'Content-Type': 'application/json'
+				}
 			});
+			const body = await response.json();
+			console.log('Delete response:', { status: response.status, body });
+			
 			if (!response.ok) {
-				const body = await response.json();
-				deleteError = body?.error || 'Failed to delete account. Please try again.';
+				deleteError = body?.error || `Failed to delete account (${response.status}). Please try again.`;
 				return;
 			}
+			
+			console.log('Account deleted successfully');
 			await supabase.auth.signOut();
 			goto(resolve('/auth/login'));
-		} catch {
-			deleteError = 'An unexpected error occurred. Please try again.';
+		} catch (err) {
+			console.error('Delete error:', err);
+			deleteError = err instanceof Error ? err.message : 'An unexpected error occurred. Please try again.';
 		} finally {
 			deleting = false;
 		}
