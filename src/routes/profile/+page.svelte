@@ -424,6 +424,60 @@
 		goto(resolve('/auth/login'));
 	}
 
+	// --- Account deletion ---
+	let showDeleteModal = false;
+	let deleteStep = 1; // 1 = warning, 2 = email confirmation
+	let deleteConfirmEmail = '';
+	let deleting = false;
+	let deleteError = '';
+
+	function openDeleteModal() {
+		showDeleteModal = true;
+		deleteStep = 1;
+		deleteConfirmEmail = '';
+		deleteError = '';
+	}
+
+	function closeDeleteModal() {
+		showDeleteModal = false;
+		deleteStep = 1;
+		deleteConfirmEmail = '';
+		deleteError = '';
+	}
+
+	async function deleteAccount() {
+		if (!currentUser) return;
+		if (deleteConfirmEmail.trim().toLowerCase() !== currentUser.email?.toLowerCase()) {
+			deleteError = 'The email address does not match. Please try again.';
+			return;
+		}
+		deleting = true;
+		deleteError = '';
+		try {
+			const { data: sessionData } = await supabase.auth.getSession();
+			const token = sessionData?.session?.access_token;
+			if (!token) {
+				deleteError = 'Session expired. Please sign in again.';
+				return;
+			}
+			const response = await fetch('/api/profile', {
+				method: 'DELETE',
+				headers: { Authorization: `Bearer ${token}` }
+			});
+			if (!response.ok) {
+				const body = await response.json();
+				deleteError = body?.error || 'Failed to delete account. Please try again.';
+				return;
+			}
+			await supabase.auth.signOut();
+			goto(resolve('/auth/login'));
+		} catch {
+			deleteError = 'An unexpected error occurred. Please try again.';
+		} finally {
+			deleting = false;
+		}
+	}
+
 	function toggleRidePreference(pref: string) {
 		if (formData.ride_preferences.includes(pref)) {
 			formData.ride_preferences = formData.ride_preferences.filter(p => p !== pref);
@@ -460,10 +514,10 @@
 						<p class="text-emerald-50/95 mt-1">Manage your account information</p>
 					</div>
 					<button
-						on:click={signOut}
-						class="px-4 py-2 rounded-lg text-sm font-semibold text-emerald-700 bg-white hover:bg-emerald-50 transition-colors cursor-pointer"
+						on:click={openDeleteModal}
+						class="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-red-600/80 hover:bg-red-700 transition-colors cursor-pointer"
 					>
-						Sign Out
+						Delete Account
 					</button>
 				</div>
 			</div>
@@ -898,6 +952,99 @@
 		<div class="text-center">
 			<p class="text-gray-600">You are not logged in.</p>
 			<a href={resolve('/auth/login')} class="text-green-600 hover:text-green-700 font-medium">Sign in</a>
+		</div>
+	</div>
+{/if}
+
+<!-- Delete Account Modal -->
+{#if showDeleteModal}
+	<!-- svelte-ignore a11y-click-events-have-key-events -->
+	<!-- svelte-ignore a11y-no-static-element-interactions -->
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4"
+		on:click|self={closeDeleteModal}
+	>
+		<div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-7 relative">
+			<button
+				type="button"
+				on:click={closeDeleteModal}
+				class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 cursor-pointer"
+				aria-label="Close"
+			>
+				<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+				</svg>
+			</button>
+
+			{#if deleteStep === 1}
+				<!-- Step 1: Warning -->
+				<div class="text-center">
+					<div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-100">
+						<svg class="h-7 w-7 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+								d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+						</svg>
+					</div>
+					<h2 class="text-xl font-bold text-slate-900 mb-2">Delete your account?</h2>
+					<p class="text-slate-600 text-sm mb-1">This action is <strong>permanent and irreversible</strong>.</p>
+					<p class="text-slate-600 text-sm mb-6">All your profile data, rides, and bookings will be permanently removed.</p>
+					<div class="flex gap-3">
+						<button
+							type="button"
+							on:click={closeDeleteModal}
+							class="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer"
+						>
+							Cancel
+						</button>
+						<button
+							type="button"
+							on:click={() => { deleteStep = 2; deleteError = ''; }}
+							class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 cursor-pointer"
+						>
+							I understand, continue
+						</button>
+					</div>
+				</div>
+			{:else}
+				<!-- Step 2: Email confirmation -->
+				<div>
+					<h2 class="text-xl font-bold text-slate-900 mb-1">Confirm deletion</h2>
+					<p class="text-slate-600 text-sm mb-4">
+						Type your email address <strong>{currentUser?.email}</strong> to confirm you want to permanently delete your account.
+					</p>
+					<label for="delete_confirm_email" class="block text-sm font-medium text-slate-700 mb-1">
+						Your email address
+					</label>
+					<input
+						id="delete_confirm_email"
+						type="email"
+						bind:value={deleteConfirmEmail}
+						placeholder={currentUser?.email}
+						class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 mb-3"
+					/>
+					{#if deleteError}
+						<p class="text-red-600 text-sm mb-3">{deleteError}</p>
+					{/if}
+					<div class="flex gap-3">
+						<button
+							type="button"
+							on:click={() => { deleteStep = 1; deleteError = ''; }}
+							disabled={deleting}
+							class="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer disabled:opacity-50"
+						>
+							Back
+						</button>
+						<button
+							type="button"
+							on:click={deleteAccount}
+							disabled={deleting}
+							class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 disabled:opacity-60 cursor-pointer disabled:cursor-not-allowed"
+						>
+							{deleting ? 'Deleting...' : 'Delete my account'}
+						</button>
+					</div>
+				</div>
+			{/if}
 		</div>
 	</div>
 {/if}
