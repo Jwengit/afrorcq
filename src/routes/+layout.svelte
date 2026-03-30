@@ -8,7 +8,9 @@
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
-	<script src="https://www.google.com/recaptcha/api.js" async defer></script>
+	<link rel="preconnect" href="https://www.google.com" />
+	<link rel="preconnect" href="https://www.gstatic.com" crossorigin="anonymous" />
+	<script src="https://www.google.com/recaptcha/api.js?render=explicit" async defer></script>
 </svelte:head>
 
 <Header />
