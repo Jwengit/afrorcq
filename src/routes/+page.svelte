@@ -251,7 +251,7 @@
 				<!-- Brand -->
 				<div class="col-span-1 md:col-span-1">
 					<div class="flex items-center gap-2 mb-4">
-						<img src="/logo.png" alt="Hizli Logo" class="h-12 w-auto object-contain" />
+						<img src="/logo.png" alt="Hizli Logo" class="h-12 w-auto object-contain footer-logo-contrast" />
 						<span class="text-xl font-bold">Hizli</span>
 					</div>
 					<p class="text-gray-50 text-sm">
@@ -312,3 +312,10 @@
 		</div>
 	</footer>
 </div>
+
+<style>
+	.footer-logo-contrast {
+		/* Makes the green accent readable on the green footer background. */
+		filter: brightness(0) invert(1);
+	}
+</style>
