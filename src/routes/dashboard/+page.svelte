@@ -55,7 +55,6 @@
 			price: number;
 		};
 	};
-
 	let currentUser: User | null = null;
 	let loading = true;
 	let myRides: Ride[] = [];
@@ -412,11 +411,6 @@
 		return combined || fallback;
 	}
 
-	async function signOut() {
-		await supabase.auth.signOut();
-		goto(resolve('/auth/login'));
-	}
-
 	function startEditingRide(ride: Ride) {
 		editingRideId = ride.id;
 		rideActionError = '';
@@ -598,15 +592,6 @@
 					<div>
 						<p class="text-sm text-emerald-50/90">Connected as {currentUser.email}</p>
 						<h1 class="text-3xl font-bold mt-1 tracking-tight">Dashboard</h1>
-					</div>
-					<div class="flex gap-3">
-						<button
-							type="button"
-							on:click={signOut}
-							class="px-4 py-2 bg-white text-emerald-700 rounded-lg text-sm font-semibold hover:bg-emerald-50 transition-colors"
-						>
-							Sign out
-						</button>
 					</div>
 				</div>
 

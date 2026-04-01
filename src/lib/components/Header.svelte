@@ -27,6 +27,7 @@
 		await supabase.auth.signOut();
 		goto('/');
 	}
+
 </script>
 
 <!-- Navbar -->

@@ -419,11 +419,6 @@
 		}
 	}
 
-	async function signOut() {
-		await supabase.auth.signOut();
-		goto(resolve('/auth/login'));
-	}
-
 	// --- Account deletion ---
 	let showDeleteModal = false;
 	let deleteStep = 1; // 1 = warning, 2 = email confirmation
