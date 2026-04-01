@@ -131,6 +131,11 @@
 			return;
 		}
 
+		if (!Number.isInteger(form.price)) {
+			errorMessage = 'Price must be a whole number.';
+			return;
+		}
+
 		const rideDateIso = new Date(form.rideDate).toISOString();
 		if (Number.isNaN(new Date(rideDateIso).getTime())) {
 			errorMessage = 'Invalid ride date.';
@@ -276,7 +281,7 @@
 							id="price"
 							type="number"
 							min="0"
-							step="0.01"
+							step="1"
 							bind:value={form.price}
 							required
 							class="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
