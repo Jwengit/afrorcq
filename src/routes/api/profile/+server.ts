@@ -114,6 +114,15 @@ export const DELETE: RequestHandler = async ({ request }) => {
 			return json({ error: 'Server configuration error' }, { status: 500 });
 		}
 
+		const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
+		if (!serviceRoleKey) {
+			console.error('SUPABASE_SERVICE_ROLE_KEY is missing. Account deletion cannot be completed.');
+			return json(
+				{ error: 'Account deletion is not configured on the server. Please contact support.' },
+				{ status: 500 }
+			);
+		}
+
 		const authHeader = request.headers.get('authorization');
 		if (!authHeader || !authHeader.startsWith('Bearer ')) {
 			console.error('No valid auth header');
@@ -146,34 +155,15 @@ export const DELETE: RequestHandler = async ({ request }) => {
 
 		console.log('Deleting account for user:', user.id);
 
-		// Delete profile row (RLS will enforce ownership)
-		const { error: profileError } = await supabaseClient
-			.from('profiles')
-			.delete()
-			.eq('id', user.id);
-
-		if (profileError) {
-			console.error('Profile delete error:', profileError);
-			return json({ error: `Failed to delete profile: ${profileError.message}` }, { status: 500 });
+		const adminClient = createClient(supabaseUrl, serviceRoleKey);
+		const { error: deleteAuthError } = await adminClient.auth.admin.deleteUser(user.id);
+		if (deleteAuthError) {
+			console.error('Auth user delete error:', deleteAuthError);
+			return json({ error: `Failed to delete account: ${deleteAuthError.message}` }, { status: 500 });
 		}
 
-		// Delete auth user if service role key is configured
-		const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
-		if (serviceRoleKey) {
-			const adminClient = createClient(supabaseUrl, serviceRoleKey);
-			const { error: deleteAuthError } = await adminClient.auth.admin.deleteUser(user.id);
-			if (deleteAuthError) {
-				console.error('Auth user delete error:', deleteAuthError);
-				// Profile is already deleted; return partial success
-				return json({ success: true, authDeleted: false, message: 'Profile deleted but auth account remains' });
-			}
-			console.log('User deleted successfully');
-			return json({ success: true, authDeleted: true });
-		}
-
-		// No service role key — profile deleted, auth account remains inactive
-		console.log('Profile deleted, service role key not available');
-		return json({ success: true, authDeleted: false });
+		console.log('User deleted successfully');
+		return json({ success: true, authDeleted: true });
 	} catch (err) {
 		console.error('Delete API error:', err);
 		const message = err instanceof Error ? err.message : 'Unknown error';

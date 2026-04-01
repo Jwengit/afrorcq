@@ -17,7 +17,8 @@
 	let recaptchaContainer: HTMLDivElement;
 	let recaptchaWidgetId: number | null = null;
 
-	const RECAPTCHA_SITE_KEY = '6LdQr38pAAAAANn80cqDW86qzuS6xbveg0b57scK';
+	const RECAPTCHA_SITE_KEY =
+		import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LdQr38pAAAAANn80cqDW86qzuS6xbveg0b57scK';
 
 	// reCAPTCHA callback
 	function onRecaptchaCallback(token: string) {
@@ -51,6 +52,11 @@
 	}
 
 	onMount(() => {
+		if (!RECAPTCHA_SITE_KEY) {
+			error = 'reCAPTCHA is not configured. Please contact support.';
+			return;
+		}
+
 		// Expose callbacks globally for reCAPTCHA
 		const recaptchaWindow = window as Window & {
 			onRecaptchaCallback?: (token: string) => void;
