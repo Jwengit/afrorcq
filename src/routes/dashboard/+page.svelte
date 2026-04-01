@@ -7,6 +7,10 @@
 	import { supabase } from '$lib/supabaseClient';
 	import type { User } from '@supabase/supabase-js';
 
+	type DriverProfile = {
+		gender?: string | null;
+	};
+
 	type Ride = {
 		id: string;
 		departure: string;
@@ -56,6 +60,7 @@
 		};
 	};
 	let currentUser: User | null = null;
+	let isFemaleDriver = false;
 	let loading = true;
 	let myRides: Ride[] = [];
 	let ridesLoading = false;
@@ -102,11 +107,30 @@
 			return;
 		}
 
+		await loadDriverEligibility(user!.id);
+
 		await loadMyRides(user!.id);
 		await loadMyBookings(user!.id);
 		await loadIncomingBookingRequests(user!.id);
 		loading = false;
 	});
+
+	async function loadDriverEligibility(userId: string) {
+		const { data, error } = await supabase
+			.from('profiles')
+			.select('gender')
+			.eq('id', userId)
+			.maybeSingle();
+
+		if (error) {
+			console.error('Profile gender load error:', error);
+			isFemaleDriver = false;
+			return;
+		}
+
+		const profile = (data as DriverProfile | null) ?? null;
+		isFemaleDriver = (profile?.gender ?? '').toLowerCase() === 'female';
+	}
 
 	function openArchive() {
 		showArchive = true;
@@ -402,6 +426,20 @@
 		return parsed.toLocaleString();
 	}
 
+	function toDateTimeLocalValue(dateValue: string) {
+		if (!dateValue) return '';
+		const parsed = new Date(dateValue);
+		if (Number.isNaN(parsed.getTime())) return '';
+
+		const year = parsed.getFullYear();
+		const month = String(parsed.getMonth() + 1).padStart(2, '0');
+		const day = String(parsed.getDate()).padStart(2, '0');
+		const hours = String(parsed.getHours()).padStart(2, '0');
+		const minutes = String(parsed.getMinutes()).padStart(2, '0');
+
+		return `${year}-${month}-${day}T${hours}:${minutes}`;
+	}
+
 	function toggleReviewForm(formId: string) {
 		openReviewFormId = openReviewFormId === formId ? null : formId;
 	}
@@ -418,10 +456,10 @@
 		editRideForm = {
 			departure: ride.departure,
 			arrival: ride.arrival,
-			rideDate: new Date(ride.ride_date).toISOString().slice(0, 16),
+			rideDate: toDateTimeLocalValue(ride.ride_date),
 			seats: ride.seats,
 			price: ride.price,
-			girlsOnly: ride.girls_only
+			girlsOnly: isFemaleDriver ? ride.girls_only : false
 		};
 	}
 
@@ -452,19 +490,26 @@
 			return;
 		}
 
+		if (!Number.isInteger(editRideForm.price)) {
+			rideActionError = 'Price must be a whole number.';
+			return;
+		}
+
 		savingRide = true;
 		rideActionError = '';
 		rideActionSuccess = '';
+		const girlsOnlyValue = isFemaleDriver ? editRideForm.girlsOnly : false;
+		const rideDateIso = new Date(editRideForm.rideDate).toISOString();
 
 		const { error } = await supabase
 			.from('rides')
 			.update({
 				departure,
 				arrival,
-				ride_date: new Date(editRideForm.rideDate).toISOString(),
+				ride_date: rideDateIso,
 				seats: editRideForm.seats,
 				price: editRideForm.price,
-				girls_only: editRideForm.girlsOnly
+				girls_only: girlsOnlyValue
 			})
 			.eq('id', rideId)
 			.eq('driver_id', currentUser.id);
@@ -482,10 +527,10 @@
 					...ride,
 					departure,
 					arrival,
-					ride_date: new Date(editRideForm.rideDate).toISOString(),
+					ride_date: rideDateIso,
 					seats: editRideForm.seats,
 					price: editRideForm.price,
-					girls_only: editRideForm.girlsOnly
+					girls_only: girlsOnlyValue
 				}
 				: ride
 		);
@@ -671,19 +716,21 @@
 											<input
 												type="number"
 												min="0"
-												step="0.01"
+												step="1"
 												bind:value={editRideForm.price}
 												class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
 											/>
 										</div>
-										<label class="inline-flex items-center gap-2 text-sm text-gray-700">
-											<input
-												type="checkbox"
-												bind:checked={editRideForm.girlsOnly}
-												class="rounded border-gray-300 text-green-600 focus:ring-green-500"
-											/>
-											Girls Only
-										</label>
+										{#if isFemaleDriver}
+											<label class="inline-flex items-center gap-2 text-sm text-gray-700">
+												<input
+													type="checkbox"
+													bind:checked={editRideForm.girlsOnly}
+													class="rounded border-gray-300 text-green-600 focus:ring-green-500"
+												/>
+												Girls Only
+											</label>
+										{/if}
 										<div class="flex gap-2">
 											<button
 												type="button"
