@@ -25,8 +25,11 @@
 	let loading = true;
 	let bookingSeats = 1;
 	let submitting = false;
+	let processingPaymentReturn = false;
 	let errorMessage = '';
 	let successMessage = '';
+	let paymentMethod: 'paypal' | 'venmo' = 'paypal';
+	let processedOrderId: string | null = null;
 
 	onMount(async () => {
 		const { data: { user } } = await supabase.auth.getUser();
@@ -49,8 +52,31 @@
 
 		ride = data as Ride;
 
+		const paymentState = $page.url.searchParams.get('payment');
+		const orderId = $page.url.searchParams.get('token');
+
+		if (paymentState === 'cancelled') {
+			errorMessage = 'Payment was cancelled. No booking was created.';
+			if (orderId) {
+				await markPaymentAsCancelled(orderId);
+			}
+			await goto(resolve(`/ride/${ride.id}`), { replaceState: true, noScroll: true, keepFocus: true });
+		}
+
+		if (paymentState === 'success' && orderId && processedOrderId !== orderId) {
+			processedOrderId = orderId;
+			await captureReturnedPayment(orderId, ride.id);
+		}
+
 		loading = false;
 	});
+
+	async function getAccessToken() {
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+		return session?.access_token || null;
+	}
 
 	async function submitBooking() {
 		if (!currentUser || !ride) return;
@@ -65,27 +91,101 @@
 
 		submitting = true;
 		try {
-			const { error } = await supabase.from('bookings').insert({
-				ride_id: ride.id,
-				passenger_id: currentUser.id,
-				seats_booked: bookingSeats,
-				status: 'Pending'
-			});
-
-			if (error) {
-				errorMessage =
-					error.message === 'Not enough seats available for this ride.'
-						? 'There are no longer enough seats available for this ride.'
-						: error.message || 'Failed to complete booking.';
+			const token = await getAccessToken();
+			if (!token) {
+				errorMessage = 'Your session has expired. Please sign in again.';
 				return;
 			}
 
-			ride = { ...ride, seats: Math.max(0, ride.seats - bookingSeats) };
-			successMessage = 'Booking request sent. Waiting for driver confirmation.';
+			const response = await fetch('/api/payments/create-order', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					authorization: `Bearer ${token}`
+				},
+				body: JSON.stringify({
+					ride_id: ride.id,
+					seats_booked: bookingSeats,
+					payment_method: paymentMethod
+				})
+			});
+
+			const payload = (await response.json()) as { error?: string; approval_url?: string };
+
+			if (!response.ok || !payload.approval_url) {
+				errorMessage = payload.error || 'Failed to initialize payment.';
+				return;
+			}
+
+			window.location.href = payload.approval_url;
 		} catch {
 			errorMessage = 'An unexpected error occurred.';
 		} finally {
 			submitting = false;
+		}
+	}
+
+	async function captureReturnedPayment(orderId: string, rideId: string) {
+		processingPaymentReturn = true;
+		errorMessage = '';
+		successMessage = '';
+
+		try {
+			const token = await getAccessToken();
+			if (!token) {
+				errorMessage = 'Your session has expired. Please sign in again.';
+				return;
+			}
+
+			const response = await fetch('/api/payments/capture', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					authorization: `Bearer ${token}`
+				},
+				body: JSON.stringify({ order_id: orderId })
+			});
+
+			const payload = (await response.json()) as { error?: string; success?: boolean };
+
+			if (!response.ok || !payload.success) {
+				errorMessage = payload.error || 'Payment capture failed.';
+				return;
+			}
+
+			successMessage =
+				'Payment captured successfully. Funds are held on the platform and will be released manually for this MVP.';
+
+			const { data, error } = await supabase.from('rides').select('*').eq('id', rideId).maybeSingle();
+			if (!error && data) {
+				ride = data as Ride;
+			}
+
+			await goto(resolve(`/ride/${rideId}`), { replaceState: true, noScroll: true, keepFocus: true });
+		} catch {
+			errorMessage = 'An unexpected error occurred while finalizing payment.';
+		} finally {
+			processingPaymentReturn = false;
+		}
+	}
+
+	async function markPaymentAsCancelled(orderId: string) {
+		try {
+			const token = await getAccessToken();
+			if (!token) {
+				return;
+			}
+
+			await fetch('/api/payments/cancel', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					authorization: `Bearer ${token}`
+				},
+				body: JSON.stringify({ order_id: orderId })
+			});
+		} catch (error) {
+			console.error('Failed to mark payment cancelled:', error);
 		}
 	}
 
@@ -151,7 +251,23 @@
 								{/each}
 							</select>
 						</div>
-						<button type="submit" disabled={submitting} class="w-full rounded-md bg-green-600 text-white font-medium py-3 hover:bg-green-700 transition-colors disabled:opacity-60">{submitting ? 'Booking...' : 'Book this ride'}</button>
+						<div>
+							<p class="block text-sm font-medium text-gray-700 mb-2">Payment method</p>
+							<div class="grid grid-cols-2 gap-3">
+								<label class="flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm">
+									<input type="radio" bind:group={paymentMethod} value="paypal" />
+									<span>PayPal</span>
+								</label>
+								<label class="flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm">
+									<input type="radio" bind:group={paymentMethod} value="venmo" />
+									<span>Venmo</span>
+								</label>
+							</div>
+						</div>
+						<div class="rounded-md bg-blue-50 border border-blue-200 p-3 text-sm text-blue-800">
+							Total now: ${(Number(ride.price) * bookingSeats).toFixed(2)}. Payment is captured immediately and held on platform until manual release.
+						</div>
+						<button type="submit" disabled={submitting || processingPaymentReturn} class="w-full rounded-md bg-green-600 text-white font-medium py-3 hover:bg-green-700 transition-colors disabled:opacity-60">{submitting ? 'Redirecting to payment...' : processingPaymentReturn ? 'Finalizing payment...' : 'Pay and book this ride'}</button>
 					</form>
 				{/if}
 			</div>
