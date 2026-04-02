@@ -13,10 +13,6 @@ Create a `.env.local` file with your Supabase credentials:
 ```
 VITE_PUBLIC_SUPABASE_URL=your_supabase_url
 VITE_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-PAYPAL_CLIENT_ID=your_paypal_client_id
-PAYPAL_CLIENT_SECRET=your_paypal_client_secret
-# Optional: defaults to sandbox API endpoint
-PAYPAL_BASE_URL=https://api-m.sandbox.paypal.com
 ```
 
 ### Supabase Configuration
@@ -47,31 +43,6 @@ PAYPAL_BASE_URL=https://api-m.sandbox.paypal.com
 - `/auth/signup` - User registration
 - `/auth/login` - User login
 - `/profile` - User profile (requires authentication)
-
-## Payments MVP (PayPal / Venmo)
-
-This project now supports a payment-first booking flow for rides:
-
-- Passenger chooses seats and payment method (`PayPal` or `Venmo`) on the ride page.
-- PayPal order is created server-side and user is redirected for approval.
-- On return, order is captured immediately.
-- Booking is created only after capture succeeds.
-- Funds are stored in platform escrow state (`payments.status = captured`) and released manually for MVP.
-
-### Database setup
-
-Run the SQL migration file below in Supabase SQL editor:
-
-- `create_payments_table.sql`
-
-### Payment status model
-
-- `created`: order created, waiting for payer approval/capture
-- `captured`: payment captured, funds held on platform
-- `released`: manually released to driver (MVP: manual DB/admin action)
-- `cancelled`: payer cancelled before capture
-- `failed`: provider capture failed
-- `captured_issue`: capture succeeded but booking creation failed (manual support required)
 
 ## Creating a project
 
