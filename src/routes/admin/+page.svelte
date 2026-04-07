@@ -19,6 +19,7 @@
 		is_admin: boolean | null;
 		is_verified: boolean | null;
 		created_at: string | null;
+		has_profile?: boolean;
 	};
 
 	let usersLoading = false;
@@ -27,13 +28,23 @@
 	let userSearch = '';
 	let users: AdminUser[] = [];
 	let actionUserId: string | null = null;
+	let statsError = '';
 
-	// Stats placeholders
+	// Dashboard overview stats
 	let stats = {
 		totalUsers: 0,
-		totalRides: 0,
-		totalBookings: 0,
-		pendingVerifications: 0
+		activeRides: 0,
+		completedRides: 0,
+		reservationsInProgress: 0,
+		revenue: {
+			hasPaymentIntegration: false,
+			estimatedRevenue: 0
+		},
+		alerts: {
+			total: 0,
+			reports: 0,
+			accountsToVerify: 0
+		}
 	};
 
 	onMount(() => {
@@ -113,38 +124,70 @@
 	});
 
 	async function loadStats() {
-		const [usersRes, ridesRes, bookingsRes, verifyRes] = await Promise.all([
-			supabase.from('profiles').select('id', { count: 'exact', head: true }),
-			supabase.from('rides').select('id', { count: 'exact', head: true }),
-			supabase.from('bookings').select('id', { count: 'exact', head: true }),
-			supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('is_verified', false)
-		]);
+		statsError = '';
 
-		stats = {
-			totalUsers: usersRes.count ?? 0,
-			totalRides: ridesRes.count ?? 0,
-			totalBookings: bookingsRes.count ?? 0,
-			pendingVerifications: verifyRes.count ?? 0
-		};
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			statsError = 'Session expirée. Merci de te reconnecter.';
+			return;
+		}
+
+		const response = await fetch('/api/admin/overview', {
+			method: 'GET',
+			headers: {
+				Authorization: `Bearer ${session.access_token}`
+			}
+		});
+
+		const payload = await response.json();
+		if (!response.ok) {
+			statsError = payload?.error || 'Impossible de charger le tableau de bord.';
+			return;
+		}
+
+		if (payload?.stats) {
+			stats = payload.stats;
+		}
 	}
 
 	async function loadUsers() {
 		usersLoading = true;
 		usersError = '';
 
-		const { data, error } = await supabase
-			.from('profiles')
-			.select('id, first_name, last_name, email, is_admin, is_verified, created_at')
-			.order('created_at', { ascending: false });
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
 
-		if (error) {
-			usersError = "Impossible de charger les utilisateurs pour le moment.";
+		if (!session?.access_token) {
+			usersError = 'Session expirée. Merci de te reconnecter.';
 			users = [];
 			usersLoading = false;
 			return;
 		}
 
-		users = (data ?? []) as AdminUser[];
+		const response = await fetch('/api/admin/users', {
+			method: 'GET',
+			headers: {
+				Authorization: `Bearer ${session.access_token}`
+			}
+		});
+
+		const payload = await response.json();
+		if (!response.ok) {
+			usersError = payload?.error || "Impossible de charger les utilisateurs pour le moment.";
+			users = [];
+			usersLoading = false;
+			return;
+		}
+
+		users = ((payload?.users ?? []) as AdminUser[]).sort((a, b) => {
+			const aDate = a.created_at ? new Date(a.created_at).getTime() : 0;
+			const bDate = b.created_at ? new Date(b.created_at).getTime() : 0;
+			return bDate - aDate;
+		});
 		usersLoading = false;
 	}
 
@@ -152,19 +195,44 @@
 		actionUserId = targetUser.id;
 		usersActionMessage = '';
 
-		const { error } = await supabase
-			.from('profiles')
-			.update({ [field]: value, updated_at: new Date().toISOString() })
-			.eq('id', targetUser.id);
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
 
-		if (error) {
+		if (!session?.access_token) {
+			usersActionMessage = 'Session expirée. Merci de te reconnecter.';
+			actionUserId = null;
+			return;
+		}
+
+		const response = await fetch('/api/admin/users', {
+			method: 'PATCH',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${session.access_token}`
+			},
+			body: JSON.stringify({
+				userId: targetUser.id,
+				field,
+				value,
+				email: targetUser.email,
+				firstName: targetUser.first_name,
+				lastName: targetUser.last_name
+			})
+		});
+
+		const payload = await response.json();
+		if (!response.ok) {
 			usersActionMessage =
+				payload?.error ||
 				"Action impossible pour le moment. Verifie que ton compte a bien le role admin dans profiles.";
 			actionUserId = null;
 			return;
 		}
 
-		users = users.map((u) => (u.id === targetUser.id ? { ...u, [field]: value } : u));
+		users = users.map((u) =>
+			u.id === targetUser.id ? { ...u, [field]: value, has_profile: true } : u
+		);
 		usersActionMessage =
 			field === 'is_admin'
 				? value
@@ -183,7 +251,7 @@
 			return true;
 		}
 
-		const searchable = `${u.first_name ?? ''} ${u.last_name ?? ''} ${u.email ?? ''}`.toLowerCase();
+		const searchable = `${u.first_name ?? ''} ${u.last_name ?? ''} ${u.email ?? ''} ${u.id}`.toLowerCase();
 		return searchable.includes(normalizedSearch);
 	});
 
@@ -229,23 +297,33 @@
 		</div>
 
 		<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+			{#if statsError}
+				<div class="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+					{statsError}
+				</div>
+			{/if}
+
 			<!-- Stats cards -->
-			<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+			<div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
 				<div class="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
 					<p class="text-sm text-gray-500 mb-1">Utilisateurs</p>
 					<p class="text-3xl font-bold text-gray-900">{stats.totalUsers}</p>
 				</div>
 				<div class="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
-					<p class="text-sm text-gray-500 mb-1">Trajets publiés</p>
-					<p class="text-3xl font-bold text-gray-900">{stats.totalRides}</p>
+					<p class="text-sm text-gray-500 mb-1">Trajets actifs</p>
+					<p class="text-3xl font-bold text-gray-900">{stats.activeRides}</p>
 				</div>
 				<div class="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
-					<p class="text-sm text-gray-500 mb-1">Réservations</p>
-					<p class="text-3xl font-bold text-gray-900">{stats.totalBookings}</p>
+					<p class="text-sm text-gray-500 mb-1">Trajets termines</p>
+					<p class="text-3xl font-bold text-gray-900">{stats.completedRides}</p>
 				</div>
 				<div class="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
-					<p class="text-sm text-gray-500 mb-1">En attente de vérification</p>
-					<p class="text-3xl font-bold {stats.pendingVerifications > 0 ? 'text-orange-500' : 'text-gray-900'}">{stats.pendingVerifications}</p>
+					<p class="text-sm text-gray-500 mb-1">Reservations en cours</p>
+					<p class="text-3xl font-bold text-gray-900">{stats.reservationsInProgress}</p>
+				</div>
+				<div class="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
+					<p class="text-sm text-gray-500 mb-1">Alertes</p>
+					<p class="text-3xl font-bold {stats.alerts.total > 0 ? 'text-orange-500' : 'text-gray-900'}">{stats.alerts.total}</p>
 				</div>
 			</div>
 
@@ -272,7 +350,35 @@
 
 				<div class="p-6">
 					{#if activeTab === 'overview'}
-						<p class="text-gray-500 text-sm">Bienvenue dans le panneau d'administration. Utilise les onglets ci-dessus pour gérer les utilisateurs, trajets et signalements.</p>
+						<div class="grid md:grid-cols-2 gap-4">
+							<div class="rounded-xl border border-gray-100 bg-gray-50 p-4">
+								<p class="text-sm text-gray-500 mb-1">Etat des trajets</p>
+								<p class="text-base font-semibold text-gray-900">
+									{stats.activeRides} actifs / {stats.completedRides} termines
+								</p>
+							</div>
+							<div class="rounded-xl border border-gray-100 bg-gray-50 p-4">
+								<p class="text-sm text-gray-500 mb-1">Reservations en cours</p>
+								<p class="text-base font-semibold text-gray-900">{stats.reservationsInProgress}</p>
+							</div>
+							<div class="rounded-xl border border-gray-100 bg-gray-50 p-4">
+								<p class="text-sm text-gray-500 mb-1">Revenus</p>
+								{#if stats.revenue.hasPaymentIntegration}
+									<p class="text-base font-semibold text-gray-900">Paiements integres</p>
+								{:else}
+									<p class="text-base font-semibold text-gray-900">
+										Estimation: {stats.revenue.estimatedRevenue.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} EUR
+									</p>
+									<p class="text-xs text-gray-500 mt-1">Paiements non integres, estimation basee sur les reservations confirmees.</p>
+								{/if}
+							</div>
+							<div class="rounded-xl border border-gray-100 bg-gray-50 p-4">
+								<p class="text-sm text-gray-500 mb-1">Alertes</p>
+								<p class="text-base font-semibold text-gray-900">{stats.alerts.total} au total</p>
+								<p class="text-xs text-gray-600 mt-1">Signalements: {stats.alerts.reports}</p>
+								<p class="text-xs text-gray-600">Comptes a verifier: {stats.alerts.accountsToVerify}</p>
+							</div>
+						</div>
 					{:else if activeTab === 'users'}
 						<div class="space-y-4">
 							<div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
@@ -327,6 +433,9 @@
 														</p>
 														<p class="text-xs text-gray-500">{adminUser.email ?? 'Email non renseigne'}</p>
 														<p class="text-xs text-gray-400 break-all">{adminUser.id}</p>
+														{#if adminUser.has_profile === false}
+															<p class="text-xs text-amber-600">Profil manquant dans profiles (compte auth detecte)</p>
+														{/if}
 													</td>
 													<td class="px-4 py-3 align-top">
 														<div class="flex flex-wrap gap-2">
