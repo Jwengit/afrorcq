@@ -5,10 +5,37 @@
 
 	let isMenuOpen = false;
 	let currentUser: any = null;
+	let hasAdminAccess = false;
+
+	async function updateAdminAccess(userId: string, email?: string | null) {
+		if (!userId) {
+			hasAdminAccess = false;
+			return;
+		}
+
+		const isTargetEmail = (email ?? '').toLowerCase() === 'hizli.carpooling@gmail.com';
+		if (isTargetEmail) {
+			hasAdminAccess = true;
+			return;
+		}
+
+		const { data: profile, error } = await supabase
+			.from('profiles')
+			.select('is_admin')
+			.eq('id', userId)
+			.single();
+
+		hasAdminAccess = !error && Boolean(profile?.is_admin);
+	}
 
 	// Subscribe to user store
 	user.subscribe((u) => {
 		currentUser = u;
+		if (u?.id) {
+			updateAdminAccess(u.id, u.email);
+		} else {
+			hasAdminAccess = false;
+		}
 	});
 
 	function toggleMenu() {
@@ -64,6 +91,11 @@
 						</svg>
 						Profile
 					</a>
+					{#if hasAdminAccess}
+						<a href="/admin" class="text-gray-600 hover:text-gray-900 transition-colors">
+							Acces admin
+						</a>
+					{/if}
 					<button
 						on:click={signOut}
 						class="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors cursor-pointer"
@@ -132,6 +164,13 @@
 						class="block px-3 py-2 text-gray-600 hover:text-primary hover:bg-gray-50 rounded-md"
 						>Profile</a
 					>
+					{#if hasAdminAccess}
+						<a
+							href="/admin"
+							class="block px-3 py-2 text-gray-600 hover:text-primary hover:bg-gray-50 rounded-md"
+							>Acces admin</a
+						>
+					{/if}
 					<button
 						on:click={signOut}
 						class="block w-full text-left px-3 py-2 text-gray-600 hover:text-primary hover:bg-gray-50 rounded-md cursor-pointer"

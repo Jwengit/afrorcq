@@ -13,6 +13,33 @@
 		} else if (data.session) {
 			// Check if user is new (created within last 5 minutes)
 			const user = data.session.user;
+			const fullName =
+				(user.user_metadata?.full_name as string | undefined) ||
+				(user.user_metadata?.name as string | undefined) ||
+				'';
+			const fallbackFirstName =
+				fullName.trim().split(' ').filter(Boolean)[0] ||
+				user.email?.split('@')[0] ||
+				'User';
+
+			// Ensure a profile row exists for OAuth users.
+			const { data: existingProfile } = await supabase
+				.from('profiles')
+				.select('id')
+				.eq('id', user.id)
+				.maybeSingle();
+
+			if (!existingProfile) {
+				const { error: profileInsertError } = await supabase.from('profiles').insert({
+					id: user.id,
+					first_name: fallbackFirstName
+				});
+
+				if (profileInsertError) {
+					console.error('Error creating profile on callback:', profileInsertError);
+				}
+			}
+
 			const createdAt = new Date(user.created_at);
 			const now = new Date();
 			const diffMinutes = (now.getTime() - createdAt.getTime()) / (1000 * 60);
