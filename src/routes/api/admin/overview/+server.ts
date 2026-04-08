@@ -188,7 +188,15 @@ export const GET: RequestHandler = async ({ request }) => {
 			return sum + seats * price;
 		}, 0);
 
-		const reportsCount = 0;
+		let reportsCount = 0;
+		const { count: pendingReportsCount, error: reportsError } = await adminClient
+			.from('reports')
+			.select('id', { count: 'exact', head: true })
+			.eq('status', 'pending');
+
+		if (!reportsError) {
+			reportsCount = pendingReportsCount ?? 0;
+		}
 		const alertsCount = reportsCount + accountsToVerify;
 
 		return json({

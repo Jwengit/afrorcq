@@ -110,6 +110,116 @@
 	let selectedBookingRider: AdminUser | null = null;
 	let riderDetailsLoading = false;
 
+	// Reports management
+	type AdminReport = {
+		id: string;
+		user_id: string | null;
+		ride_id: string | null;
+		type: string;
+		description: string | null;
+		status: string;
+		action_taken: string | null;
+		admin_note: string | null;
+		created_at: string;
+		updated_at: string;
+		profiles?: {
+			first_name: string | null;
+			last_name: string | null;
+			email: string | null;
+		} | null;
+		rides?: {
+			city_from: string | null;
+			city_to: string | null;
+			ride_date: string | null;
+		} | null;
+	};
+
+	let reportsLoading = false;
+	let reportsError = '';
+	let reportActionMessage = '';
+	let reports: AdminReport[] = [];
+	let filteredReports: AdminReport[] = [];
+	let reportFilterType = '';
+	let reportFilterStatus = '';
+	let reportActionId: string | null = null;
+	let showReportHistoryModal = false;
+	let selectedReportHistory: AdminReport | null = null;
+
+	// Support management (tickets + messages)
+	type SupportTicket = {
+		id: string;
+		user_id: string | null;
+		subject: string;
+		status: 'open' | 'in_progress' | 'resolved' | 'closed';
+		priority: 'low' | 'normal' | 'high' | 'urgent';
+		created_at: string;
+		updated_at: string;
+		profiles?: {
+			first_name: string | null;
+			last_name: string | null;
+			email: string | null;
+		} | null;
+	};
+
+	type SupportMessage = {
+		id: string;
+		ticket_id: string;
+		sender_id: string | null;
+		sender_role: 'user' | 'admin';
+		message: string;
+		created_at: string;
+		profiles?: {
+			first_name: string | null;
+			last_name: string | null;
+			email: string | null;
+		} | null;
+	};
+
+	let supportLoading = false;
+	let supportError = '';
+	let supportActionMessage = '';
+	let supportTickets: SupportTicket[] = [];
+	let supportFilterStatus = '';
+	let selectedSupportTicket: SupportTicket | null = null;
+	let supportMessages: SupportMessage[] = [];
+	let supportMessagesLoading = false;
+	let supportReplyMessage = '';
+	let supportSendingReply = false;
+	let supportUpdatingStatus = false;
+
+	// Transactions management (simple MVP)
+	type AdminTransaction = {
+		id: string;
+		booking_id: string | null;
+		user_id: string | null;
+		amount: number;
+		status: 'succeeded' | 'failed';
+		refund_status: 'none' | 'refunded';
+		currency: string;
+		created_at: string;
+		profiles?: {
+			first_name: string | null;
+			last_name: string | null;
+			email: string | null;
+		} | null;
+	};
+
+	let transactionsLoading = false;
+	let transactionsError = '';
+	let transactionsActionMessage = '';
+	let transactions: AdminTransaction[] = [];
+	let transactionFilterStatus = '';
+	let transactionActionId: string | null = null;
+
+	// Platform settings management
+	let settingsLoading = false;
+	let settingsError = '';
+	let settingsMessage = '';
+	let settingsSaving = false;
+	let commissionPercent = 10;
+	let maxSeatsLimit = 6;
+	let maxPriceLimit = 200;
+
 	// Dashboard overview stats
 	let stats = {
 		totalUsers: 0,
@@ -150,6 +260,10 @@
 				await loadUsers();
 				await loadRides();
 				await loadBookings();
+				await loadReports();
+				await loadSupportTickets();
+				await loadTransactions();
+				await loadPlatformSettings();
 				loading = false;
 				return;
 			}
@@ -200,6 +314,10 @@
 			await loadUsers();
 			await loadRides();
 			await loadBookings();
+			await loadReports();
+			await loadSupportTickets();
+			await loadTransactions();
+			await loadPlatformSettings();
 			loading = false;
 		}
 
@@ -675,6 +793,482 @@
 		selectedBooking = null;
 		selectedBookingRider = null;
 	}
+
+	async function loadReports() {
+		reportsLoading = true;
+		reportsError = '';
+		reportActionMessage = '';
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			reportsError = 'Session expirée. Merci de te reconnecter.';
+			reportsLoading = false;
+			return;
+		}
+
+		const params = new URLSearchParams();
+		if (reportFilterType) params.append('type', reportFilterType);
+		if (reportFilterStatus) params.append('status', reportFilterStatus);
+
+		const response = await fetch(`/api/admin/reports?${params.toString()}`, {
+			method: 'GET',
+			headers: {
+				Authorization: `Bearer ${session.access_token}`
+			}
+		});
+
+		const payload = await response.json();
+		if (!response.ok) {
+			reportsError = payload?.error || 'Impossible de charger les signalements.';
+			reports = [];
+			reportsLoading = false;
+			return;
+		}
+
+		reports = (payload?.reports ?? []) as AdminReport[];
+		applyReportFilters();
+		reportsLoading = false;
+	}
+
+	function applyReportFilters() {
+		filteredReports = reports.slice();
+	}
+
+	function reportTypeLabel(type: string) {
+		if (type === 'behavior') return 'Comportement';
+		if (type === 'spam') return 'Spam';
+		if (type === 'payment_issue') return 'Problème de paiement';
+		return type;
+	}
+
+	async function moderateReport(report: AdminReport, action: 'ignore' | 'warn' | 'suspend') {
+		reportActionId = report.id;
+		reportActionMessage = '';
+
+		if (action === 'suspend' && !confirm('Confirmer la suspension du compte lié à ce signalement ?')) {
+			reportActionId = null;
+			return;
+		}
+
+		const note =
+			action === 'ignore'
+				? 'Signalement ignoré par admin'
+				: prompt('Ajouter une note admin (optionnel)') ?? '';
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			reportActionMessage = 'Session expirée. Merci de te reconnecter.';
+			reportActionId = null;
+			return;
+		}
+
+		const response = await fetch('/api/admin/reports', {
+			method: 'PATCH',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${session.access_token}`
+			},
+			body: JSON.stringify({
+				reportId: report.id,
+				action,
+				note,
+				userId: report.user_id
+			})
+		});
+
+		const payload = await response.json();
+		if (!response.ok) {
+			reportActionMessage = payload?.error || 'Action impossible pour le moment.';
+			reportActionId = null;
+			return;
+		}
+
+		const nextStatus = action === 'ignore' ? 'ignored' : 'resolved';
+		const nextAction =
+			action === 'ignore' ? 'ignored' : action === 'warn' ? 'warned_user' : 'suspended_user';
+
+		reports = reports.map((r) =>
+			r.id === report.id
+				? {
+					...r,
+					status: nextStatus,
+					action_taken: nextAction,
+					admin_note: note,
+					updated_at: new Date().toISOString()
+				}
+				: r
+		);
+		applyReportFilters();
+
+		if (action === 'suspend' && report.user_id) {
+			users = users.map((u) => (u.id === report.user_id ? { ...u, user_status: 'suspended' } : u));
+		}
+
+		reportActionMessage =
+			action === 'ignore'
+				? 'Signalement ignoré.'
+				: action === 'warn'
+					? 'Utilisateur averti.'
+					: 'Compte suspendu et signalement résolu.';
+		reportActionId = null;
+	}
+
+	async function openReportedUser(report: AdminReport) {
+		if (!report.user_id) return;
+
+		if (users.length === 0) {
+			await loadUsers();
+		}
+
+		const target = users.find((u) => u.id === report.user_id);
+		if (!target) {
+			reportActionMessage = "Utilisateur introuvable dans la liste actuelle.";
+			return;
+		}
+
+		await openProfileModal(target);
+	}
+
+	async function openReportedRide(report: AdminReport) {
+		if (!report.ride_id) return;
+		setTab('rides');
+		await loadRides();
+	}
+
+	function openReportHistory(report: AdminReport) {
+		selectedReportHistory = report;
+		showReportHistoryModal = true;
+	}
+
+	function closeReportHistoryModal() {
+		selectedReportHistory = null;
+		showReportHistoryModal = false;
+	}
+
+	async function loadSupportTickets() {
+		supportLoading = true;
+		supportError = '';
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			supportError = 'Session expirée. Merci de te reconnecter.';
+			supportLoading = false;
+			return;
+		}
+
+		const params = new URLSearchParams();
+		if (supportFilterStatus) {
+			params.append('status', supportFilterStatus);
+		}
+
+		const response = await fetch(`/api/admin/support?${params.toString()}`, {
+			method: 'GET',
+			headers: {
+				Authorization: `Bearer ${session.access_token}`
+			}
+		});
+
+		const payload = await response.json();
+		if (!response.ok) {
+			supportError = payload?.error || 'Impossible de charger les tickets support.';
+			supportTickets = [];
+			supportLoading = false;
+			return;
+		}
+
+		supportTickets = (payload?.tickets ?? []) as SupportTicket[];
+		supportLoading = false;
+	}
+
+	async function openSupportTicket(ticket: SupportTicket) {
+		selectedSupportTicket = ticket;
+		supportMessages = [];
+		supportMessagesLoading = true;
+		supportActionMessage = '';
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			supportMessagesLoading = false;
+			return;
+		}
+
+		const response = await fetch(
+			`/api/admin/support?ticketId=${encodeURIComponent(ticket.id)}`,
+			{
+				method: 'GET',
+				headers: {
+					Authorization: `Bearer ${session.access_token}`
+				}
+			}
+		);
+
+		const payload = await response.json();
+		if (!response.ok) {
+			supportActionMessage = payload?.error || 'Impossible de charger la conversation.';
+			supportMessagesLoading = false;
+			return;
+		}
+
+		supportMessages = (payload?.messages ?? []) as SupportMessage[];
+		supportMessagesLoading = false;
+	}
+
+	async function sendSupportReply() {
+		if (!selectedSupportTicket) return;
+		const message = supportReplyMessage.trim();
+		if (!message) return;
+
+		supportSendingReply = true;
+		supportActionMessage = '';
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			supportActionMessage = 'Session expirée. Merci de te reconnecter.';
+			supportSendingReply = false;
+			return;
+		}
+
+		const response = await fetch('/api/admin/support', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${session.access_token}`
+			},
+			body: JSON.stringify({
+				ticketId: selectedSupportTicket.id,
+				message
+			})
+		});
+
+		const payload = await response.json();
+		if (!response.ok) {
+			supportActionMessage = payload?.error || 'Impossible d\'envoyer la réponse.';
+			supportSendingReply = false;
+			return;
+		}
+
+		supportReplyMessage = '';
+		supportActionMessage = 'Réponse envoyée.';
+		supportSendingReply = false;
+		await openSupportTicket(selectedSupportTicket);
+		await loadSupportTickets();
+	}
+
+	async function updateSupportTicketStatus(status: SupportTicket['status']) {
+		if (!selectedSupportTicket) return;
+		supportUpdatingStatus = true;
+		supportActionMessage = '';
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			supportActionMessage = 'Session expirée. Merci de te reconnecter.';
+			supportUpdatingStatus = false;
+			return;
+		}
+
+		const response = await fetch('/api/admin/support', {
+			method: 'PATCH',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${session.access_token}`
+			},
+			body: JSON.stringify({
+				ticketId: selectedSupportTicket.id,
+				status
+			})
+		});
+
+		const payload = await response.json();
+		if (!response.ok) {
+			supportActionMessage = payload?.error || 'Impossible de mettre à jour le ticket.';
+			supportUpdatingStatus = false;
+			return;
+		}
+
+		selectedSupportTicket = { ...selectedSupportTicket, status };
+		supportTickets = supportTickets.map((t) =>
+			t.id === selectedSupportTicket?.id ? { ...t, status } : t
+		);
+		supportActionMessage = 'Statut du ticket mis à jour.';
+		supportUpdatingStatus = false;
+	}
+
+	async function loadTransactions() {
+		transactionsLoading = true;
+		transactionsError = '';
+		transactionsActionMessage = '';
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			transactionsError = 'Session expirée. Merci de te reconnecter.';
+			transactionsLoading = false;
+			return;
+		}
+
+		const params = new URLSearchParams();
+		if (transactionFilterStatus) {
+			params.append('status', transactionFilterStatus);
+		}
+
+		const response = await fetch(`/api/admin/transactions?${params.toString()}`, {
+			method: 'GET',
+			headers: {
+				Authorization: `Bearer ${session.access_token}`
+			}
+		});
+
+		const payload = await response.json();
+		if (!response.ok) {
+			transactionsError = payload?.error || 'Impossible de charger les transactions.';
+			transactions = [];
+			transactionsLoading = false;
+			return;
+		}
+
+		transactions = (payload?.transactions ?? []) as AdminTransaction[];
+		transactionsLoading = false;
+	}
+
+	async function refundTransaction(transaction: AdminTransaction) {
+		if (transaction.refund_status === 'refunded') return;
+		if (!confirm('Confirmer le remboursement de cette transaction ?')) return;
+
+		transactionActionId = transaction.id;
+		transactionsActionMessage = '';
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			transactionsActionMessage = 'Session expirée. Merci de te reconnecter.';
+			transactionActionId = null;
+			return;
+		}
+
+		const response = await fetch('/api/admin/transactions', {
+			method: 'PATCH',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${session.access_token}`
+			},
+			body: JSON.stringify({
+				transactionId: transaction.id,
+				action: 'refund'
+			})
+		});
+
+		const payload = await response.json();
+		if (!response.ok) {
+			transactionsActionMessage = payload?.error || 'Remboursement impossible pour le moment.';
+			transactionActionId = null;
+			return;
+		}
+
+		transactions = transactions.map((t) =>
+			t.id === transaction.id ? { ...t, refund_status: 'refunded' } : t
+		);
+		transactionsActionMessage = 'Transaction remboursée.';
+		transactionActionId = null;
+	}
+
+	async function loadPlatformSettings() {
+		settingsLoading = true;
+		settingsError = '';
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			settingsError = 'Session expirée. Merci de te reconnecter.';
+			settingsLoading = false;
+			return;
+		}
+
+		const response = await fetch('/api/admin/platform-settings', {
+			method: 'GET',
+			headers: {
+				Authorization: `Bearer ${session.access_token}`
+			}
+		});
+
+		const payload = await response.json();
+		if (!response.ok) {
+			settingsError = payload?.error || 'Impossible de charger la configuration.';
+			settingsLoading = false;
+			return;
+		}
+
+		const s = payload?.settings;
+		if (s) {
+			commissionPercent = Number(s.commission_percent ?? 10);
+			maxSeatsLimit = Number(s.max_seats ?? 6);
+			maxPriceLimit = Number(s.max_price ?? 200);
+		}
+
+		settingsLoading = false;
+	}
+
+	async function savePlatformSettings() {
+		settingsSaving = true;
+		settingsError = '';
+		settingsMessage = '';
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			settingsError = 'Session expirée. Merci de te reconnecter.';
+			settingsSaving = false;
+			return;
+		}
+
+		const response = await fetch('/api/admin/platform-settings', {
+			method: 'PATCH',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${session.access_token}`
+			},
+			body: JSON.stringify({
+				commission_percent: commissionPercent,
+				max_seats: maxSeatsLimit,
+				max_price: maxPriceLimit
+			})
+		});
+
+		const payload = await response.json();
+		if (!response.ok) {
+			settingsError = payload?.error || 'Impossible d\'enregistrer la configuration.';
+			settingsSaving = false;
+			return;
+		}
+
+		settingsMessage = 'Configuration enregistrée.';
+		settingsSaving = false;
+	}
 </script>
 
 {#if loading}
@@ -791,7 +1385,11 @@
 						{ id: 'overview', label: 'Vue d\'ensemble' },
 						{ id: 'users', label: 'Utilisateurs' },
 						{ id: 'rides', label: 'Trajets' },
-						{ id: 'bookings', label: 'Réservations' }
+						{ id: 'bookings', label: 'Réservations' },
+						{ id: 'transactions', label: 'Transactions' },
+						{ id: 'settings', label: 'Configuration' },
+						{ id: 'reports', label: 'Signalements' },
+						{ id: 'support', label: 'Support' }
 					] as tab}
 						<button
 							class="px-5 py-3 text-sm font-medium transition-colors cursor-pointer
@@ -1318,6 +1916,463 @@
 								</div>
 							{/if}
 						</div>
+					{:else if activeTab === 'reports'}
+						<div class="space-y-6">
+							<div class="bg-white rounded-xl p-4 border border-gray-200">
+								<h3 class="text-sm font-semibold text-gray-900 mb-4">Filtres</h3>
+								<div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+									<select
+										class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+										bind:value={reportFilterType}
+										on:change={loadReports}
+									>
+										<option value="">Tous les types</option>
+										<option value="behavior">Comportement</option>
+										<option value="spam">Spam</option>
+										<option value="payment_issue">Problème de paiement</option>
+									</select>
+									<select
+										class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+										bind:value={reportFilterStatus}
+										on:change={loadReports}
+									>
+										<option value="">Tous les statuts</option>
+										<option value="pending">En attente</option>
+										<option value="ignored">Ignoré</option>
+										<option value="resolved">Traité</option>
+									</select>
+									<button
+										on:click={loadReports}
+										class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 font-medium"
+									>
+										Charger signalements
+									</button>
+								</div>
+								{#if reportActionMessage}
+									<p class="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 mt-3">{reportActionMessage}</p>
+								{/if}
+							</div>
+
+							{#if reportsLoading}
+								<p class="text-sm text-gray-500">Chargement des signalements...</p>
+							{:else if reportsError}
+								<p class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{reportsError}</p>
+							{:else if filteredReports.length === 0}
+								<p class="text-sm text-gray-500">Aucun signalement pour le moment.</p>
+							{:else}
+								<div class="overflow-x-auto border border-gray-100 rounded-xl">
+									<table class="w-full text-sm">
+										<thead class="bg-gray-50 text-left text-gray-600">
+											<tr>
+												<th class="px-4 py-3 font-medium">Type</th>
+												<th class="px-4 py-3 font-medium">Signalement</th>
+												<th class="px-4 py-3 font-medium">Statut</th>
+												<th class="px-4 py-3 font-medium">Liens</th>
+												<th class="px-4 py-3 font-medium">Actions</th>
+											</tr>
+										</thead>
+										<tbody class="divide-y divide-gray-100">
+											{#each filteredReports as report}
+												<tr class="hover:bg-gray-50">
+													<td class="px-4 py-3 align-top">
+														<span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+															report.type === 'behavior'
+																? 'bg-orange-100 text-orange-700'
+																: report.type === 'spam'
+																	? 'bg-purple-100 text-purple-700'
+																	: 'bg-blue-100 text-blue-700'
+														}`}>
+															{reportTypeLabel(report.type)}
+														</span>
+													</td>
+													<td class="px-4 py-3 align-top">
+														<p class="text-sm text-gray-900">{report.description || 'Sans description'}</p>
+														<p class="text-xs text-gray-500 mt-1">Créé le {new Date(report.created_at).toLocaleDateString('fr-FR')}</p>
+													</td>
+													<td class="px-4 py-3 align-top">
+														<span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+															report.status === 'pending'
+																? 'bg-yellow-100 text-yellow-700'
+																: report.status === 'ignored'
+																	? 'bg-gray-100 text-gray-700'
+																	: 'bg-green-100 text-green-700'
+														}`}>
+															{report.status === 'pending' ? 'En attente' : report.status === 'ignored' ? 'Ignoré' : 'Traité'}
+														</span>
+													</td>
+													<td class="px-4 py-3 align-top">
+														<div class="flex flex-wrap gap-1">
+															<button on:click={() => openReportedUser(report)} class="px-2 py-1 rounded text-xs border border-blue-200 text-blue-700 hover:bg-blue-50">Utilisateur</button>
+															<button on:click={() => openReportedRide(report)} class="px-2 py-1 rounded text-xs border border-indigo-200 text-indigo-700 hover:bg-indigo-50">Trajet</button>
+															<button on:click={() => openReportHistory(report)} class="px-2 py-1 rounded text-xs border border-gray-300 text-gray-700 hover:bg-gray-50">Historique</button>
+														</div>
+													</td>
+													<td class="px-4 py-3 align-top">
+														<div class="flex flex-wrap gap-1">
+															<button
+																disabled={reportActionId === report.id}
+																on:click={() => moderateReport(report, 'ignore')}
+																class="px-2 py-1 rounded text-xs border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+															>
+																Ignorer
+															</button>
+															<button
+																disabled={reportActionId === report.id}
+																on:click={() => moderateReport(report, 'warn')}
+																class="px-2 py-1 rounded text-xs border border-amber-200 text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+															>
+																Avertir utilisateur
+															</button>
+															<button
+																disabled={reportActionId === report.id}
+																on:click={() => moderateReport(report, 'suspend')}
+																class="px-2 py-1 rounded text-xs border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
+															>
+																Suspendre compte
+															</button>
+														</div>
+													</td>
+												</tr>
+											{/each}
+										</tbody>
+									</table>
+								</div>
+							{/if}
+						</div>
+					{:else if activeTab === 'transactions'}
+						<div class="space-y-6">
+							<div class="bg-white rounded-xl p-4 border border-gray-200">
+								<div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+									<select
+										class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+										bind:value={transactionFilterStatus}
+										on:change={loadTransactions}
+									>
+										<option value="">Tous les statuts</option>
+										<option value="succeeded">Réussi</option>
+										<option value="failed">Échoué</option>
+									</select>
+									<button
+										on:click={loadTransactions}
+										class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 font-medium"
+									>
+										Charger transactions
+									</button>
+								</div>
+								{#if transactionsActionMessage}
+									<p class="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 mt-3">{transactionsActionMessage}</p>
+								{/if}
+							</div>
+
+							{#if transactionsLoading}
+								<p class="text-sm text-gray-500">Chargement des transactions...</p>
+							{:else if transactionsError}
+								<p class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{transactionsError}</p>
+							{:else if transactions.length === 0}
+								<p class="text-sm text-gray-500">Aucune transaction.</p>
+							{:else}
+								<div class="overflow-x-auto border border-gray-100 rounded-xl">
+									<table class="w-full text-sm">
+										<thead class="bg-gray-50 text-left text-gray-600">
+											<tr>
+												<th class="px-4 py-3 font-medium">Client</th>
+												<th class="px-4 py-3 font-medium">Statut</th>
+												<th class="px-4 py-3 font-medium">Montant</th>
+												<th class="px-4 py-3 font-medium">Remboursement</th>
+												<th class="px-4 py-3 font-medium">Date</th>
+												<th class="px-4 py-3 font-medium">Action</th>
+											</tr>
+										</thead>
+										<tbody class="divide-y divide-gray-100">
+											{#each transactions as tx}
+												<tr class="hover:bg-gray-50">
+													<td class="px-4 py-3">
+														<p class="font-medium text-gray-900">
+															{tx.profiles?.first_name} {tx.profiles?.last_name}
+														</p>
+														<p class="text-xs text-gray-500">{tx.profiles?.email || '-'}</p>
+													</td>
+													<td class="px-4 py-3">
+														<span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+															tx.status === 'succeeded' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+														}`}>
+															{tx.status === 'succeeded' ? 'Réussi' : 'Échoué'}
+														</span>
+													</td>
+													<td class="px-4 py-3 font-medium text-gray-900">
+														{new Intl.NumberFormat('en-US', {
+															style: 'currency',
+															currency: tx.currency || 'USD'
+														}).format(Number(tx.amount || 0))}
+													</td>
+													<td class="px-4 py-3">
+														<span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+															tx.refund_status === 'refunded' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-700'
+														}`}>
+															{tx.refund_status === 'refunded' ? 'Remboursé' : 'Aucun'}
+														</span>
+													</td>
+													<td class="px-4 py-3 text-gray-600">
+														{new Date(tx.created_at).toLocaleDateString('fr-FR')}
+													</td>
+													<td class="px-4 py-3">
+														<button
+															disabled={tx.refund_status === 'refunded' || tx.status !== 'succeeded' || transactionActionId === tx.id}
+															on:click={() => refundTransaction(tx)}
+															class="px-3 py-1 rounded text-xs font-medium border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+														>
+															{transactionActionId === tx.id ? 'Traitement...' : 'Rembourser'}
+														</button>
+													</td>
+												</tr>
+											{/each}
+										</tbody>
+									</table>
+								</div>
+							{/if}
+						</div>
+					{:else if activeTab === 'settings'}
+						<div class="space-y-6">
+							<div class="bg-white rounded-xl border border-gray-200 p-5">
+								<h3 class="text-base font-semibold text-gray-900 mb-4">Configuration plateforme</h3>
+								{#if settingsError}
+									<p class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">{settingsError}</p>
+								{/if}
+								{#if settingsMessage}
+									<p class="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 mb-3">{settingsMessage}</p>
+								{/if}
+								{#if settingsLoading}
+									<p class="text-sm text-gray-500">Chargement de la configuration...</p>
+								{:else}
+									<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+										<div>
+											<label class="block text-xs font-medium text-gray-600 mb-1">Commission (%)</label>
+											<input
+												type="number"
+												min="0"
+												max="100"
+												step="0.1"
+												bind:value={commissionPercent}
+												class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+											/>
+										</div>
+										<div>
+											<label class="block text-xs font-medium text-gray-600 mb-1">Places max par trajet</label>
+											<input
+												type="number"
+												min="1"
+												bind:value={maxSeatsLimit}
+												class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+											/>
+										</div>
+										<div>
+											<label class="block text-xs font-medium text-gray-600 mb-1">Prix max (USD)</label>
+											<input
+												type="number"
+												min="1"
+												step="0.01"
+												bind:value={maxPriceLimit}
+												class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+											/>
+										</div>
+									</div>
+									<div class="mt-4 flex justify-end">
+										<button
+											on:click={savePlatformSettings}
+											disabled={settingsSaving}
+											class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50"
+										>
+											{settingsSaving ? 'Enregistrement...' : 'Enregistrer'}
+										</button>
+									</div>
+								{/if}
+							</div>
+
+							<div class="bg-white rounded-xl border border-gray-200 p-5">
+								<h3 class="text-base font-semibold text-gray-900 mb-4">Gestion des admins</h3>
+								<p class="text-sm text-gray-500 mb-4">Promouvoir ou rétrograder les comptes administrateurs.</p>
+								{#if usersLoading}
+									<p class="text-sm text-gray-500">Chargement des utilisateurs...</p>
+								{:else if users.length === 0}
+									<p class="text-sm text-gray-500">Aucun utilisateur disponible.</p>
+								{:else}
+									<div class="overflow-x-auto border border-gray-100 rounded-xl">
+										<table class="w-full text-sm">
+											<thead class="bg-gray-50 text-left text-gray-600">
+												<tr>
+													<th class="px-4 py-3 font-medium">Utilisateur</th>
+													<th class="px-4 py-3 font-medium">Rôle</th>
+													<th class="px-4 py-3 font-medium">Action</th>
+												</tr>
+											</thead>
+											<tbody class="divide-y divide-gray-100">
+												{#each users as adminUser}
+													<tr class="hover:bg-gray-50">
+														<td class="px-4 py-3">
+															<p class="font-medium text-gray-900">{`${adminUser.first_name ?? ''} ${adminUser.last_name ?? ''}`.trim() || 'Sans nom'}</p>
+															<p class="text-xs text-gray-500">{adminUser.email ?? 'Email non renseigné'}</p>
+														</td>
+														<td class="px-4 py-3">
+															<span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${adminUser.is_admin ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
+																{adminUser.is_admin ? 'Admin' : 'Utilisateur'}
+															</span>
+														</td>
+														<td class="px-4 py-3">
+															<button
+																type="button"
+																disabled={actionUserId === adminUser.id}
+																on:click={() => updateUserFlag(adminUser, 'is_admin', !adminUser.is_admin)}
+																class="px-3 py-1.5 rounded text-xs font-medium border {adminUser.is_admin ? 'border-red-200 text-red-700 hover:bg-red-50' : 'border-green-200 text-green-700 hover:bg-green-50'} disabled:opacity-50"
+															>
+																{adminUser.is_admin ? 'Retirer admin' : 'Promouvoir admin'}
+															</button>
+														</td>
+													</tr>
+												{/each}
+											</tbody>
+										</table>
+									</div>
+								{/if}
+							</div>
+						</div>
+					{:else if activeTab === 'support'}
+						<div class="space-y-6">
+							<div class="bg-white rounded-xl p-4 border border-gray-200">
+								<div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+									<select
+										class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+										bind:value={supportFilterStatus}
+										on:change={loadSupportTickets}
+									>
+										<option value="">Tous les tickets</option>
+										<option value="open">Ouvert</option>
+										<option value="in_progress">En cours</option>
+										<option value="resolved">Résolu</option>
+										<option value="closed">Fermé</option>
+									</select>
+									<button
+										on:click={loadSupportTickets}
+										class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 font-medium"
+									>
+										Rafraîchir tickets
+									</button>
+								</div>
+							</div>
+
+							{#if supportError}
+								<p class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{supportError}</p>
+							{/if}
+							{#if supportActionMessage}
+								<p class="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">{supportActionMessage}</p>
+							{/if}
+
+							<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+								<div class="lg:col-span-1 border border-gray-200 rounded-xl overflow-hidden">
+									<div class="bg-gray-50 px-4 py-3 border-b border-gray-200">
+										<h3 class="text-sm font-semibold text-gray-900">Tickets de support</h3>
+									</div>
+									{#if supportLoading}
+										<p class="text-sm text-gray-500 px-4 py-3">Chargement...</p>
+									{:else if supportTickets.length === 0}
+										<p class="text-sm text-gray-500 px-4 py-3">Aucun ticket.</p>
+									{:else}
+										<div class="max-h-125 overflow-y-auto divide-y divide-gray-100">
+											{#each supportTickets as ticket}
+												<button
+													type="button"
+													on:click={() => openSupportTicket(ticket)}
+													class="w-full text-left px-4 py-3 hover:bg-gray-50 {selectedSupportTicket?.id === ticket.id ? 'bg-green-50' : ''}"
+												>
+													<p class="text-sm font-medium text-gray-900 truncate">{ticket.subject}</p>
+													<p class="text-xs text-gray-500 truncate">
+														{ticket.profiles?.first_name} {ticket.profiles?.last_name} • {ticket.profiles?.email}
+													</p>
+													<div class="mt-1 flex gap-1">
+														<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-100 text-blue-700">
+															{ticket.priority}
+														</span>
+														<span class={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${
+																ticket.status === 'open'
+																	? 'bg-yellow-100 text-yellow-700'
+																	: ticket.status === 'in_progress'
+																		? 'bg-indigo-100 text-indigo-700'
+																		: ticket.status === 'resolved'
+																			? 'bg-green-100 text-green-700'
+																			: 'bg-gray-100 text-gray-700'
+														}`}>
+															{ticket.status}
+														</span>
+													</div>
+												</button>
+											{/each}
+										</div>
+									{/if}
+								</div>
+
+								<div class="lg:col-span-2 border border-gray-200 rounded-xl overflow-hidden">
+									<div class="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+										<h3 class="text-sm font-semibold text-gray-900">
+											{selectedSupportTicket ? `Ticket: ${selectedSupportTicket.subject}` : 'Conversation'}
+										</h3>
+										{#if selectedSupportTicket}
+											<div class="flex gap-2">
+												<select
+													disabled={supportUpdatingStatus}
+													class="px-2 py-1 border border-gray-300 rounded text-xs"
+													on:change={(e) => updateSupportTicketStatus((e.currentTarget as HTMLSelectElement).value as SupportTicket['status'])}
+												>
+													<option selected={selectedSupportTicket.status === 'open'} value="open">Ouvert</option>
+													<option selected={selectedSupportTicket.status === 'in_progress'} value="in_progress">En cours</option>
+													<option selected={selectedSupportTicket.status === 'resolved'} value="resolved">Résolu</option>
+													<option selected={selectedSupportTicket.status === 'closed'} value="closed">Fermé</option>
+												</select>
+											</div>
+										{/if}
+									</div>
+
+									{#if !selectedSupportTicket}
+										<p class="text-sm text-gray-500 p-4">Sélectionne un ticket pour voir les messages.</p>
+									{:else}
+										<div class="p-4 space-y-3 max-h-105 overflow-y-auto bg-gray-50">
+											{#if supportMessagesLoading}
+												<p class="text-sm text-gray-500">Chargement de la conversation...</p>
+											{:else if supportMessages.length === 0}
+												<p class="text-sm text-gray-500">Aucun message.</p>
+											{:else}
+												{#each supportMessages as msg}
+													<div class="{msg.sender_role === 'admin' ? 'text-right' : 'text-left'}">
+														<div class="inline-block max-w-[85%] rounded-lg px-3 py-2 text-sm {msg.sender_role === 'admin' ? 'bg-green-100 text-green-900' : 'bg-white border border-gray-200 text-gray-800'}">
+															<p class="text-[11px] opacity-70 mb-1">
+																{msg.sender_role === 'admin' ? 'Admin' : 'Utilisateur'} • {new Date(msg.created_at).toLocaleString('fr-FR')}
+															</p>
+															<p>{msg.message}</p>
+														</div>
+													</div>
+												{/each}
+											{/if}
+										</div>
+
+										<div class="p-4 border-t border-gray-200 space-y-2">
+											<textarea
+												rows="3"
+												bind:value={supportReplyMessage}
+												placeholder="Répondre à l'utilisateur..."
+												class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+											></textarea>
+											<div class="flex justify-end">
+												<button
+													disabled={supportSendingReply || !supportReplyMessage.trim()}
+													on:click={sendSupportReply}
+													class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50"
+												>
+													{supportSendingReply ? 'Envoi...' : 'Répondre'}
+												</button>
+											</div>
+										</div>
+									{/if}
+								</div>
+							</div>
+						</div>
 					{/if}
 				</div>
 			</div>
@@ -1523,6 +2578,52 @@
 						>
 							Fermer
 						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	{/if}
+	<!-- Report History Modal -->
+	{#if showReportHistoryModal && selectedReportHistory}
+		<div class="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
+			<div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+				<div class="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white">
+					<h2 class="text-lg font-bold text-gray-900">Historique du signalement</h2>
+					<button
+						on:click={closeReportHistoryModal}
+						class="text-gray-400 hover:text-gray-600 text-xl font-semibold p-1"
+						aria-label="Fermer"
+						title="Fermer la modale"
+					>
+						×
+					</button>
+				</div>
+				<div class="p-6 space-y-4 text-sm">
+					<div class="rounded-lg border border-gray-200 p-4">
+						<p class="text-gray-500">Type</p>
+						<p class="font-medium text-gray-900">{reportTypeLabel(selectedReportHistory.type)}</p>
+					</div>
+					<div class="rounded-lg border border-gray-200 p-4">
+						<p class="text-gray-500">Description</p>
+						<p class="font-medium text-gray-900">{selectedReportHistory.description || 'Sans description'}</p>
+					</div>
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+						<div class="rounded-lg border border-gray-200 p-4">
+							<p class="text-gray-500">Créé le</p>
+							<p class="font-medium text-gray-900">{new Date(selectedReportHistory.created_at).toLocaleString('fr-FR')}</p>
+						</div>
+						<div class="rounded-lg border border-gray-200 p-4">
+							<p class="text-gray-500">Dernière mise à jour</p>
+							<p class="font-medium text-gray-900">{new Date(selectedReportHistory.updated_at).toLocaleString('fr-FR')}</p>
+						</div>
+					</div>
+					<div class="rounded-lg border border-gray-200 p-4">
+						<p class="text-gray-500">Action prise</p>
+						<p class="font-medium text-gray-900">{selectedReportHistory.action_taken || 'Aucune action pour le moment'}</p>
+					</div>
+					<div class="rounded-lg border border-gray-200 p-4">
+						<p class="text-gray-500">Note admin</p>
+						<p class="font-medium text-gray-900">{selectedReportHistory.admin_note || 'Aucune note'}</p>
 					</div>
 				</div>
 			</div>
