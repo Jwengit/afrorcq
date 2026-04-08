@@ -276,7 +276,7 @@
 
 			if (error) {
 				accessError =
-					"Impossible de verifier ton acces admin. Ton profil n'existe peut-etre pas encore dans la table profiles.";
+					"Unable to verify admin access. Your profile may not exist yet in the profiles table.";
 				loading = false;
 				return;
 			}
@@ -304,7 +304,7 @@
 			}
 
 			if (!checkedProfile?.is_admin) {
-				accessError = "Ton compte est connecte, mais il n'a pas encore le role admin.";
+				accessError = "Your account is signed in, but it does not have the admin role yet.";
 				loading = false;
 				return;
 			}
@@ -334,7 +334,7 @@
 		} = await supabase.auth.getSession();
 
 		if (!session?.access_token) {
-			statsError = 'Session expirée. Merci de te reconnecter.';
+			statsError = 'Session expired. Please sign in again.';
 			return;
 		}
 
@@ -347,7 +347,7 @@
 
 		const payload = await response.json();
 		if (!response.ok) {
-			statsError = payload?.error || 'Impossible de charger le tableau de bord.';
+			statsError = payload?.error || 'Unable to load dashboard data.';
 			return;
 		}
 
@@ -365,7 +365,7 @@
 		} = await supabase.auth.getSession();
 
 		if (!session?.access_token) {
-			usersError = 'Session expirée. Merci de te reconnecter.';
+			usersError = 'Session expired. Please sign in again.';
 			users = [];
 			usersLoading = false;
 			return;
@@ -380,7 +380,7 @@
 
 		const payload = await response.json();
 		if (!response.ok) {
-			usersError = payload?.error || "Impossible de charger les utilisateurs pour le moment.";
+			usersError = payload?.error || 'Unable to load users right now.';
 			users = [];
 			usersLoading = false;
 			return;
@@ -403,7 +403,7 @@
 		} = await supabase.auth.getSession();
 
 		if (!session?.access_token) {
-			usersActionMessage = 'Session expirée. Merci de te reconnecter.';
+			usersActionMessage = 'Session expired. Please sign in again.';
 			actionUserId = null;
 			return;
 		}
@@ -428,7 +428,7 @@
 		if (!response.ok) {
 			usersActionMessage =
 				payload?.error ||
-				"Action impossible pour le moment. Verifie que ton compte a bien le role admin dans profiles.";
+				'Action unavailable right now. Check that your account has admin role in profiles.';
 			actionUserId = null;
 			return;
 		}
@@ -439,11 +439,11 @@
 		usersActionMessage =
 			field === 'is_admin'
 				? value
-					? 'Le compte est maintenant admin.'
-					: "Le role admin a ete retire."
+					? 'The account is now admin.'
+					: 'Admin role has been removed.'
 				: value
-					? 'Le compte est maintenant verifie.'
-					: 'Le compte est repasse non verifie.';
+					? 'The account is now verified.'
+					: 'The account is now unverified.';
 
 		actionUserId = null;
 	}
@@ -513,7 +513,7 @@
 		} = await supabase.auth.getSession();
 
 		if (!session?.access_token) {
-			statusActionMessage = 'Session expirée. Merci de te reconnecter.';
+			statusActionMessage = 'Session expired. Please sign in again.';
 			statusActionInProgress = false;
 			return;
 		}
@@ -532,7 +532,7 @@
 
 		const payload = await response.json();
 		if (!response.ok) {
-			statusActionMessage = payload?.error || 'Erreur lors du changement de statut.';
+			statusActionMessage = payload?.error || 'Error while changing status.';
 			statusActionInProgress = false;
 			return;
 		}
@@ -543,12 +543,12 @@
 		);
 
 		const statusLabels: Record<string, string> = {
-			active: 'Compte activé',
-			suspended: 'Compte suspendu',
-			banned: 'Compte banni'
+			active: 'Account activated',
+			suspended: 'Account suspended',
+			banned: 'Account banned'
 		};
 
-		statusActionMessage = statusLabels[status] || 'Statut mis à jour';
+		statusActionMessage = statusLabels[status] || 'Status updated';
 		statusActionInProgress = false;
 	}
 
@@ -563,7 +563,7 @@
 		} = await supabase.auth.getSession();
 
 		if (!session?.access_token) {
-			statusActionMessage = 'Session expirée. Merci de te reconnecter.';
+			statusActionMessage = 'Session expired. Please sign in again.';
 			statusActionInProgress = false;
 			return;
 		}
@@ -582,12 +582,12 @@
 
 		const payload = await response.json();
 		if (!response.ok) {
-			statusActionMessage = payload?.error || 'Erreur lors de la réinitialisation du mot de passe.';
+			statusActionMessage = payload?.error || 'Error while resetting password.';
 			statusActionInProgress = false;
 			return;
 		}
 
-		statusActionMessage = `Email de réinitialisation envoyé à ${selectedProfile.email}`;
+		statusActionMessage = `Password reset email sent to ${selectedProfile.email}`;
 		statusActionInProgress = false;
 	}
 
@@ -601,7 +601,7 @@
 		} = await supabase.auth.getSession();
 
 		if (!session?.access_token) {
-			ridesManagementError = 'Session expirée. Merci de te reconnecter.';
+			ridesManagementError = 'Session expired. Please sign in again.';
 			ridesManagementLoading = false;
 			return;
 		}
@@ -621,7 +621,7 @@
 
 		const payload = await response.json();
 		if (!response.ok) {
-			ridesManagementError = payload?.error || 'Impossible de charger les trajets.';
+			ridesManagementError = payload?.error || 'Unable to load rides.';
 			rides = [];
 			ridesManagementLoading = false;
 			return;
@@ -637,7 +637,7 @@
 	}
 
 	async function deleteRide(ride: AdminRide) {
-		if (!confirm(`Confirmer la suppression du trajet de ${ride.city_from} à ${ride.city_to} ?`)) {
+		if (!confirm(`Confirm deletion of ride from ${ride.city_from} to ${ride.city_to}?`)) {
 			return;
 		}
 
@@ -649,7 +649,7 @@
 		} = await supabase.auth.getSession();
 
 		if (!session?.access_token) {
-			ridesManagementActionMessage = 'Session expirée. Merci de te reconnecter.';
+			ridesManagementActionMessage = 'Session expired. Please sign in again.';
 			deletingRideId = null;
 			return;
 		}
@@ -663,14 +663,14 @@
 
 		const payload = await response.json();
 		if (!response.ok) {
-			ridesManagementActionMessage = payload?.error || 'Erreur lors de la suppression.';
+			ridesManagementActionMessage = payload?.error || 'Error while deleting ride.';
 			deletingRideId = null;
 			return;
 		}
 
 		rides = rides.filter((r) => r.id !== ride.id);
 		applyRideFilters();
-		ridesManagementActionMessage = 'Trajet supprimé avec succès.';
+		ridesManagementActionMessage = 'Ride deleted successfully.';
 		deletingRideId = null;
 	}
 
@@ -723,7 +723,7 @@
 		} = await supabase.auth.getSession();
 
 		if (!session?.access_token) {
-			bookingsError = 'Session expirée. Merci de te reconnecter.';
+			bookingsError = 'Session expired. Please sign in again.';
 			bookingsLoading = false;
 			return;
 		}
@@ -741,7 +741,7 @@
 
 		const payload = await response.json();
 		if (!response.ok) {
-			bookingsError = payload?.error || 'Impossible de charger les réservations.';
+			bookingsError = payload?.error || 'Unable to load bookings.';
 			bookings = [];
 			bookingsLoading = false;
 			return;
@@ -804,7 +804,7 @@
 		} = await supabase.auth.getSession();
 
 		if (!session?.access_token) {
-			reportsError = 'Session expirée. Merci de te reconnecter.';
+			reportsError = 'Session expired. Please sign in again.';
 			reportsLoading = false;
 			return;
 		}
@@ -822,7 +822,7 @@
 
 		const payload = await response.json();
 		if (!response.ok) {
-			reportsError = payload?.error || 'Impossible de charger les signalements.';
+			reportsError = payload?.error || 'Unable to load reports.';
 			reports = [];
 			reportsLoading = false;
 			return;
@@ -838,9 +838,9 @@
 	}
 
 	function reportTypeLabel(type: string) {
-		if (type === 'behavior') return 'Comportement';
+		if (type === 'behavior') return 'Behavior';
 		if (type === 'spam') return 'Spam';
-		if (type === 'payment_issue') return 'Problème de paiement';
+		if (type === 'payment_issue') return 'Payment issue';
 		return type;
 	}
 
@@ -848,22 +848,22 @@
 		reportActionId = report.id;
 		reportActionMessage = '';
 
-		if (action === 'suspend' && !confirm('Confirmer la suspension du compte lié à ce signalement ?')) {
+		if (action === 'suspend' && !confirm('Confirm suspension of the account linked to this report?')) {
 			reportActionId = null;
 			return;
 		}
 
 		const note =
 			action === 'ignore'
-				? 'Signalement ignoré par admin'
-				: prompt('Ajouter une note admin (optionnel)') ?? '';
+				? 'Report ignored by admin'
+				: prompt('Add an admin note (optional)') ?? '';
 
 		const {
 			data: { session }
 		} = await supabase.auth.getSession();
 
 		if (!session?.access_token) {
-			reportActionMessage = 'Session expirée. Merci de te reconnecter.';
+			reportActionMessage = 'Session expired. Please sign in again.';
 			reportActionId = null;
 			return;
 		}
@@ -884,7 +884,7 @@
 
 		const payload = await response.json();
 		if (!response.ok) {
-			reportActionMessage = payload?.error || 'Action impossible pour le moment.';
+			reportActionMessage = payload?.error || 'Action unavailable right now.';
 			reportActionId = null;
 			return;
 		}
@@ -912,10 +912,10 @@
 
 		reportActionMessage =
 			action === 'ignore'
-				? 'Signalement ignoré.'
+				? 'Report ignored.'
 				: action === 'warn'
-					? 'Utilisateur averti.'
-					: 'Compte suspendu et signalement résolu.';
+					? 'User warned.'
+					: 'Account suspended and report resolved.';
 		reportActionId = null;
 	}
 
@@ -928,7 +928,7 @@
 
 		const target = users.find((u) => u.id === report.user_id);
 		if (!target) {
-			reportActionMessage = "Utilisateur introuvable dans la liste actuelle.";
+			reportActionMessage = 'User not found in current list.';
 			return;
 		}
 
@@ -960,7 +960,7 @@
 		} = await supabase.auth.getSession();
 
 		if (!session?.access_token) {
-			supportError = 'Session expirée. Merci de te reconnecter.';
+			supportError = 'Session expired. Please sign in again.';
 			supportLoading = false;
 			return;
 		}
@@ -979,7 +979,7 @@
 
 		const payload = await response.json();
 		if (!response.ok) {
-			supportError = payload?.error || 'Impossible de charger les tickets support.';
+			supportError = payload?.error || 'Unable to load support tickets.';
 			supportTickets = [];
 			supportLoading = false;
 			return;
@@ -1016,7 +1016,7 @@
 
 		const payload = await response.json();
 		if (!response.ok) {
-			supportActionMessage = payload?.error || 'Impossible de charger la conversation.';
+			supportActionMessage = payload?.error || 'Unable to load conversation.';
 			supportMessagesLoading = false;
 			return;
 		}
@@ -1038,7 +1038,7 @@
 		} = await supabase.auth.getSession();
 
 		if (!session?.access_token) {
-			supportActionMessage = 'Session expirée. Merci de te reconnecter.';
+			supportActionMessage = 'Session expired. Please sign in again.';
 			supportSendingReply = false;
 			return;
 		}
@@ -1057,13 +1057,13 @@
 
 		const payload = await response.json();
 		if (!response.ok) {
-			supportActionMessage = payload?.error || 'Impossible d\'envoyer la réponse.';
+			supportActionMessage = payload?.error || 'Unable to send reply.';
 			supportSendingReply = false;
 			return;
 		}
 
 		supportReplyMessage = '';
-		supportActionMessage = 'Réponse envoyée.';
+		supportActionMessage = 'Reply sent.';
 		supportSendingReply = false;
 		await openSupportTicket(selectedSupportTicket);
 		await loadSupportTickets();
@@ -1079,7 +1079,7 @@
 		} = await supabase.auth.getSession();
 
 		if (!session?.access_token) {
-			supportActionMessage = 'Session expirée. Merci de te reconnecter.';
+			supportActionMessage = 'Session expired. Please sign in again.';
 			supportUpdatingStatus = false;
 			return;
 		}
@@ -1098,7 +1098,7 @@
 
 		const payload = await response.json();
 		if (!response.ok) {
-			supportActionMessage = payload?.error || 'Impossible de mettre à jour le ticket.';
+			supportActionMessage = payload?.error || 'Unable to update ticket.';
 			supportUpdatingStatus = false;
 			return;
 		}
@@ -1107,7 +1107,7 @@
 		supportTickets = supportTickets.map((t) =>
 			t.id === selectedSupportTicket?.id ? { ...t, status } : t
 		);
-		supportActionMessage = 'Statut du ticket mis à jour.';
+		supportActionMessage = 'Ticket status updated.';
 		supportUpdatingStatus = false;
 	}
 
@@ -1121,7 +1121,7 @@
 		} = await supabase.auth.getSession();
 
 		if (!session?.access_token) {
-			transactionsError = 'Session expirée. Merci de te reconnecter.';
+			transactionsError = 'Session expired. Please sign in again.';
 			transactionsLoading = false;
 			return;
 		}
@@ -1140,7 +1140,7 @@
 
 		const payload = await response.json();
 		if (!response.ok) {
-			transactionsError = payload?.error || 'Impossible de charger les transactions.';
+			transactionsError = payload?.error || 'Unable to load transactions.';
 			transactions = [];
 			transactionsLoading = false;
 			return;
@@ -1152,7 +1152,7 @@
 
 	async function refundTransaction(transaction: AdminTransaction) {
 		if (transaction.refund_status === 'refunded') return;
-		if (!confirm('Confirmer le remboursement de cette transaction ?')) return;
+		if (!confirm('Confirm refund for this transaction?')) return;
 
 		transactionActionId = transaction.id;
 		transactionsActionMessage = '';
@@ -1162,7 +1162,7 @@
 		} = await supabase.auth.getSession();
 
 		if (!session?.access_token) {
-			transactionsActionMessage = 'Session expirée. Merci de te reconnecter.';
+			transactionsActionMessage = 'Session expired. Please sign in again.';
 			transactionActionId = null;
 			return;
 		}
@@ -1181,7 +1181,7 @@
 
 		const payload = await response.json();
 		if (!response.ok) {
-			transactionsActionMessage = payload?.error || 'Remboursement impossible pour le moment.';
+			transactionsActionMessage = payload?.error || 'Refund unavailable right now.';
 			transactionActionId = null;
 			return;
 		}
@@ -1189,7 +1189,7 @@
 		transactions = transactions.map((t) =>
 			t.id === transaction.id ? { ...t, refund_status: 'refunded' } : t
 		);
-		transactionsActionMessage = 'Transaction remboursée.';
+		transactionsActionMessage = 'Transaction refunded.';
 		transactionActionId = null;
 	}
 
@@ -1202,7 +1202,7 @@
 		} = await supabase.auth.getSession();
 
 		if (!session?.access_token) {
-			settingsError = 'Session expirée. Merci de te reconnecter.';
+			settingsError = 'Session expired. Please sign in again.';
 			settingsLoading = false;
 			return;
 		}
@@ -1216,7 +1216,7 @@
 
 		const payload = await response.json();
 		if (!response.ok) {
-			settingsError = payload?.error || 'Impossible de charger la configuration.';
+			settingsError = payload?.error || 'Unable to load settings.';
 			settingsLoading = false;
 			return;
 		}
@@ -1241,7 +1241,7 @@
 		} = await supabase.auth.getSession();
 
 		if (!session?.access_token) {
-			settingsError = 'Session expirée. Merci de te reconnecter.';
+			settingsError = 'Session expired. Please sign in again.';
 			settingsSaving = false;
 			return;
 		}
@@ -1261,12 +1261,12 @@
 
 		const payload = await response.json();
 		if (!response.ok) {
-			settingsError = payload?.error || 'Impossible d\'enregistrer la configuration.';
+			settingsError = payload?.error || 'Unable to save settings.';
 			settingsSaving = false;
 			return;
 		}
 
-		settingsMessage = 'Configuration enregistrée.';
+		settingsMessage = 'Settings saved.';
 		settingsSaving = false;
 	}
 </script>
@@ -1278,12 +1278,12 @@
 {:else if accessError}
 	<div class="min-h-screen bg-gray-50 flex items-center justify-center px-4">
 		<div class="max-w-xl w-full bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-			<h1 class="text-xl font-bold text-gray-900 mb-2">Acces admin indisponible</h1>
+			<h1 class="text-xl font-bold text-gray-900 mb-2">Admin access unavailable</h1>
 			<p class="text-sm text-gray-600 mb-4">{accessError}</p>
-			<p class="text-sm text-gray-500 mb-6">Compte connecte: {currentUser?.email ?? 'non detecte'}</p>
+			<p class="text-sm text-gray-500 mb-6">Signed-in account: {currentUser?.email ?? 'not detected'}</p>
 			<div class="flex gap-3">
-				<a href="/profile" class="px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700">Aller au profil</a>
-				<a href="/" class="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50">Retour accueil</a>
+				<a href="/profile" class="px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700">Go to profile</a>
+				<a href="/" class="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50">Back to home</a>
 			</div>
 		</div>
 	</div>
@@ -1299,8 +1299,8 @@
 						</svg>
 					</span>
 					<div>
-						<h1 class="text-lg font-bold text-gray-900">Panneau d'administration</h1>
-						<p class="text-xs text-gray-500">Accès restreint</p>
+						<h1 class="text-lg font-bold text-gray-900">Admin Dashboard</h1>
+						<p class="text-xs text-gray-500">Restricted access</p>
 					</div>
 				</div>
 				<span class="text-sm text-gray-500">{currentUser?.email}</span>
@@ -1316,7 +1316,7 @@
 
 			<!-- Stats cards -->
 			<div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-				<!-- Utilisateurs -->
+				<!-- Users -->
 				<div class="bg-white rounded-xl border border-gray-100 p-4 shadow-sm flex items-center gap-3">
 					<div class="shrink-0 w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
 						<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -1324,11 +1324,11 @@
 						</svg>
 					</div>
 					<div>
-						<p class="text-xs text-gray-500">Utilisateurs</p>
+						<p class="text-xs text-gray-500">Users</p>
 						<p class="text-2xl font-bold text-gray-900">{stats.totalUsers}</p>
 					</div>
 				</div>
-				<!-- Trajets actifs -->
+				<!-- Active rides -->
 				<div class="bg-white rounded-xl border border-gray-100 p-4 shadow-sm flex items-center gap-3">
 					<div class="shrink-0 w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center">
 						<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -1336,11 +1336,11 @@
 						</svg>
 					</div>
 					<div>
-						<p class="text-xs text-gray-500">Trajets actifs</p>
+						<p class="text-xs text-gray-500">Active rides</p>
 						<p class="text-2xl font-bold text-gray-900">{stats.activeRides}</p>
 					</div>
 				</div>
-				<!-- Trajets terminés -->
+				<!-- Completed rides -->
 				<div class="bg-white rounded-xl border border-gray-100 p-4 shadow-sm flex items-center gap-3">
 					<div class="shrink-0 w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
 						<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -1348,11 +1348,11 @@
 						</svg>
 					</div>
 					<div>
-						<p class="text-xs text-gray-500">Terminés</p>
+						<p class="text-xs text-gray-500">Completed</p>
 						<p class="text-2xl font-bold text-gray-900">{stats.completedRides}</p>
 					</div>
 				</div>
-				<!-- Réservations -->
+				<!-- Bookings -->
 				<div class="bg-white rounded-xl border border-gray-100 p-4 shadow-sm flex items-center gap-3">
 					<div class="shrink-0 w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center">
 						<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -1360,11 +1360,11 @@
 						</svg>
 					</div>
 					<div>
-						<p class="text-xs text-gray-500">Réservations</p>
+						<p class="text-xs text-gray-500">Bookings</p>
 						<p class="text-2xl font-bold text-gray-900">{stats.reservationsInProgress}</p>
 					</div>
 				</div>
-				<!-- Alertes -->
+				<!-- Alerts -->
 				<div class="bg-white rounded-xl border p-4 shadow-sm flex items-center gap-3 {stats.alerts.total > 0 ? 'border-orange-200' : 'border-gray-100'}">
 					<div class="shrink-0 w-10 h-10 rounded-lg flex items-center justify-center {stats.alerts.total > 0 ? 'bg-orange-50' : 'bg-gray-100'}">
 						<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 {stats.alerts.total > 0 ? 'text-orange-500' : 'text-gray-400'}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -1372,7 +1372,7 @@
 						</svg>
 					</div>
 					<div>
-						<p class="text-xs text-gray-500">Alertes</p>
+						<p class="text-xs text-gray-500">Alerts</p>
 						<p class="text-2xl font-bold {stats.alerts.total > 0 ? 'text-orange-500' : 'text-gray-900'}">{stats.alerts.total}</p>
 					</div>
 				</div>
@@ -1382,13 +1382,13 @@
 			<div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
 				<div class="flex border-b border-gray-100">
 					{#each [
-						{ id: 'overview', label: 'Vue d\'ensemble' },
-						{ id: 'users', label: 'Utilisateurs' },
-						{ id: 'rides', label: 'Trajets' },
-						{ id: 'bookings', label: 'Réservations' },
+						{ id: 'overview', label: 'Overview' },
+						{ id: 'users', label: 'Users' },
+						{ id: 'rides', label: 'Rides' },
+						{ id: 'bookings', label: 'Bookings' },
 						{ id: 'transactions', label: 'Transactions' },
-						{ id: 'settings', label: 'Configuration' },
-						{ id: 'reports', label: 'Signalements' },
+						{ id: 'settings', label: 'Settings' },
+						{ id: 'reports', label: 'Reports' },
 						{ id: 'support', label: 'Support' }
 					] as tab}
 						<button
@@ -1406,26 +1406,26 @@
 				<div class="p-6">
 					{#if activeTab === 'overview'}
 						<div class="space-y-6">
-							<!-- Titre section -->
+							<!-- Section title -->
 							<div>
-								<h2 class="text-base font-semibold text-gray-900">Aperçu de la plateforme</h2>
-								<p class="text-sm text-gray-500 mt-0.5">Indicateurs clés en temps réel.</p>
+								<h2 class="text-base font-semibold text-gray-900">Platform Overview</h2>
+								<p class="text-sm text-gray-500 mt-0.5">Key metrics in real time.</p>
 							</div>
 
-							<!-- Trajets -->
+							<!-- Rides -->
 							<div>
-								<h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Trajets</h3>
+								<h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Rides</h3>
 								<div class="grid md:grid-cols-2 gap-4">
 									<div class="rounded-xl border border-green-200 bg-green-50 p-5">
 										<div class="flex items-center justify-between mb-2">
-											<p class="text-sm font-semibold text-green-800">Trajets actifs</p>
+											<p class="text-sm font-semibold text-green-800">Active rides</p>
 											<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-700">{stats.activeRides}</span>
 										</div>
-										<p class="text-xs text-green-700 mb-3">Date de départ à venir — disponibles à la réservation.</p>
+										<p class="text-xs text-green-700 mb-3">Upcoming departure date, available for booking.</p>
 										{#if stats.activeRides + stats.completedRides > 0}
 											<div>
 												<div class="flex justify-between text-xs text-green-700 mb-1">
-													<span>Part des actifs</span>
+													<span>Active share</span>
 													<span>{Math.round(stats.activeRides / (stats.activeRides + stats.completedRides) * 100)} %</span>
 												</div>
 												<div class="w-full bg-green-200 rounded-full h-1.5">
@@ -1436,73 +1436,73 @@
 									</div>
 									<div class="rounded-xl border border-gray-200 bg-gray-50 p-5">
 										<div class="flex items-center justify-between mb-2">
-											<p class="text-sm font-semibold text-gray-700">Trajets terminés</p>
+											<p class="text-sm font-semibold text-gray-700">Completed rides</p>
 											<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-gray-200 text-gray-600">{stats.completedRides}</span>
 										</div>
-										<p class="text-xs text-gray-500 mb-1">Date de départ passée.</p>
+										<p class="text-xs text-gray-500 mb-1">Departure date passed.</p>
 										<p class="text-xs text-gray-500">
-											Total créés : <span class="font-semibold text-gray-700">{stats.activeRides + stats.completedRides}</span>
+											Total created: <span class="font-semibold text-gray-700">{stats.activeRides + stats.completedRides}</span>
 										</p>
 									</div>
 								</div>
 							</div>
 
-							<!-- Réservations + Revenus -->
+							<!-- Bookings + Revenue -->
 							<div class="grid md:grid-cols-2 gap-4">
 								<div class="rounded-xl border border-purple-200 bg-purple-50 p-5">
 									<div class="flex items-center justify-between mb-2">
-										<p class="text-sm font-semibold text-purple-800">Réservations en cours</p>
+										<p class="text-sm font-semibold text-purple-800">Active bookings</p>
 										<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-700">{stats.reservationsInProgress}</span>
 									</div>
-									<p class="text-xs text-purple-700">Statut <strong>En attente</strong> ou <strong>Confirmée</strong> — départ pas encore effectué.</p>
+									<p class="text-xs text-purple-700">Status <strong>Pending</strong> or <strong>Confirmed</strong>, not departed yet.</p>
 								</div>
 								<div class="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
 									<div class="flex items-center justify-between mb-2">
-										<p class="text-sm font-semibold text-emerald-800">Revenus estimés</p>
+										<p class="text-sm font-semibold text-emerald-800">Estimated revenue</p>
 										{#if stats.revenue.hasPaymentIntegration}
-											<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-200 text-emerald-700">Intégré</span>
+											<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-200 text-emerald-700">Integrated</span>
 										{:else}
-											<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">Estimation</span>
+											<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">Estimate</span>
 										{/if}
 									</div>
 									<p class="text-2xl font-bold text-emerald-700">
 										{stats.revenue.estimatedRevenue.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
 									</p>
 									{#if !stats.revenue.hasPaymentIntegration}
-										<p class="text-xs text-emerald-700 mt-1">Calculé sur les réservations confirmées (prix × sièges). Paiements non intégrés.</p>
+										<p class="text-xs text-emerald-700 mt-1">Calculated from confirmed bookings (price x seats). Payments not integrated.</p>
 									{/if}
 								</div>
 							</div>
 
-							<!-- Alertes -->
+							<!-- Alerts -->
 							<div>
 								<h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Alertes</h3>
 								<div class="grid md:grid-cols-2 gap-4">
 									<div class="rounded-xl border p-5 {stats.alerts.reports > 0 ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-gray-50'}">
 										<div class="flex items-center justify-between mb-2">
-											<p class="text-sm font-semibold {stats.alerts.reports > 0 ? 'text-red-800' : 'text-gray-600'}">Signalements</p>
+											<p class="text-sm font-semibold {stats.alerts.reports > 0 ? 'text-red-800' : 'text-gray-600'}">Reports</p>
 											<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold {stats.alerts.reports > 0 ? 'bg-red-100 text-red-700' : 'bg-gray-200 text-gray-600'}">{stats.alerts.reports}</span>
 										</div>
 										{#if stats.alerts.reports === 0}
-											<p class="text-xs text-gray-500">Aucun signalement en attente.</p>
+											<p class="text-xs text-gray-500">No pending reports.</p>
 										{:else}
-											<p class="text-xs text-red-700 mb-2">Des signalements nécessitent une action.</p>
+											<p class="text-xs text-red-700 mb-2">Some reports need action.</p>
 											<button type="button" on:click={() => setTab('reports')} class="text-xs font-medium text-red-700 underline hover:text-red-900 cursor-pointer">
-												Voir les signalements →
+												View reports ->
 											</button>
 										{/if}
 									</div>
 									<div class="rounded-xl border p-5 {stats.alerts.accountsToVerify > 0 ? 'border-orange-200 bg-orange-50' : 'border-gray-200 bg-gray-50'}">
 										<div class="flex items-center justify-between mb-2">
-											<p class="text-sm font-semibold {stats.alerts.accountsToVerify > 0 ? 'text-orange-800' : 'text-gray-600'}">Comptes à vérifier</p>
+											<p class="text-sm font-semibold {stats.alerts.accountsToVerify > 0 ? 'text-orange-800' : 'text-gray-600'}">Accounts to verify</p>
 											<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold {stats.alerts.accountsToVerify > 0 ? 'bg-orange-100 text-orange-700' : 'bg-gray-200 text-gray-600'}">{stats.alerts.accountsToVerify}</span>
 										</div>
 										{#if stats.alerts.accountsToVerify === 0}
-											<p class="text-xs text-gray-500">Tous les comptes sont vérifiés.</p>
+											<p class="text-xs text-gray-500">All accounts are verified.</p>
 										{:else}
-											<p class="text-xs text-orange-700 mb-2">Profils non vérifiés ou sans entrée dans la table profiles.</p>
+											<p class="text-xs text-orange-700 mb-2">Unverified profiles or missing entries in profiles table.</p>
 											<button type="button" on:click={() => setTab('users')} class="text-xs font-medium text-orange-700 underline hover:text-orange-900 cursor-pointer">
-												Voir les utilisateurs →
+												View users ->
 											</button>
 										{/if}
 									</div>
@@ -1513,14 +1513,14 @@
 						<div class="space-y-4">
 							<div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
 								<div>
-									<h2 class="text-lg font-semibold text-gray-900">Gestion des utilisateurs</h2>
-									<p class="text-sm text-gray-500">Recherche par nom ou email, gestion des droits et verification.</p>
+									<h2 class="text-lg font-semibold text-gray-900">User management</h2>
+									<p class="text-sm text-gray-500">Search by name or email, manage permissions and verification.</p>
 								</div>
 								<div class="flex gap-2">
 									<input
 										type="text"
 										bind:value={userSearch}
-										placeholder="Rechercher un nom ou un email"
+										placeholder="Search by name or email"
 										class="w-72 max-w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
 									/>
 									<button
@@ -1528,7 +1528,7 @@
 										on:click={loadUsers}
 										class="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50"
 									>
-										Rafraichir
+										Refresh
 									</button>
 								</div>
 							</div>
@@ -1540,19 +1540,19 @@
 							{#if usersError}
 								<p class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{usersError}</p>
 							{:else if usersLoading}
-								<p class="text-sm text-gray-500">Chargement des utilisateurs...</p>
+								<p class="text-sm text-gray-500">Loading users...</p>
 							{:else if filteredUsers.length === 0}
-								<p class="text-sm text-gray-500">Aucun utilisateur ne correspond a la recherche.</p>
+								<p class="text-sm text-gray-500">No users match your search.</p>
 							{:else}
 								<div class="overflow-x-auto border border-gray-100 rounded-xl">
 									<table class="w-full text-sm">
 										<thead class="bg-gray-50 text-left text-gray-600">
 											<tr>
-												<th class="px-4 py-3 font-medium">Utilisateur</th>
-												<th class="px-4 py-3 font-medium">Vérification</th>
+												<th class="px-4 py-3 font-medium">User</th>
+												<th class="px-4 py-3 font-medium">Verification</th>
 												<th class="px-4 py-3 font-medium">Status</th>
-												<th class="px-4 py-3 font-medium">Note</th>
-												<th class="px-4 py-3 font-medium">Inscription</th>
+												<th class="px-4 py-3 font-medium">Rating</th>
+												<th class="px-4 py-3 font-medium">Created</th>
 												<th class="px-4 py-3 font-medium">Actions</th>
 											</tr>
 										</thead>
@@ -1591,7 +1591,7 @@
 													</td>
 													<td class="px-4 py-3 align-top text-gray-500">
 														{#if adminUser.created_at}
-															{new Date(adminUser.created_at).toLocaleDateString('fr-FR')}
+															{new Date(adminUser.created_at).toLocaleDateString('en-US')}
 														{:else}
 															-
 														{/if}
@@ -1626,18 +1626,18 @@
 						<div class="space-y-6">
 							<!-- Filters Section -->
 							<div class="bg-white rounded-xl p-4 border border-gray-200">
-								<h3 class="text-sm font-semibold text-gray-900 mb-4">Filtres</h3>
+								<h3 class="text-sm font-semibold text-gray-900 mb-4">Filters</h3>
 								<div class="grid grid-cols-1 md:grid-cols-5 gap-3">
 									<input
 										type="text"
-										placeholder="Ville départ"
+										placeholder="Departure city"
 										class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
 										bind:value={rideFilterCityFrom}
 										on:change={loadRides}
 									/>
 									<input
 										type="text"
-										placeholder="Ville arrivée"
+										placeholder="Arrival city"
 										class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
 										bind:value={rideFilterCityTo}
 										on:change={loadRides}
@@ -1653,17 +1653,17 @@
 										bind:value={rideFilterStatus}
 										on:change={loadRides}
 									>
-										<option value="">Tous les statuts</option>
-										<option value="Actif">Actif</option>
-										<option value="Complet">Complet</option>
-										<option value="Annulé">Annulé</option>
-										<option value="Terminé">Terminé</option>
+										<option value="">All statuses</option>
+										<option value="Actif">Active</option>
+										<option value="Complet">Full</option>
+										<option value="Annulé">Cancelled</option>
+										<option value="Terminé">Completed</option>
 									</select>
 									<button
 										on:click={loadRides}
 										class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 font-medium"
 									>
-										Charger trajets
+										Load rides
 									</button>
 								</div>
 								{#if ridesManagementActionMessage}
@@ -1687,17 +1687,17 @@
 										on:click={loadRides}
 										class="mt-2 px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700"
 									>
-										Réessayer
+										Retry
 									</button>
 								</div>
 							{:else if filteredRides.length === 0}
 								<div class="bg-gray-50 rounded-xl p-8 text-center">
-									<p class="text-gray-500 text-sm">Aucun trajet trouvé.</p>
+									<p class="text-gray-500 text-sm">No rides found.</p>
 									<button
 										on:click={loadRides}
 										class="mt-3 px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700"
 									>
-										Recharger
+										Reload
 									</button>
 								</div>
 							{:else}
@@ -1705,12 +1705,12 @@
 									<table class="w-full text-sm">
 										<thead class="bg-gray-50 border-b border-gray-200">
 											<tr>
-												<th class="px-4 py-3 text-left font-semibold text-gray-900">Conducteur</th>
-												<th class="px-4 py-3 text-left font-semibold text-gray-900">Trajet</th>
+												<th class="px-4 py-3 text-left font-semibold text-gray-900">Driver</th>
+												<th class="px-4 py-3 text-left font-semibold text-gray-900">Ride</th>
 												<th class="px-4 py-3 text-left font-semibold text-gray-900">Date</th>
-												<th class="px-4 py-3 text-left font-semibold text-gray-900">Prix</th>
-												<th class="px-4 py-3 text-left font-semibold text-gray-900">Places</th>
-												<th class="px-4 py-3 text-left font-semibold text-gray-900">Statut</th>
+												<th class="px-4 py-3 text-left font-semibold text-gray-900">Price</th>
+												<th class="px-4 py-3 text-left font-semibold text-gray-900">Seats</th>
+												<th class="px-4 py-3 text-left font-semibold text-gray-900">Status</th>
 												<th class="px-4 py-3 text-left font-semibold text-gray-900">Actions</th>
 											</tr>
 										</thead>
@@ -1728,7 +1728,7 @@
 													</td>
 													<td class="px-4 py-3">
 														<div class="text-sm text-gray-600">
-															{new Date(ride.ride_date).toLocaleDateString('fr-FR', {
+															{new Date(ride.ride_date).toLocaleDateString('en-US', {
 																day: '2-digit',
 																month: '2-digit',
 																year: 'numeric'
@@ -1758,7 +1758,7 @@
 																		? 'bg-red-100 text-red-800'
 																		: 'bg-gray-100 text-gray-800'
 														}`}>
-															{ride.status}
+															{ride.status === 'Actif' ? 'Active' : ride.status === 'Complet' ? 'Full' : ride.status === 'Annulé' ? 'Cancelled' : ride.status === 'Terminé' ? 'Completed' : ride.status}
 														</span>
 													</td>
 													<td class="px-4 py-3">
@@ -1767,14 +1767,14 @@
 																on:click={() => showRideBookings(ride)}
 																class="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
 															>
-																Réservations
+																Bookings
 															</button>
 															<button
 																on:click={() => deleteRide(ride)}
 																disabled={deletingRideId === ride.id}
 																class="px-3 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 disabled:opacity-50"
 															>
-																{deletingRideId === ride.id ? 'Suppression...' : 'Supprimer'}
+																{deletingRideId === ride.id ? 'Deleting...' : 'Delete'}
 															</button>
 														</div>
 													</td>
@@ -1789,7 +1789,7 @@
 						<div class="space-y-6">
 							<!-- Filters Section -->
 							<div class="bg-white rounded-xl p-4 border border-gray-200">
-								<h3 class="text-sm font-semibold text-gray-900 mb-4">Filtres</h3>
+								<h3 class="text-sm font-semibold text-gray-900 mb-4">Filters</h3>
 								<div class="grid grid-cols-1 md:grid-cols-4 gap-3">
 									<input
 										type="date"
@@ -1802,16 +1802,16 @@
 										bind:value={bookingFilterStatus}
 										on:change={loadBookings}
 									>
-										<option value="">Tous les statuts</option>
-										<option value="Confirmed">Confirmée</option>
-										<option value="Pending">En attente</option>
-										<option value="Cancelled">Annulée</option>
+										<option value="">All statuses</option>
+										<option value="Confirmed">Confirmed</option>
+										<option value="Pending">Pending</option>
+										<option value="Cancelled">Cancelled</option>
 									</select>
 									<button
 										on:click={loadBookings}
 										class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 font-medium"
 									>
-										Charger réservations
+										Load bookings
 									</button>
 									{#if bookingsActionMessage}
 										<div class="text-sm text-green-600 px-3 py-2">{bookingsActionMessage}</div>
@@ -1835,17 +1835,17 @@
 										on:click={loadBookings}
 										class="mt-2 px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700"
 									>
-										Réessayer
+										Retry
 									</button>
 								</div>
 							{:else if filteredBookings.length === 0}
 								<div class="bg-gray-50 rounded-xl p-8 text-center">
-									<p class="text-gray-500 text-sm">Aucune réservation trouvée.</p>
+									<p class="text-gray-500 text-sm">No bookings found.</p>
 									<button
 										on:click={loadBookings}
 										class="mt-3 px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700"
 									>
-										Recharger
+										Reload
 									</button>
 								</div>
 							{:else}
@@ -1853,11 +1853,11 @@
 									<table class="w-full text-sm">
 										<thead class="bg-gray-50 border-b border-gray-200">
 											<tr>
-												<th class="px-4 py-3 text-left font-semibold text-gray-900">Passager</th>
-												<th class="px-4 py-3 text-left font-semibold text-gray-900">Trajet</th>
-												<th class="px-4 py-3 text-left font-semibold text-gray-900">Places</th>
-												<th class="px-4 py-3 text-left font-semibold text-gray-900">Statut</th>
-												<th class="px-4 py-3 text-left font-semibold text-gray-900">Date réservation</th>
+												<th class="px-4 py-3 text-left font-semibold text-gray-900">Passenger</th>
+												<th class="px-4 py-3 text-left font-semibold text-gray-900">Ride</th>
+												<th class="px-4 py-3 text-left font-semibold text-gray-900">Seats</th>
+												<th class="px-4 py-3 text-left font-semibold text-gray-900">Status</th>
+												<th class="px-4 py-3 text-left font-semibold text-gray-900">Booking date</th>
 												<th class="px-4 py-3 text-left font-semibold text-gray-900">Actions</th>
 											</tr>
 										</thead>
@@ -1873,7 +1873,7 @@
 													<td class="px-4 py-3">
 														<div class="text-sm text-gray-900">{booking.rides?.city_from} → {booking.rides?.city_to}</div>
 														<div class="text-xs text-gray-500">
-															{new Date(booking.rides?.ride_date).toLocaleDateString('fr-FR', {
+															{new Date(booking.rides?.ride_date).toLocaleDateString('en-US', {
 																day: '2-digit',
 																month: '2-digit',
 																year: 'numeric'
@@ -1893,12 +1893,12 @@
 																		? 'bg-red-100 text-red-800'
 																		: 'bg-gray-100 text-gray-800'
 														}`}>
-															{booking.status === 'Confirmed' ? 'Confirmée' : booking.status === 'Pending' ? 'En attente' : booking.status === 'Cancelled' ? 'Annulée' : booking.status}
+															{booking.status === 'Confirmed' ? 'Confirmed' : booking.status === 'Pending' ? 'Pending' : booking.status === 'Cancelled' ? 'Cancelled' : booking.status}
 														</span>
 													</td>
 													<td class="px-4 py-3">
 														<div class="text-sm text-gray-600">
-															{new Date(booking.created_at).toLocaleDateString('fr-FR')}
+															{new Date(booking.created_at).toLocaleDateString('en-US')}
 														</div>
 													</td>
 													<td class="px-4 py-3">
@@ -1906,7 +1906,7 @@
 															on:click={() => showBookingDetails(booking)}
 															class="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
 														>
-															Détails
+															Details
 														</button>
 													</td>
 												</tr>
@@ -1929,7 +1929,7 @@
 										<option value="">Tous les types</option>
 										<option value="behavior">Comportement</option>
 										<option value="spam">Spam</option>
-										<option value="payment_issue">Problème de paiement</option>
+										<option value="payment_issue">Payment issue</option>
 									</select>
 									<select
 										class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
@@ -1938,14 +1938,14 @@
 									>
 										<option value="">Tous les statuts</option>
 										<option value="pending">En attente</option>
-										<option value="ignored">Ignoré</option>
-										<option value="resolved">Traité</option>
+										<option value="ignored">Ignored</option>
+										<option value="resolved">Resolved</option>
 									</select>
 									<button
 										on:click={loadReports}
 										class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 font-medium"
 									>
-										Charger signalements
+										Load reports
 									</button>
 								</div>
 								{#if reportActionMessage}
@@ -1954,18 +1954,18 @@
 							</div>
 
 							{#if reportsLoading}
-								<p class="text-sm text-gray-500">Chargement des signalements...</p>
+								<p class="text-sm text-gray-500">Loading reports...</p>
 							{:else if reportsError}
 								<p class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{reportsError}</p>
 							{:else if filteredReports.length === 0}
-								<p class="text-sm text-gray-500">Aucun signalement pour le moment.</p>
+								<p class="text-sm text-gray-500">No reports right now.</p>
 							{:else}
 								<div class="overflow-x-auto border border-gray-100 rounded-xl">
 									<table class="w-full text-sm">
 										<thead class="bg-gray-50 text-left text-gray-600">
 											<tr>
 												<th class="px-4 py-3 font-medium">Type</th>
-												<th class="px-4 py-3 font-medium">Signalement</th>
+												<th class="px-4 py-3 font-medium">Report</th>
 												<th class="px-4 py-3 font-medium">Statut</th>
 												<th class="px-4 py-3 font-medium">Liens</th>
 												<th class="px-4 py-3 font-medium">Actions</th>
@@ -1987,7 +1987,7 @@
 													</td>
 													<td class="px-4 py-3 align-top">
 														<p class="text-sm text-gray-900">{report.description || 'Sans description'}</p>
-														<p class="text-xs text-gray-500 mt-1">Créé le {new Date(report.created_at).toLocaleDateString('fr-FR')}</p>
+														<p class="text-xs text-gray-500 mt-1">Created on {new Date(report.created_at).toLocaleDateString('en-US')}</p>
 													</td>
 													<td class="px-4 py-3 align-top">
 														<span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
@@ -1997,7 +1997,7 @@
 																	? 'bg-gray-100 text-gray-700'
 																	: 'bg-green-100 text-green-700'
 														}`}>
-															{report.status === 'pending' ? 'En attente' : report.status === 'ignored' ? 'Ignoré' : 'Traité'}
+															{report.status === 'pending' ? 'Pending' : report.status === 'ignored' ? 'Ignored' : 'Resolved'}
 														</span>
 													</td>
 													<td class="px-4 py-3 align-top">
@@ -2028,7 +2028,7 @@
 																on:click={() => moderateReport(report, 'suspend')}
 																class="px-2 py-1 rounded text-xs border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
 															>
-																Suspendre compte
+																Suspend account
 															</button>
 														</div>
 													</td>
@@ -2049,8 +2049,8 @@
 										on:change={loadTransactions}
 									>
 										<option value="">Tous les statuts</option>
-										<option value="succeeded">Réussi</option>
-										<option value="failed">Échoué</option>
+										<option value="succeeded">Succeeded</option>
+										<option value="failed">Failed</option>
 									</select>
 									<button
 										on:click={loadTransactions}
@@ -2065,11 +2065,11 @@
 							</div>
 
 							{#if transactionsLoading}
-								<p class="text-sm text-gray-500">Chargement des transactions...</p>
+								<p class="text-sm text-gray-500">Loading transactions...</p>
 							{:else if transactionsError}
 								<p class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{transactionsError}</p>
 							{:else if transactions.length === 0}
-								<p class="text-sm text-gray-500">Aucune transaction.</p>
+								<p class="text-sm text-gray-500">No transactions.</p>
 							{:else}
 								<div class="overflow-x-auto border border-gray-100 rounded-xl">
 									<table class="w-full text-sm">
@@ -2096,7 +2096,7 @@
 														<span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
 															tx.status === 'succeeded' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
 														}`}>
-															{tx.status === 'succeeded' ? 'Réussi' : 'Échoué'}
+															{tx.status === 'succeeded' ? 'Succeeded' : 'Failed'}
 														</span>
 													</td>
 													<td class="px-4 py-3 font-medium text-gray-900">
@@ -2109,11 +2109,11 @@
 														<span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
 															tx.refund_status === 'refunded' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-700'
 														}`}>
-															{tx.refund_status === 'refunded' ? 'Remboursé' : 'Aucun'}
+															{tx.refund_status === 'refunded' ? 'Refunded' : 'None'}
 														</span>
 													</td>
 													<td class="px-4 py-3 text-gray-600">
-														{new Date(tx.created_at).toLocaleDateString('fr-FR')}
+														{new Date(tx.created_at).toLocaleDateString('en-US')}
 													</td>
 													<td class="px-4 py-3">
 														<button
@@ -2134,7 +2134,7 @@
 					{:else if activeTab === 'settings'}
 						<div class="space-y-6">
 							<div class="bg-white rounded-xl border border-gray-200 p-5">
-								<h3 class="text-base font-semibold text-gray-900 mb-4">Configuration plateforme</h3>
+								<h3 class="text-base font-semibold text-gray-900 mb-4">Platform settings</h3>
 								{#if settingsError}
 									<p class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">{settingsError}</p>
 								{/if}
@@ -2142,12 +2142,13 @@
 									<p class="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 mb-3">{settingsMessage}</p>
 								{/if}
 								{#if settingsLoading}
-									<p class="text-sm text-gray-500">Chargement de la configuration...</p>
+									<p class="text-sm text-gray-500">Loading settings...</p>
 								{:else}
 									<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
 										<div>
-											<label class="block text-xs font-medium text-gray-600 mb-1">Commission (%)</label>
+											<p class="block text-xs font-medium text-gray-600 mb-1">Commission (%)</p>
 											<input
+												id="commission-percent"
 												type="number"
 												min="0"
 												max="100"
@@ -2157,8 +2158,9 @@
 											/>
 										</div>
 										<div>
-											<label class="block text-xs font-medium text-gray-600 mb-1">Places max par trajet</label>
+											<p class="block text-xs font-medium text-gray-600 mb-1">Places max par trajet</p>
 											<input
+												id="max-seats-limit"
 												type="number"
 												min="1"
 												bind:value={maxSeatsLimit}
@@ -2166,8 +2168,9 @@
 											/>
 										</div>
 										<div>
-											<label class="block text-xs font-medium text-gray-600 mb-1">Prix max (USD)</label>
+											<p class="block text-xs font-medium text-gray-600 mb-1">Prix max (USD)</p>
 											<input
+												id="max-price-limit"
 												type="number"
 												min="1"
 												step="0.01"
@@ -2189,19 +2192,19 @@
 							</div>
 
 							<div class="bg-white rounded-xl border border-gray-200 p-5">
-								<h3 class="text-base font-semibold text-gray-900 mb-4">Gestion des admins</h3>
-								<p class="text-sm text-gray-500 mb-4">Promouvoir ou rétrograder les comptes administrateurs.</p>
+								<h3 class="text-base font-semibold text-gray-900 mb-4">Admin management</h3>
+								<p class="text-sm text-gray-500 mb-4">Promote or demote administrator accounts.</p>
 								{#if usersLoading}
-									<p class="text-sm text-gray-500">Chargement des utilisateurs...</p>
+									<p class="text-sm text-gray-500">Loading users...</p>
 								{:else if users.length === 0}
-									<p class="text-sm text-gray-500">Aucun utilisateur disponible.</p>
+									<p class="text-sm text-gray-500">No users available.</p>
 								{:else}
 									<div class="overflow-x-auto border border-gray-100 rounded-xl">
 										<table class="w-full text-sm">
 											<thead class="bg-gray-50 text-left text-gray-600">
 												<tr>
 													<th class="px-4 py-3 font-medium">Utilisateur</th>
-													<th class="px-4 py-3 font-medium">Rôle</th>
+													<th class="px-4 py-3 font-medium">Role</th>
 													<th class="px-4 py-3 font-medium">Action</th>
 												</tr>
 											</thead>
@@ -2210,7 +2213,7 @@
 													<tr class="hover:bg-gray-50">
 														<td class="px-4 py-3">
 															<p class="font-medium text-gray-900">{`${adminUser.first_name ?? ''} ${adminUser.last_name ?? ''}`.trim() || 'Sans nom'}</p>
-															<p class="text-xs text-gray-500">{adminUser.email ?? 'Email non renseigné'}</p>
+															<p class="text-xs text-gray-500">{adminUser.email ?? 'Email not provided'}</p>
 														</td>
 														<td class="px-4 py-3">
 															<span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${adminUser.is_admin ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
@@ -2244,17 +2247,17 @@
 										bind:value={supportFilterStatus}
 										on:change={loadSupportTickets}
 									>
-										<option value="">Tous les tickets</option>
-										<option value="open">Ouvert</option>
+										<option value="">All tickets</option>
+										<option value="open">Open</option>
 										<option value="in_progress">En cours</option>
-										<option value="resolved">Résolu</option>
-										<option value="closed">Fermé</option>
+										<option value="resolved">Resolved</option>
+										<option value="closed">Closed</option>
 									</select>
 									<button
 										on:click={loadSupportTickets}
 										class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 font-medium"
 									>
-										Rafraîchir tickets
+										Refresh tickets
 									</button>
 								</div>
 							</div>
@@ -2269,12 +2272,12 @@
 							<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
 								<div class="lg:col-span-1 border border-gray-200 rounded-xl overflow-hidden">
 									<div class="bg-gray-50 px-4 py-3 border-b border-gray-200">
-										<h3 class="text-sm font-semibold text-gray-900">Tickets de support</h3>
+										<h3 class="text-sm font-semibold text-gray-900">Support tickets</h3>
 									</div>
 									{#if supportLoading}
-										<p class="text-sm text-gray-500 px-4 py-3">Chargement...</p>
+										<p class="text-sm text-gray-500 px-4 py-3">Loading...</p>
 									{:else if supportTickets.length === 0}
-										<p class="text-sm text-gray-500 px-4 py-3">Aucun ticket.</p>
+										<p class="text-sm text-gray-500 px-4 py-3">No tickets.</p>
 									{:else}
 										<div class="max-h-125 overflow-y-auto divide-y divide-gray-100">
 											{#each supportTickets as ticket}
@@ -2321,29 +2324,29 @@
 													class="px-2 py-1 border border-gray-300 rounded text-xs"
 													on:change={(e) => updateSupportTicketStatus((e.currentTarget as HTMLSelectElement).value as SupportTicket['status'])}
 												>
-													<option selected={selectedSupportTicket.status === 'open'} value="open">Ouvert</option>
+													<option selected={selectedSupportTicket.status === 'open'} value="open">Open</option>
 													<option selected={selectedSupportTicket.status === 'in_progress'} value="in_progress">En cours</option>
-													<option selected={selectedSupportTicket.status === 'resolved'} value="resolved">Résolu</option>
-													<option selected={selectedSupportTicket.status === 'closed'} value="closed">Fermé</option>
+													<option selected={selectedSupportTicket.status === 'resolved'} value="resolved">Resolved</option>
+													<option selected={selectedSupportTicket.status === 'closed'} value="closed">Closed</option>
 												</select>
 											</div>
 										{/if}
 									</div>
 
 									{#if !selectedSupportTicket}
-										<p class="text-sm text-gray-500 p-4">Sélectionne un ticket pour voir les messages.</p>
+										<p class="text-sm text-gray-500 p-4">Select a ticket to view messages.</p>
 									{:else}
 										<div class="p-4 space-y-3 max-h-105 overflow-y-auto bg-gray-50">
 											{#if supportMessagesLoading}
-												<p class="text-sm text-gray-500">Chargement de la conversation...</p>
+												<p class="text-sm text-gray-500">Loading conversation...</p>
 											{:else if supportMessages.length === 0}
-												<p class="text-sm text-gray-500">Aucun message.</p>
+												<p class="text-sm text-gray-500">No messages.</p>
 											{:else}
 												{#each supportMessages as msg}
 													<div class="{msg.sender_role === 'admin' ? 'text-right' : 'text-left'}">
 														<div class="inline-block max-w-[85%] rounded-lg px-3 py-2 text-sm {msg.sender_role === 'admin' ? 'bg-green-100 text-green-900' : 'bg-white border border-gray-200 text-gray-800'}">
 															<p class="text-[11px] opacity-70 mb-1">
-																{msg.sender_role === 'admin' ? 'Admin' : 'Utilisateur'} • {new Date(msg.created_at).toLocaleString('fr-FR')}
+																{msg.sender_role === 'admin' ? 'Admin' : 'User'} • {new Date(msg.created_at).toLocaleString('en-US')}
 															</p>
 															<p>{msg.message}</p>
 														</div>
@@ -2356,7 +2359,7 @@
 											<textarea
 												rows="3"
 												bind:value={supportReplyMessage}
-												placeholder="Répondre à l'utilisateur..."
+												placeholder="Reply to user..."
 												class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
 											></textarea>
 											<div class="flex justify-end">
@@ -2365,7 +2368,7 @@
 													on:click={sendSupportReply}
 													class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50"
 												>
-													{supportSendingReply ? 'Envoi...' : 'Répondre'}
+													{supportSendingReply ? 'Sending...' : 'Reply'}
 												</button>
 											</div>
 										</div>
@@ -2385,14 +2388,14 @@
 				<!-- Modal Header -->
 				<div class="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white">
 					<div>
-						<h2 class="text-lg font-bold text-gray-900">Réservations</h2>
+						<h2 class="text-lg font-bold text-gray-900">Bookings</h2>
 						<p class="text-sm text-gray-500">{selectedRideForBookings.city_from} → {selectedRideForBookings.city_to}</p>
 					</div>
 					<button
 						on:click={closeRideBookingsModal}
 						class="text-gray-400 hover:text-gray-600 text-xl font-semibold p-1"
-						aria-label="Fermer"
-						title="Fermer la modale"
+						aria-label="Close"
+						title="Close modal"
 					>
 						×
 					</button>
@@ -2410,7 +2413,7 @@
 							</div>
 						</div>
 					{:else if rideBookings.length === 0}
-						<p class="text-gray-500 text-center py-4">Aucune réservation pour ce trajet.</p>
+						<p class="text-gray-500 text-center py-4">No bookings for this ride.</p>
 					{:else}
 						<div class="space-y-4">
 							{#each rideBookings as booking}
@@ -2429,12 +2432,12 @@
 													? 'bg-red-100 text-red-800'
 													: 'bg-gray-100 text-gray-800'
 										}`}>
-											{booking.status === 'Confirmed' ? 'Confirmée' : booking.status === 'Cancelled' ? 'Annulée' : booking.status}
+											{booking.status === 'Confirmed' ? 'Confirmed' : booking.status === 'Cancelled' ? 'Cancelled' : booking.status}
 										</span>
 									</div>
 									<div class="text-sm text-gray-600">
-										<p><strong>Places réservées:</strong> {booking.seats_booked}</p>
-										<p><strong>Réservé le:</strong> {new Date(booking.created_at).toLocaleDateString('fr-FR')}</p>
+										<p><strong>Booked seats:</strong> {booking.seats_booked}</p>
+										<p><strong>Booked on:</strong> {new Date(booking.created_at).toLocaleDateString('en-US')}</p>
 									</div>
 								</div>
 							{/each}
@@ -2450,12 +2453,12 @@
 			<div class="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
 				<!-- Modal Header -->
 				<div class="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white">
-					<h2 class="text-lg font-bold text-gray-900">Détails de la réservation</h2>
+					<h2 class="text-lg font-bold text-gray-900">Booking details</h2>
 					<button
 						on:click={closeBookingDetailsModal}
 						class="text-gray-400 hover:text-gray-600 text-xl font-semibold p-1"
-						aria-label="Fermer"
-						title="Fermer la modale"
+						aria-label="Close"
+						title="Close modal"
 					>
 						×
 					</button>
@@ -2465,9 +2468,9 @@
 				<div class="p-6 space-y-6">
 					<!-- Booking Status -->
 					<div class="border border-gray-200 rounded-lg p-4">
-						<h3 class="text-sm font-semibold text-gray-900 mb-3">État de la réservation</h3>
+						<h3 class="text-sm font-semibold text-gray-900 mb-3">Booking status</h3>
 						<div class="flex items-center justify-between">
-							<span class="text-sm text-gray-600">Statut:</span>
+							<span class="text-sm text-gray-600">Status:</span>
 							<span class={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold ${
 								selectedBooking.status === 'Confirmed'
 									? 'bg-green-100 text-green-800'
@@ -2475,15 +2478,15 @@
 										? 'bg-yellow-100 text-yellow-800'
 										: 'bg-red-100 text-red-800'
 							}`}>
-								{selectedBooking.status === 'Confirmed' ? '✓ Confirmée' : selectedBooking.status === 'Pending' ? '⏳ En attente' : '✕ Annulée'}
+								{selectedBooking.status === 'Confirmed' ? '✓ Confirmed' : selectedBooking.status === 'Pending' ? '⏳ Pending' : '✕ Cancelled'}
 							</span>
 						</div>
-						<p class="text-xs text-gray-500 mt-2">Réservé le {new Date(selectedBooking.created_at).toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+						<p class="text-xs text-gray-500 mt-2">Booked on {new Date(selectedBooking.created_at).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
 					</div>
 
 					<!-- Passenger Information -->
 					<div class="border border-gray-200 rounded-lg p-4">
-						<h3 class="text-sm font-semibold text-gray-900 mb-4">Informations du passager</h3>
+						<h3 class="text-sm font-semibold text-gray-900 mb-4">Passenger information</h3>
 						{#if riderDetailsLoading}
 							<div class="text-center py-4">
 								<div class="inline-block animate-spin">
@@ -2505,16 +2508,16 @@
 										<p class="text-sm font-medium text-gray-900">{selectedBookingRider.email}</p>
 									</div>
 									<div>
-										<p class="text-xs text-gray-500">Téléphone</p>
-										<p class="text-sm font-medium text-gray-900">{selectedBookingRider.phone_number || 'Non fourni'}</p>
+										<p class="text-xs text-gray-500">Phone</p>
+										<p class="text-sm font-medium text-gray-900">{selectedBookingRider.phone_number || 'Not provided'}</p>
 									</div>
 									<div>
 										<p class="text-xs text-gray-500">Note moyenne</p>
-										<p class="text-sm font-medium text-gray-900">{selectedBookingRider.average_rating ? `${selectedBookingRider.average_rating}/5 ⭐` : 'Pas d\'avis'}</p>
+										<p class="text-sm font-medium text-gray-900">{selectedBookingRider.average_rating ? `${selectedBookingRider.average_rating}/5 ⭐` : 'No reviews'}</p>
 									</div>
 								</div>
 								<div class="pt-2">
-									<p class="text-xs text-gray-500">Statut du compte</p>
+									<p class="text-xs text-gray-500">Account status</p>
 									<span class={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium mt-1 ${
 										selectedBookingRider.user_status === 'active'
 											? 'bg-green-100 text-green-800'
@@ -2522,7 +2525,7 @@
 												? 'bg-yellow-100 text-yellow-800'
 												: 'bg-red-100 text-red-800'
 									}`}>
-										{selectedBookingRider.user_status === 'active' ? 'Actif' : selectedBookingRider.user_status === 'suspended' ? 'Suspendu' : 'Banni'}
+										{selectedBookingRider.user_status === 'active' ? 'Active' : selectedBookingRider.user_status === 'suspended' ? 'Suspended' : 'Banned'}
 									</span>
 								</div>
 							</div>
@@ -2531,21 +2534,21 @@
 
 					<!-- Ride Information -->
 					<div class="border border-gray-200 rounded-lg p-4">
-						<h3 class="text-sm font-semibold text-gray-900 mb-4">Informations du trajet</h3>
+						<h3 class="text-sm font-semibold text-gray-900 mb-4">Ride information</h3>
 						<div class="space-y-3">
 							<div class="grid grid-cols-2 gap-4">
 								<div>
-									<p class="text-xs text-gray-500">Itinéraire</p>
+									<p class="text-xs text-gray-500">Route</p>
 									<p class="text-sm font-medium text-gray-900">{selectedBooking.rides?.city_from} → {selectedBooking.rides?.city_to}</p>
 								</div>
 								<div>
-									<p class="text-xs text-gray-500">Date du trajet</p>
+									<p class="text-xs text-gray-500">Ride date</p>
 									<p class="text-sm font-medium text-gray-900">
-										{new Date(selectedBooking.rides?.ride_date).toLocaleDateString('fr-FR', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+										{new Date(selectedBooking.rides?.ride_date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
 									</p>
 								</div>
 								<div>
-									<p class="text-xs text-gray-500">Places réservées</p>
+									<p class="text-xs text-gray-500">Booked seats</p>
 									<p class="text-sm font-medium text-gray-900">{selectedBooking.seats_booked}</p>
 								</div>
 								<div>
@@ -2576,7 +2579,7 @@
 							on:click={closeBookingDetailsModal}
 							class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
 						>
-							Fermer
+							Close
 						</button>
 					</div>
 				</div>
@@ -2588,12 +2591,12 @@
 		<div class="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
 			<div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
 				<div class="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white">
-					<h2 class="text-lg font-bold text-gray-900">Historique du signalement</h2>
+					<h2 class="text-lg font-bold text-gray-900">Report history</h2>
 					<button
 						on:click={closeReportHistoryModal}
 						class="text-gray-400 hover:text-gray-600 text-xl font-semibold p-1"
-						aria-label="Fermer"
-						title="Fermer la modale"
+						aria-label="Close"
+						title="Close modal"
 					>
 						×
 					</button>
@@ -2609,21 +2612,21 @@
 					</div>
 					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 						<div class="rounded-lg border border-gray-200 p-4">
-							<p class="text-gray-500">Créé le</p>
-							<p class="font-medium text-gray-900">{new Date(selectedReportHistory.created_at).toLocaleString('fr-FR')}</p>
+							<p class="text-gray-500">Created on</p>
+							<p class="font-medium text-gray-900">{new Date(selectedReportHistory.created_at).toLocaleString('en-US')}</p>
 						</div>
 						<div class="rounded-lg border border-gray-200 p-4">
-							<p class="text-gray-500">Dernière mise à jour</p>
-							<p class="font-medium text-gray-900">{new Date(selectedReportHistory.updated_at).toLocaleString('fr-FR')}</p>
+							<p class="text-gray-500">Last updated</p>
+							<p class="font-medium text-gray-900">{new Date(selectedReportHistory.updated_at).toLocaleString('en-US')}</p>
 						</div>
 					</div>
 					<div class="rounded-lg border border-gray-200 p-4">
 						<p class="text-gray-500">Action prise</p>
-						<p class="font-medium text-gray-900">{selectedReportHistory.action_taken || 'Aucune action pour le moment'}</p>
+						<p class="font-medium text-gray-900">{selectedReportHistory.action_taken || 'No action yet'}</p>
 					</div>
 					<div class="rounded-lg border border-gray-200 p-4">
 						<p class="text-gray-500">Note admin</p>
-						<p class="font-medium text-gray-900">{selectedReportHistory.admin_note || 'Aucune note'}</p>
+						<p class="font-medium text-gray-900">{selectedReportHistory.admin_note || 'No note'}</p>
 					</div>
 				</div>
 			</div>
@@ -2643,10 +2646,10 @@
 						type="button"
 						on:click={closeProfileModal}
 						class="text-gray-400 hover:text-gray-600"
-						aria-label="Fermer"
-						title="Fermer"
+						aria-label="Close"
+						title="Close"
 					>
-						<span class="sr-only">Fermer</span>
+						<span class="sr-only">Close</span>
 						<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 							<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
 						</svg>
@@ -2657,10 +2660,10 @@
 				<div class="p-6 space-y-6">
 					<!-- Profile Info -->
 					<div>
-						<h3 class="text-sm font-semibold text-gray-900 mb-3">Informations personnelles</h3>
+						<h3 class="text-sm font-semibold text-gray-900 mb-3">Personal information</h3>
 						<div class="grid grid-cols-2 gap-4 text-sm">
 							<div>
-								<p class="text-gray-500">Téléphone</p>
+								<p class="text-gray-500">Phone</p>
 								<p class="font-medium text-gray-900">{selectedProfile.phone_number || '-'}</p>
 							</div>
 							<div>
@@ -2669,18 +2672,18 @@
 							</div>
 							<div>
 								<p class="text-gray-500">Inscription</p>
-								<p class="font-medium text-gray-900">{selectedProfile.created_at ? new Date(selectedProfile.created_at).toLocaleDateString('fr-FR') : '-'}</p>
+								<p class="font-medium text-gray-900">{selectedProfile.created_at ? new Date(selectedProfile.created_at).toLocaleDateString('en-US') : '-'}</p>
 							</div>
 							<div>
-								<p class="text-gray-500">Rôle</p>
-								<p class="font-medium text-gray-900">{selectedProfile.is_admin ? 'Admin' : 'Utilisateur'}</p>
+								<p class="text-gray-500">Role</p>
+								<p class="font-medium text-gray-900">{selectedProfile.is_admin ? 'Admin' : 'User'}</p>
 							</div>
 						</div>
 					</div>
 
 					<!-- Status Actions -->
 					<div>
-						<h3 class="text-sm font-semibold text-gray-900 mb-3">Gestion du compte</h3>
+						<h3 class="text-sm font-semibold text-gray-900 mb-3">Account management</h3>
 						{#if statusActionMessage}
 							<p class="text-sm bg-green-50 border border-green-200 text-green-700 rounded-lg px-3 py-2 mb-3">{statusActionMessage}</p>
 						{/if}
@@ -2699,7 +2702,7 @@
 								on:click={() => changeUserStatus('suspended')}
 								class="w-full px-4 py-2 rounded-lg border text-sm font-medium {selectedProfile.user_status === 'suspended' ? 'border-yellow-300 bg-yellow-50 text-yellow-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'} disabled:opacity-50"
 							>
-								{selectedProfile.user_status === 'suspended' ? '✓' : ''} Suspendre le compte
+								{selectedProfile.user_status === 'suspended' ? '✓' : ''} Suspend account
 							</button>
 							<button
 								type="button"
@@ -2707,7 +2710,7 @@
 								on:click={() => changeUserStatus('banned')}
 								class="w-full px-4 py-2 rounded-lg border text-sm font-medium {selectedProfile.user_status === 'banned' ? 'border-red-300 bg-red-50 text-red-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'} disabled:opacity-50"
 							>
-								{selectedProfile.user_status === 'banned' ? '✓' : ''} Bannir le compte
+								{selectedProfile.user_status === 'banned' ? '✓' : ''} Ban account
 							</button>
 							<button
 								type="button"
@@ -2715,37 +2718,37 @@
 								on:click={resetUserPassword}
 								class="w-full px-4 py-2 rounded-lg border border-blue-300 text-blue-700 bg-blue-50 text-sm font-medium hover:bg-blue-100 disabled:opacity-50"
 							>
-								Réinitialiser le mot de passe
+								Reset password
 							</button>
 						</div>
 					</div>
 
 					<!-- Rides History -->
 					<div>
-						<h3 class="text-sm font-semibold text-gray-900 mb-3">Historique des trajets</h3>
+						<h3 class="text-sm font-semibold text-gray-900 mb-3">Ride history</h3>
 						{#if ridesLoading}
-							<p class="text-sm text-gray-500">Chargement...</p>
+							<p class="text-sm text-gray-500">Loading...</p>
 						{:else if profileRides.length === 0 && profileBookings.length === 0}
-							<p class="text-sm text-gray-500 italic">Aucun trajet pour cet utilisateur.</p>
+							<p class="text-sm text-gray-500 italic">No rides for this user.</p>
 						{:else}
 							<div class="space-y-3">
 								{#if profileRides.length > 0}
 									<div>
-										<p class="text-xs font-medium text-gray-600 mb-2">Trajets en tant que conducteur</p>
+										<p class="text-xs font-medium text-gray-600 mb-2">Rides as driver</p>
 										{#each profileRides as ride}
 											<div class="text-xs border border-gray-200 rounded p-2 mb-2">
 												<p><strong>{ride.city_from}</strong> → <strong>{ride.city_to}</strong></p>
-												<p class="text-gray-600">{new Date(ride.ride_date).toLocaleDateString('fr-FR')} • {ride.available_seats} places • {ride.price}€</p>
+												<p class="text-gray-600">{new Date(ride.ride_date).toLocaleDateString('en-US')} • {ride.available_seats} seats • ${ride.price}</p>
 											</div>
 										{/each}
 									</div>
 								{/if}
 								{#if profileBookings.length > 0}
 									<div>
-										<p class="text-xs font-medium text-gray-600 mb-2">Trajets réservés</p>
+										<p class="text-xs font-medium text-gray-600 mb-2">Booked rides</p>
 										{#each profileBookings as booking}
 											<div class="text-xs border border-gray-200 rounded p-2 mb-2">
-												<p>{booking.ride?.[0]?.city_from || '-'} → {booking.ride?.[0]?.city_to || '-'} ({booking.seats_booked} places)</p>
+												<p>{booking.ride?.[0]?.city_from || '-'} → {booking.ride?.[0]?.city_to || '-'} ({booking.seats_booked} seats)</p>
 												<p class="text-gray-600">{booking.status}</p>
 											</div>
 										{/each}
@@ -2763,7 +2766,7 @@
 						on:click={closeProfileModal}
 						class="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-100"
 					>
-						Fermer
+						Close
 					</button>
 				</div>
 			</div>

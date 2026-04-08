@@ -74,7 +74,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
 		let query = adminClient
 			.from('reports')
 			.select(
-				'id, user_id, ride_id, type, description, status, action_taken, admin_note, created_at, updated_at, profiles(first_name, last_name, email), rides(city_from, city_to, ride_date)'
+				'id, user_id, ride_id, type, description, status, action_taken, admin_note, created_at, updated_at, profiles(first_name, last_name, email), rides(departure, arrival, ride_date)'
 			)
 			.order('created_at', { ascending: false });
 
@@ -93,7 +93,18 @@ export const GET: RequestHandler = async ({ request, url }) => {
 			return json({ error: error.message }, { status: 500 });
 		}
 
-		return json({ reports: data ?? [] });
+		const normalizedReports = (data ?? []).map((report) => ({
+			...report,
+			rides: report.rides
+				? {
+					...report.rides,
+					city_from: report.rides.departure,
+					city_to: report.rides.arrival
+				}
+				: report.rides
+		}));
+
+		return json({ reports: normalizedReports });
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Internal server error';
 		return json({ error: message }, { status: 500 });

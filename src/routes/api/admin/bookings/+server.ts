@@ -76,12 +76,11 @@ export const GET: RequestHandler = async ({ request, url }) => {
 			`
 			id, 
 			ride_id, 
-			user_id, 
+			passenger_id, 
 			seats_booked, 
 			status, 
 			created_at,
-			rides(id, city_from, city_to, ride_date, price, driver_id),
-			profiles(first_name, last_name, email)
+			rides(id, departure, arrival, ride_date, price, driver_id)
 		`
 		);
 
@@ -95,7 +94,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
 			query = query.eq('status', filterStatus);
 		}
 		if (filterUserId) {
-			query = query.eq('user_id', filterUserId);
+			query = query.eq('passenger_id', filterUserId);
 		}
 		if (filterRideId) {
 			query = query.eq('ride_id', filterRideId);
@@ -112,7 +111,57 @@ export const GET: RequestHandler = async ({ request, url }) => {
 			return json({ error: bookingsError.message }, { status: 500 });
 		}
 
-		return json({ bookings });
+		const passengerIds = Array.from(
+			new Set((bookings ?? []).map((b) => b.passenger_id).filter((id): id is string => Boolean(id)))
+		);
+		let passengersById = new Map<
+			string,
+			{ first_name: string | null; last_name: string | null; email: string | null }
+		>();
+
+		if (passengerIds.length > 0) {
+			const { data: passengerProfiles, error: passengerProfilesError } = await adminClient
+				.from('profiles')
+				.select('id, first_name, last_name, email')
+				.in('id', passengerIds);
+
+			if (passengerProfilesError) {
+				return json({ error: passengerProfilesError.message }, { status: 500 });
+			}
+
+			passengersById = new Map(
+				(passengerProfiles ?? []).map((p) => [
+					p.id,
+					{
+						first_name: p.first_name ?? null,
+						last_name: p.last_name ?? null,
+						email: p.email ?? null
+					}
+				])
+			);
+		}
+
+		const normalizedBookings = (bookings ?? []).map((booking) => {
+			const ride = Array.isArray(booking.rides) ? booking.rides[0] : booking.rides;
+			return {
+				...booking,
+				user_id: booking.passenger_id,
+				profiles: passengersById.get(booking.passenger_id) ?? {
+					first_name: null,
+					last_name: null,
+					email: null
+				},
+				rides: ride
+					? {
+						...ride,
+						city_from: ride.departure,
+						city_to: ride.arrival
+					}
+					: ride
+			};
+		});
+
+		return json({ bookings: normalizedBookings });
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Internal server error';
 		return json({ error: message }, { status: 500 });

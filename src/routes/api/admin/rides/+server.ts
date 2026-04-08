@@ -74,9 +74,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
 		// Build filters
 		let query = adminClient
 			.from('rides')
-			.select(
-				'id, city_from, city_to, ride_date, price, available_seats, driver_id, status, created_at, profiles(first_name, last_name, email)'
-			);
+			.select('id, departure, arrival, ride_date, price, seats, driver_id, created_at');
 
 		// Apply filters
 		const cityFrom = url.searchParams.get('cityFrom');
@@ -85,13 +83,10 @@ export const GET: RequestHandler = async ({ request, url }) => {
 		const fromDate = url.searchParams.get('fromDate');
 
 		if (cityFrom) {
-			query = query.ilike('city_from', `%${cityFrom}%`);
+			query = query.ilike('departure', `%${cityFrom}%`);
 		}
 		if (cityTo) {
-			query = query.ilike('city_to', `%${cityTo}%`);
-		}
-		if (status) {
-			query = query.eq('status', status);
+			query = query.ilike('arrival', `%${cityTo}%`);
 		}
 		if (fromDate) {
 			query = query.gte('ride_date', fromDate);
@@ -101,6 +96,37 @@ export const GET: RequestHandler = async ({ request, url }) => {
 
 		if (ridesError) {
 			return json({ error: ridesError.message }, { status: 500 });
+		}
+
+		// Resolve driver profile info explicitly (no FK relation required in PostgREST schema cache)
+		const driverIds = Array.from(
+			new Set((rides ?? []).map((r) => r.driver_id).filter((id): id is string => Boolean(id)))
+		);
+		let driverProfilesById = new Map<
+			string,
+			{ first_name: string | null; last_name: string | null; email: string | null }
+		>();
+
+		if (driverIds.length > 0) {
+			const { data: driverProfiles, error: driverProfilesError } = await adminClient
+				.from('profiles')
+				.select('id, first_name, last_name, email')
+				.in('id', driverIds);
+
+			if (driverProfilesError) {
+				return json({ error: driverProfilesError.message }, { status: 500 });
+			}
+
+			driverProfilesById = new Map(
+				(driverProfiles ?? []).map((p) => [
+					p.id,
+					{
+						first_name: p.first_name ?? null,
+						last_name: p.last_name ?? null,
+						email: p.email ?? null
+					}
+				])
+			);
 		}
 
 		// Get booking counts for each ride
@@ -119,10 +145,36 @@ export const GET: RequestHandler = async ({ request, url }) => {
 			});
 		}
 
-		const enrichedRides = (rides ?? []).map((ride) => ({
-			...ride,
-			bookedSeats: bookingCounts[ride.id] ?? 0
-		}));
+		const now = Date.now();
+		const enrichedRides = (rides ?? [])
+			.map((ride) => {
+				const bookedSeats = bookingCounts[ride.id] ?? 0;
+				const totalSeats = Number(ride.seats ?? 0);
+				const isPastRide = new Date(ride.ride_date).getTime() < now;
+				const computedStatus = isPastRide ? 'Terminé' : bookedSeats >= totalSeats && totalSeats > 0 ? 'Complet' : 'Actif';
+
+				return {
+					id: ride.id,
+					city_from: ride.departure,
+					city_to: ride.arrival,
+					ride_date: ride.ride_date,
+					price: ride.price,
+					available_seats: totalSeats,
+					driver_id: ride.driver_id,
+					status: computedStatus,
+					created_at: ride.created_at,
+					profiles: driverProfilesById.get(ride.driver_id) ?? {
+				first_name: null,
+				last_name: null,
+				email: null
+			},
+					bookedSeats
+				};
+			})
+			.filter((ride) => {
+				if (!status) return true;
+				return ride.status === status;
+			});
 
 		return json({ rides: enrichedRides });
 	} catch (error) {

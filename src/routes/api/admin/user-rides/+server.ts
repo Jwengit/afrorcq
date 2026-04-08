@@ -80,16 +80,16 @@ export const GET: RequestHandler = async ({ request, url }) => {
 		const [driverRidesRes, bookingsRes] = await Promise.all([
 			adminClient
 				.from('rides')
-				.select('id, city_from, city_to, ride_date, available_seats, price, status')
+				.select('id, departure, arrival, ride_date, seats, price')
 				.eq('driver_id', userId)
 				.order('ride_date', { ascending: false })
 				.limit(20),
 			adminClient
 				.from('bookings')
 				.select(
-					'id, status, seats_booked, ride:rides(id, city_from, city_to, ride_date, price)'
+					'id, status, seats_booked, ride:rides(id, departure, arrival, ride_date, price)'
 				)
-				.eq('user_id', userId)
+				.eq('passenger_id', userId)
 				.order('created_at', { ascending: false })
 				.limit(20)
 		]);
@@ -104,9 +104,32 @@ export const GET: RequestHandler = async ({ request, url }) => {
 			);
 		}
 
+		const now = Date.now();
+		const normalizedDriverRides = (driverRidesRes.data ?? []).map((ride) => {
+			const isPastRide = new Date(ride.ride_date).getTime() < now;
+			return {
+				id: ride.id,
+				city_from: ride.departure,
+				city_to: ride.arrival,
+				ride_date: ride.ride_date,
+				available_seats: ride.seats,
+				price: ride.price,
+				status: isPastRide ? 'Terminé' : 'Actif'
+			};
+		});
+
+		const normalizedBookings = (bookingsRes.data ?? []).map((booking) => ({
+			...booking,
+			ride: (booking.ride ?? []).map((r) => ({
+				...r,
+				city_from: r.departure,
+				city_to: r.arrival
+			}))
+		}));
+
 		return json({
-			driverRides: driverRidesRes.data ?? [],
-			bookings: bookingsRes.data ?? []
+			driverRides: normalizedDriverRides,
+			bookings: normalizedBookings
 		});
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Internal server error';

@@ -79,16 +79,55 @@ export const GET: RequestHandler = async ({ request, url }) => {
 		// Get bookings for this ride with passenger info
 		const { data: bookings, error: bookingsError } = await adminClient
 			.from('bookings')
-			.select(
-				'id, user_id, seats_booked, status, created_at, profiles(first_name, last_name, email)'
-			)
+			.select('id, passenger_id, seats_booked, status, created_at')
 			.eq('ride_id', rideId);
 
 		if (bookingsError) {
 			return json({ error: bookingsError.message }, { status: 500 });
 		}
 
-		return json({ bookings });
+		const passengerIds = Array.from(
+			new Set((bookings ?? []).map((b) => b.passenger_id).filter((id): id is string => Boolean(id)))
+		);
+
+		let passengersById = new Map<
+			string,
+			{ first_name: string | null; last_name: string | null; email: string | null }
+		>();
+
+		if (passengerIds.length > 0) {
+			const { data: passengerProfiles, error: passengerProfilesError } = await adminClient
+				.from('profiles')
+				.select('id, first_name, last_name, email')
+				.in('id', passengerIds);
+
+			if (passengerProfilesError) {
+				return json({ error: passengerProfilesError.message }, { status: 500 });
+			}
+
+			passengersById = new Map(
+				(passengerProfiles ?? []).map((p) => [
+					p.id,
+					{
+						first_name: p.first_name ?? null,
+						last_name: p.last_name ?? null,
+						email: p.email ?? null
+					}
+				])
+			);
+		}
+
+		const normalizedBookings = (bookings ?? []).map((b) => ({
+			...b,
+			user_id: b.passenger_id,
+			profiles: passengersById.get(b.passenger_id) ?? {
+				first_name: null,
+				last_name: null,
+				email: null
+			}
+		}));
+
+		return json({ bookings: normalizedBookings });
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Internal server error';
 		return json({ error: message }, { status: 500 });
