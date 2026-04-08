@@ -75,6 +75,41 @@
 	let rideBookingsLoading = false;
 	let deletingRideId: string | null = null;
 
+	// Bookings/Reservations management
+	type AdminBooking = {
+		id: string;
+		ride_id: string;
+		user_id: string;
+		seats_booked: number;
+		status: string;
+		created_at: string;
+		rides: {
+			id: string;
+			city_from: string;
+			city_to: string;
+			ride_date: string;
+			price: number;
+			driver_id: string;
+		};
+		profiles: {
+			first_name: string | null;
+			last_name: string | null;
+			email: string | null;
+		};
+	};
+
+	let bookingsLoading = false;
+	let bookingsError = '';
+	let bookingsActionMessage = '';
+	let bookings: AdminBooking[] = [];
+	let filteredBookings: AdminBooking[] = [];
+	let bookingFilterStatus = '';
+	let bookingFilterFromDate = '';
+	let selectedBooking: AdminBooking | null = null;
+	let showBookingDetailsModal = false;
+	let selectedBookingRider: AdminUser | null = null;
+	let riderDetailsLoading = false;
+
 	// Dashboard overview stats
 	let stats = {
 		totalUsers: 0,
@@ -112,6 +147,9 @@
 			if (isHizliAccount) {
 				isAdmin = true;
 				await loadStats();
+				await loadUsers();
+				await loadRides();
+				await loadBookings();
 				loading = false;
 				return;
 			}
@@ -161,6 +199,7 @@
 			await loadStats();
 			await loadUsers();
 			await loadRides();
+			await loadBookings();
 			loading = false;
 		}
 
@@ -555,6 +594,87 @@
 		selectedRideForBookings = null;
 		rideBookings = [];
 	}
+
+	async function loadBookings() {
+		bookingsLoading = true;
+		bookingsError = '';
+		bookingsActionMessage = '';
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			bookingsError = 'Session expirée. Merci de te reconnecter.';
+			bookingsLoading = false;
+			return;
+		}
+
+		const params = new URLSearchParams();
+		if (bookingFilterStatus) params.append('status', bookingFilterStatus);
+		if (bookingFilterFromDate) params.append('fromDate', bookingFilterFromDate);
+
+		const response = await fetch(`/api/admin/bookings?${params.toString()}`, {
+			method: 'GET',
+			headers: {
+				Authorization: `Bearer ${session.access_token}`
+			}
+		});
+
+		const payload = await response.json();
+		if (!response.ok) {
+			bookingsError = payload?.error || 'Impossible de charger les réservations.';
+			bookings = [];
+			bookingsLoading = false;
+			return;
+		}
+
+		bookings = (payload?.bookings ?? []) as AdminBooking[];
+		applyBookingFilters();
+		bookingsLoading = false;
+	}
+
+	function applyBookingFilters() {
+		filteredBookings = bookings.slice();
+	}
+
+	async function showBookingDetails(booking: AdminBooking) {
+		selectedBooking = booking;
+		showBookingDetailsModal = true;
+		selectedBookingRider = null;
+		riderDetailsLoading = true;
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			riderDetailsLoading = false;
+			return;
+		}
+
+		// Fetch rider profile details
+		const { data: riderProfile } = await supabase
+			.from('profiles')
+			.select('id, first_name, last_name, email, phone_number, average_rating, created_at')
+			.eq('id', booking.user_id)
+			.maybeSingle();
+
+		if (riderProfile) {
+			selectedBookingRider = {
+				...(riderProfile as AdminUser),
+				user_status: (riderProfile as Partial<AdminUser>).user_status ?? 'active'
+			};
+		}
+
+		riderDetailsLoading = false;
+	}
+
+	function closeBookingDetailsModal() {
+		showBookingDetailsModal = false;
+		selectedBooking = null;
+		selectedBookingRider = null;
+	}
 </script>
 
 {#if loading}
@@ -671,7 +791,7 @@
 						{ id: 'overview', label: 'Vue d\'ensemble' },
 						{ id: 'users', label: 'Utilisateurs' },
 						{ id: 'rides', label: 'Trajets' },
-						{ id: 'reports', label: 'Signalements' }
+						{ id: 'bookings', label: 'Réservations' }
 					] as tab}
 						<button
 							class="px-5 py-3 text-sm font-medium transition-colors cursor-pointer
@@ -1067,8 +1187,137 @@
 								</div>
 							{/if}
 						</div>
-					{:else if activeTab === 'reports'}
-						<p class="text-gray-400 text-sm italic">Gestion des signalements — à venir</p>
+					{:else if activeTab === 'bookings'}
+						<div class="space-y-6">
+							<!-- Filters Section -->
+							<div class="bg-white rounded-xl p-4 border border-gray-200">
+								<h3 class="text-sm font-semibold text-gray-900 mb-4">Filtres</h3>
+								<div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+									<input
+										type="date"
+										class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+										bind:value={bookingFilterFromDate}
+										on:change={loadBookings}
+									/>
+									<select
+										class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+										bind:value={bookingFilterStatus}
+										on:change={loadBookings}
+									>
+										<option value="">Tous les statuts</option>
+										<option value="Confirmed">Confirmée</option>
+										<option value="Pending">En attente</option>
+										<option value="Cancelled">Annulée</option>
+									</select>
+									<button
+										on:click={loadBookings}
+										class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 font-medium"
+									>
+										Charger réservations
+									</button>
+									{#if bookingsActionMessage}
+										<div class="text-sm text-green-600 px-3 py-2">{bookingsActionMessage}</div>
+									{/if}
+								</div>
+							</div>
+
+							{#if bookingsLoading}
+								<div class="text-center py-8">
+									<div class="inline-block animate-spin">
+										<svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+											<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+										</svg>
+									</div>
+								</div>
+							{:else if bookingsError}
+								<div class="bg-red-50 border border-red-200 rounded-lg p-4">
+									<p class="text-sm text-red-600">{bookingsError}</p>
+									<button
+										on:click={loadBookings}
+										class="mt-2 px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700"
+									>
+										Réessayer
+									</button>
+								</div>
+							{:else if filteredBookings.length === 0}
+								<div class="bg-gray-50 rounded-xl p-8 text-center">
+									<p class="text-gray-500 text-sm">Aucune réservation trouvée.</p>
+									<button
+										on:click={loadBookings}
+										class="mt-3 px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700"
+									>
+										Recharger
+									</button>
+								</div>
+							{:else}
+								<div class="overflow-x-auto">
+									<table class="w-full text-sm">
+										<thead class="bg-gray-50 border-b border-gray-200">
+											<tr>
+												<th class="px-4 py-3 text-left font-semibold text-gray-900">Passager</th>
+												<th class="px-4 py-3 text-left font-semibold text-gray-900">Trajet</th>
+												<th class="px-4 py-3 text-left font-semibold text-gray-900">Places</th>
+												<th class="px-4 py-3 text-left font-semibold text-gray-900">Statut</th>
+												<th class="px-4 py-3 text-left font-semibold text-gray-900">Date réservation</th>
+												<th class="px-4 py-3 text-left font-semibold text-gray-900">Actions</th>
+											</tr>
+										</thead>
+										<tbody>
+											{#each filteredBookings as booking}
+												<tr class="border-b border-gray-200 hover:bg-gray-50">
+													<td class="px-4 py-3">
+														<div class="text-sm font-medium text-gray-900">
+															{booking.profiles?.first_name} {booking.profiles?.last_name}
+														</div>
+														<div class="text-xs text-gray-500">{booking.profiles?.email}</div>
+													</td>
+													<td class="px-4 py-3">
+														<div class="text-sm text-gray-900">{booking.rides?.city_from} → {booking.rides?.city_to}</div>
+														<div class="text-xs text-gray-500">
+															{new Date(booking.rides?.ride_date).toLocaleDateString('fr-FR', {
+																day: '2-digit',
+																month: '2-digit',
+																year: 'numeric'
+															})}
+														</div>
+													</td>
+													<td class="px-4 py-3">
+														<div class="text-sm font-medium text-gray-900">{booking.seats_booked}</div>
+													</td>
+													<td class="px-4 py-3">
+														<span class={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+															booking.status === 'Confirmed'
+																? 'bg-green-100 text-green-800'
+																: booking.status === 'Pending'
+																	? 'bg-yellow-100 text-yellow-800'
+																	: booking.status === 'Cancelled'
+																		? 'bg-red-100 text-red-800'
+																		: 'bg-gray-100 text-gray-800'
+														}`}>
+															{booking.status === 'Confirmed' ? 'Confirmée' : booking.status === 'Pending' ? 'En attente' : booking.status === 'Cancelled' ? 'Annulée' : booking.status}
+														</span>
+													</td>
+													<td class="px-4 py-3">
+														<div class="text-sm text-gray-600">
+															{new Date(booking.created_at).toLocaleDateString('fr-FR')}
+														</div>
+													</td>
+													<td class="px-4 py-3">
+														<button
+															on:click={() => showBookingDetails(booking)}
+															class="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+														>
+															Détails
+														</button>
+													</td>
+												</tr>
+											{/each}
+										</tbody>
+									</table>
+								</div>
+							{/if}
+						</div>
 					{/if}
 				</div>
 			</div>
@@ -1136,6 +1385,145 @@
 							{/each}
 						</div>
 					{/if}
+				</div>
+			</div>
+		</div>
+	{/if}
+	<!-- Booking Details Modal -->
+	{#if showBookingDetailsModal && selectedBooking}
+		<div class="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
+			<div class="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+				<!-- Modal Header -->
+				<div class="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white">
+					<h2 class="text-lg font-bold text-gray-900">Détails de la réservation</h2>
+					<button
+						on:click={closeBookingDetailsModal}
+						class="text-gray-400 hover:text-gray-600 text-xl font-semibold p-1"
+						aria-label="Fermer"
+						title="Fermer la modale"
+					>
+						×
+					</button>
+				</div>
+
+				<!-- Modal Content -->
+				<div class="p-6 space-y-6">
+					<!-- Booking Status -->
+					<div class="border border-gray-200 rounded-lg p-4">
+						<h3 class="text-sm font-semibold text-gray-900 mb-3">État de la réservation</h3>
+						<div class="flex items-center justify-between">
+							<span class="text-sm text-gray-600">Statut:</span>
+							<span class={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold ${
+								selectedBooking.status === 'Confirmed'
+									? 'bg-green-100 text-green-800'
+									: selectedBooking.status === 'Pending'
+										? 'bg-yellow-100 text-yellow-800'
+										: 'bg-red-100 text-red-800'
+							}`}>
+								{selectedBooking.status === 'Confirmed' ? '✓ Confirmée' : selectedBooking.status === 'Pending' ? '⏳ En attente' : '✕ Annulée'}
+							</span>
+						</div>
+						<p class="text-xs text-gray-500 mt-2">Réservé le {new Date(selectedBooking.created_at).toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+					</div>
+
+					<!-- Passenger Information -->
+					<div class="border border-gray-200 rounded-lg p-4">
+						<h3 class="text-sm font-semibold text-gray-900 mb-4">Informations du passager</h3>
+						{#if riderDetailsLoading}
+							<div class="text-center py-4">
+								<div class="inline-block animate-spin">
+									<svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+										<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+									</svg>
+								</div>
+							</div>
+						{:else if selectedBookingRider}
+							<div class="space-y-3">
+								<div class="grid grid-cols-2 gap-4">
+									<div>
+										<p class="text-xs text-gray-500">Nom</p>
+										<p class="text-sm font-medium text-gray-900">{selectedBookingRider.first_name} {selectedBookingRider.last_name}</p>
+									</div>
+									<div>
+										<p class="text-xs text-gray-500">Email</p>
+										<p class="text-sm font-medium text-gray-900">{selectedBookingRider.email}</p>
+									</div>
+									<div>
+										<p class="text-xs text-gray-500">Téléphone</p>
+										<p class="text-sm font-medium text-gray-900">{selectedBookingRider.phone_number || 'Non fourni'}</p>
+									</div>
+									<div>
+										<p class="text-xs text-gray-500">Note moyenne</p>
+										<p class="text-sm font-medium text-gray-900">{selectedBookingRider.average_rating ? `${selectedBookingRider.average_rating}/5 ⭐` : 'Pas d\'avis'}</p>
+									</div>
+								</div>
+								<div class="pt-2">
+									<p class="text-xs text-gray-500">Statut du compte</p>
+									<span class={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium mt-1 ${
+										selectedBookingRider.user_status === 'active'
+											? 'bg-green-100 text-green-800'
+											: selectedBookingRider.user_status === 'suspended'
+												? 'bg-yellow-100 text-yellow-800'
+												: 'bg-red-100 text-red-800'
+									}`}>
+										{selectedBookingRider.user_status === 'active' ? 'Actif' : selectedBookingRider.user_status === 'suspended' ? 'Suspendu' : 'Banni'}
+									</span>
+								</div>
+							</div>
+						{/if}
+					</div>
+
+					<!-- Ride Information -->
+					<div class="border border-gray-200 rounded-lg p-4">
+						<h3 class="text-sm font-semibold text-gray-900 mb-4">Informations du trajet</h3>
+						<div class="space-y-3">
+							<div class="grid grid-cols-2 gap-4">
+								<div>
+									<p class="text-xs text-gray-500">Itinéraire</p>
+									<p class="text-sm font-medium text-gray-900">{selectedBooking.rides?.city_from} → {selectedBooking.rides?.city_to}</p>
+								</div>
+								<div>
+									<p class="text-xs text-gray-500">Date du trajet</p>
+									<p class="text-sm font-medium text-gray-900">
+										{new Date(selectedBooking.rides?.ride_date).toLocaleDateString('fr-FR', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+									</p>
+								</div>
+								<div>
+									<p class="text-xs text-gray-500">Places réservées</p>
+									<p class="text-sm font-medium text-gray-900">{selectedBooking.seats_booked}</p>
+								</div>
+								<div>
+									<p class="text-xs text-gray-500">Prix par place</p>
+									<p class="text-sm font-medium text-gray-900">
+										{new Intl.NumberFormat('en-US', {
+											style: 'currency',
+											currency: 'USD'
+										}).format(selectedBooking.rides?.price || 0)}
+									</p>
+								</div>
+								<div>
+									<p class="text-xs text-gray-500">Total</p>
+									<p class="text-sm font-bold text-green-600">
+										{new Intl.NumberFormat('en-US', {
+											style: 'currency',
+											currency: 'USD'
+										}).format((selectedBooking.rides?.price || 0) * selectedBooking.seats_booked)}
+									</p>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<!-- Actions -->
+					<div class="flex gap-2 justify-end">
+						<button
+							on:click={closeBookingDetailsModal}
+							class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
+						>
+							Fermer
+						</button>
+					</div>
 				</div>
 			</div>
 		</div>
