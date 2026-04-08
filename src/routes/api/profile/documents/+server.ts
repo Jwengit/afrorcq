@@ -21,7 +21,6 @@ type DocumentRow = {
   created_at: string;
 };
 
-type VerificationDocumentColumn = 'document_type' | 'doc_type' | 'type' | 'file_url';
 
 function isStatusConstraintError(message: string | undefined): boolean {
   const m = (message || '').toLowerCase();
@@ -29,27 +28,12 @@ function isStatusConstraintError(message: string | undefined): boolean {
     (m.includes('check constraint') && m.includes('status'));
 }
 
-async function getVerificationDocumentColumns(adminClient: ReturnType<typeof createClient>) {
-  const { data, error } = await adminClient
-    .from('information_schema.columns')
-    .select('column_name')
-    .eq('table_schema', 'public')
-    .eq('table_name', 'verification_documents')
-    .in('column_name', ['document_type', 'doc_type', 'type', 'file_url']);
-
-  if (error) {
-    return new Set<VerificationDocumentColumn>(['document_type', 'file_url']);
-  }
-
-  return new Set((data ?? []).map((row) => row.column_name as VerificationDocumentColumn));
-}
-
 function normalizeDocumentType(row: DocumentRow): string {
   return row.document_type ?? row.doc_type ?? row.type ?? 'other';
 }
 
-function buildDocumentInsertPayload(
-  columns: Set<VerificationDocumentColumn>,
+async function tryInsertDocumentRecord(
+  adminClient: unknown,
   input: {
     userId: string;
     documentType: string;
@@ -57,24 +41,110 @@ function buildDocumentInsertPayload(
     storagePath: string;
     mimeType: string | null;
     fileSize: number | null;
-    status: string;
   }
 ) {
-  const payload: Record<string, unknown> = {
-    user_id: input.userId,
-    file_name: input.fileName,
-    storage_path: input.storagePath,
-    mime_type: input.mimeType,
-    file_size: input.fileSize,
-    status: input.status
+  const db = adminClient as {
+    from: (table: string) => {
+      insert: (values: Record<string, unknown>) => Promise<{ error: { message?: string } | null }>;
+    };
   };
 
-  if (columns.has('document_type')) payload.document_type = input.documentType;
-  if (columns.has('doc_type')) payload.doc_type = input.documentType;
-  if (columns.has('type')) payload.type = input.documentType;
-  if (columns.has('file_url')) payload.file_url = input.storagePath;
+  const variants: Array<Record<string, unknown>> = [
+    {
+      user_id: input.userId,
+      document_type: input.documentType,
+      doc_type: input.documentType,
+      type: input.documentType,
+      file_name: input.fileName,
+      file_url: input.storagePath,
+      storage_path: input.storagePath,
+      mime_type: input.mimeType,
+      file_size: input.fileSize
+    },
+    {
+      user_id: input.userId,
+      document_type: input.documentType,
+      doc_type: input.documentType,
+      file_name: input.fileName,
+      file_url: input.storagePath,
+      storage_path: input.storagePath,
+      mime_type: input.mimeType,
+      file_size: input.fileSize
+    },
+    {
+      user_id: input.userId,
+      document_type: input.documentType,
+      type: input.documentType,
+      file_name: input.fileName,
+      file_url: input.storagePath,
+      storage_path: input.storagePath,
+      mime_type: input.mimeType,
+      file_size: input.fileSize
+    },
+    {
+      user_id: input.userId,
+      doc_type: input.documentType,
+      file_name: input.fileName,
+      file_url: input.storagePath,
+      storage_path: input.storagePath,
+      mime_type: input.mimeType,
+      file_size: input.fileSize
+    },
+    {
+      user_id: input.userId,
+      type: input.documentType,
+      file_name: input.fileName,
+      file_url: input.storagePath,
+      storage_path: input.storagePath,
+      mime_type: input.mimeType,
+      file_size: input.fileSize
+    },
+    {
+      user_id: input.userId,
+      document_type: input.documentType,
+      file_name: input.fileName,
+      file_url: input.storagePath,
+      storage_path: input.storagePath,
+      mime_type: input.mimeType,
+      file_size: input.fileSize
+    },
+    {
+      user_id: input.userId,
+      document_type: input.documentType,
+      file_name: input.fileName,
+      storage_path: input.storagePath,
+      mime_type: input.mimeType,
+      file_size: input.fileSize
+    }
+  ];
 
-  return payload;
+  const statusVariants = ['pending', 'Pending'];
+  let lastError: { message?: string } | null = null;
+
+  for (const variant of variants) {
+    for (const status of statusVariants) {
+      const { error } = await db.from('verification_documents').insert({
+        ...variant,
+        status
+      });
+
+      if (!error) {
+        return null;
+      }
+
+      lastError = error;
+      const message = error.message?.toLowerCase() ?? '';
+      const retryableMissingColumn =
+        message.includes('does not exist') || message.includes('could not find the') || message.includes('column');
+      const retryableConstraint = isStatusConstraintError(error.message) || message.includes('file_url');
+
+      if (!(retryableMissingColumn || retryableConstraint)) {
+        return error;
+      }
+    }
+  }
+
+  return lastError;
 }
 
 function getBearerToken(request: Request): string | null {
@@ -132,36 +202,80 @@ export const GET: RequestHandler = async ({ request }) => {
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-    const columns = await getVerificationDocumentColumns(adminClient);
-    const selectFields = [
-      'id',
-      'file_name',
-      'storage_path',
-      'mime_type',
-      'file_size',
-      'status',
-      'admin_note',
-      'reviewed_at',
-      'created_at',
-      ...(columns.has('document_type') ? ['document_type'] : []),
-      ...(columns.has('doc_type') ? ['doc_type'] : []),
-      ...(columns.has('type') ? ['type'] : [])
-    ].join(', ');
+    let docs: DocumentRow[] = [];
 
-    const { data: rawDocs, error } = await adminClient
+    const primaryQuery = await adminClient
       .from('verification_documents')
-      .select(selectFields)
+      .select('id, document_type, file_name, storage_path, mime_type, file_size, status, admin_note, reviewed_at, created_at')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
-    if (error) {
-      return json({ error: error.message || 'Failed to load verification documents.' }, { status: 500 });
-    }
+    if (!primaryQuery.error) {
+      docs = ((primaryQuery.data ?? []) as unknown as DocumentRow[]).map((doc) => ({
+        ...doc,
+        document_type: normalizeDocumentType(doc)
+      }));
 
-    const docs = ((rawDocs ?? []) as DocumentRow[]).map((doc) => ({
-      ...doc,
-      document_type: normalizeDocumentType(doc)
-    }));
+      if (docs.some((doc) => !doc.document_type || doc.document_type === 'other')) {
+        const legacyDocTypeQuery = await adminClient
+          .from('verification_documents')
+          .select('id, doc_type')
+          .eq('user_id', user.id);
+
+        if (!legacyDocTypeQuery.error) {
+          const byId = new Map(
+            ((legacyDocTypeQuery.data ?? []) as unknown as Array<{ id: string; doc_type: string | null }>).map((row) => [row.id, row.doc_type])
+          );
+          docs = docs.map((doc) => ({
+            ...doc,
+            document_type: doc.document_type && doc.document_type !== 'other' ? doc.document_type : byId.get(doc.id) || doc.document_type
+          }));
+        }
+
+        const legacyTypeQuery = await adminClient
+          .from('verification_documents')
+          .select('id, type')
+          .eq('user_id', user.id);
+
+        if (!legacyTypeQuery.error) {
+          const byId = new Map(
+            ((legacyTypeQuery.data ?? []) as unknown as Array<{ id: string; type: string | null }>).map((row) => [row.id, row.type])
+          );
+          docs = docs.map((doc) => ({
+            ...doc,
+            document_type: doc.document_type && doc.document_type !== 'other' ? doc.document_type : byId.get(doc.id) || doc.document_type || 'other'
+          }));
+        }
+      }
+    } else {
+      const fallbackDocTypeQuery = await adminClient
+        .from('verification_documents')
+        .select('id, doc_type, file_name, storage_path, mime_type, file_size, status, admin_note, reviewed_at, created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (!fallbackDocTypeQuery.error) {
+        docs = ((fallbackDocTypeQuery.data ?? []) as unknown as DocumentRow[]).map((doc) => ({
+          ...doc,
+          document_type: normalizeDocumentType(doc)
+        }));
+      } else {
+        const fallbackTypeQuery = await adminClient
+          .from('verification_documents')
+          .select('id, type, file_name, storage_path, mime_type, file_size, status, admin_note, reviewed_at, created_at')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+
+        if (fallbackTypeQuery.error) {
+          return json({ error: fallbackTypeQuery.error.message || 'Failed to load verification documents.' }, { status: 500 });
+        }
+
+        docs = ((fallbackTypeQuery.data ?? []) as unknown as DocumentRow[]).map((doc) => ({
+          ...doc,
+          document_type: normalizeDocumentType(doc)
+        }));
+      }
+    }
 
     let documents = docs ?? [];
     const withUrls = await Promise.all(
@@ -243,33 +357,14 @@ export const POST: RequestHandler = async ({ request }) => {
         return json({ error: uploadError.message || 'Unable to upload document.' }, { status: 500 });
       }
 
-        const columns = await getVerificationDocumentColumns(adminClient);
-        let { error: insertError } = await adminClient.from('verification_documents').insert(
-          buildDocumentInsertPayload(columns, {
-            userId: user.id,
-            documentType,
-            fileName: fileValue.name,
-            storagePath,
-            mimeType: fileValue.type || null,
-            fileSize: fileValue.size,
-            status: 'pending'
-          })
-        );
-
-        if (isStatusConstraintError(insertError?.message)) {
-          const retryLegacyStatus = await adminClient.from('verification_documents').insert(
-            buildDocumentInsertPayload(columns, {
-              userId: user.id,
-              documentType,
-              fileName: fileValue.name,
-              storagePath,
-              mimeType: fileValue.type || null,
-              fileSize: fileValue.size,
-              status: 'Pending'
-            })
-          );
-          insertError = retryLegacyStatus.error;
-        }
+        const insertError = await tryInsertDocumentRecord(adminClient, {
+          userId: user.id,
+          documentType,
+          fileName: fileValue.name,
+          storagePath,
+          mimeType: fileValue.type || null,
+          fileSize: fileValue.size
+        });
 
       if (insertError) {
         await adminClient.storage.from(BUCKET).remove([storagePath]);
@@ -295,33 +390,14 @@ export const POST: RequestHandler = async ({ request }) => {
       return json({ error: 'Invalid payload' }, { status: 400 });
     }
 
-    const columns = await getVerificationDocumentColumns(adminClient);
-    let { error } = await adminClient.from('verification_documents').insert(
-      buildDocumentInsertPayload(columns, {
-        userId: user.id,
-        documentType,
-        fileName,
-        storagePath,
-        mimeType,
-        fileSize: Number.isFinite(fileSize) ? fileSize : null,
-        status: 'pending'
-      })
-    );
-
-    if (isStatusConstraintError(error?.message)) {
-      const retryLegacyStatus = await adminClient.from('verification_documents').insert(
-        buildDocumentInsertPayload(columns, {
-          userId: user.id,
-          documentType,
-          fileName,
-          storagePath,
-          mimeType,
-          fileSize: Number.isFinite(fileSize) ? fileSize : null,
-          status: 'Pending'
-        })
-      );
-      error = retryLegacyStatus.error;
-    }
+    const error = await tryInsertDocumentRecord(adminClient, {
+      userId: user.id,
+      documentType,
+      fileName,
+      storagePath,
+      mimeType,
+      fileSize: Number.isFinite(fileSize) ? fileSize : null
+    });
 
     if (error) {
       return json({ error: error.message }, { status: 500 });

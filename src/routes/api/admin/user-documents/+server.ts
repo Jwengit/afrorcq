@@ -34,6 +34,10 @@ type AdminDocumentRow = {
   updated_at: string;
 };
 
+function normalizeDocumentType(row: AdminDocumentRow): string {
+  return row.document_type ?? row.doc_type ?? row.type ?? 'other';
+}
+
 function getBearerToken(request: Request): string | null {
   const authHeader = request.headers.get('authorization');
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -109,8 +113,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-    let docs: AdminDocumentRow[] | null = null;
-    let error: { message?: string } | null = null;
+    let docs: AdminDocumentRow[] = [];
 
     const primaryQuery = await adminClient
       .from('verification_documents')
@@ -118,49 +121,71 @@ export const GET: RequestHandler = async ({ request, url }) => {
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
-    docs = primaryQuery.data as AdminDocumentRow[] | null;
-    error = primaryQuery.error as { message?: string } | null;
+    if (!primaryQuery.error) {
+      docs = ((primaryQuery.data ?? []) as unknown as AdminDocumentRow[]).map((doc) => ({
+        ...doc,
+        document_type: normalizeDocumentType(doc)
+      }));
 
-    const missingDocumentTypeColumn =
-      Boolean(error?.message) && error?.message?.toLowerCase().includes('document_type');
+      if (docs.some((doc) => !doc.document_type || doc.document_type === 'other')) {
+        const legacyDocTypeQuery = await adminClient
+          .from('verification_documents')
+          .select('id, doc_type')
+          .eq('user_id', userId);
 
-    if (missingDocumentTypeColumn) {
-      const legacyDocTypeQuery = await adminClient
+        if (!legacyDocTypeQuery.error) {
+          const byId = new Map(
+            ((legacyDocTypeQuery.data ?? []) as unknown as Array<{ id: string; doc_type: string | null }>).map((row) => [row.id, row.doc_type])
+          );
+          docs = docs.map((doc) => ({
+            ...doc,
+            document_type: doc.document_type && doc.document_type !== 'other' ? doc.document_type : byId.get(doc.id) || doc.document_type
+          }));
+        }
+
+        const legacyTypeQuery = await adminClient
+          .from('verification_documents')
+          .select('id, type')
+          .eq('user_id', userId);
+
+        if (!legacyTypeQuery.error) {
+          const byId = new Map(
+            ((legacyTypeQuery.data ?? []) as unknown as Array<{ id: string; type: string | null }>).map((row) => [row.id, row.type])
+          );
+          docs = docs.map((doc) => ({
+            ...doc,
+            document_type: doc.document_type && doc.document_type !== 'other' ? doc.document_type : byId.get(doc.id) || doc.document_type || 'other'
+          }));
+        }
+      }
+    } else {
+      const fallbackDocTypeQuery = await adminClient
         .from('verification_documents')
         .select('id, user_id, doc_type, file_name, storage_path, mime_type, file_size, status, admin_note, reviewed_by, reviewed_at, created_at, updated_at')
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
-      if (!legacyDocTypeQuery.error) {
-        docs = ((legacyDocTypeQuery.data ?? []) as AdminDocumentRow[]).map((doc) => ({
+      if (!fallbackDocTypeQuery.error) {
+        docs = ((fallbackDocTypeQuery.data ?? []) as unknown as AdminDocumentRow[]).map((doc) => ({
           ...doc,
-          document_type: doc.doc_type ?? 'other'
+          document_type: normalizeDocumentType(doc)
         }));
-        error = null;
+      } else {
+        const fallbackTypeQuery = await adminClient
+          .from('verification_documents')
+          .select('id, user_id, type, file_name, storage_path, mime_type, file_size, status, admin_note, reviewed_by, reviewed_at, created_at, updated_at')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false });
+
+        if (fallbackTypeQuery.error) {
+          return json({ error: fallbackTypeQuery.error.message || 'Failed to load user verification documents.' }, { status: 500 });
+        }
+
+        docs = ((fallbackTypeQuery.data ?? []) as unknown as AdminDocumentRow[]).map((doc) => ({
+          ...doc,
+          document_type: normalizeDocumentType(doc)
+        }));
       }
-    }
-
-    if (error) {
-      const legacyQuery = await adminClient
-        .from('verification_documents')
-        .select('id, user_id, type, file_name, storage_path, mime_type, file_size, status, admin_note, reviewed_by, reviewed_at, created_at, updated_at')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
-
-      if (legacyQuery.error) {
-        return json({ error: legacyQuery.error.message }, { status: 500 });
-      }
-
-      docs = ((legacyQuery.data ?? []) as AdminDocumentRow[]).map((doc) => ({
-        ...doc,
-        document_type: doc.type ?? 'other'
-      }));
-      error = null;
-    }
-
-    if (error) {
-      const queryErrorMessage = (error as { message?: string } | null)?.message;
-      return json({ error: queryErrorMessage || 'Failed to load user verification documents.' }, { status: 500 });
     }
 
     const documentsWithUrls = await Promise.all(
