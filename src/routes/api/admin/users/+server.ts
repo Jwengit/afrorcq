@@ -20,18 +20,12 @@ async function isRequesterAdmin(token: string): Promise<{ ok: boolean; userId?: 
 		return { ok: false };
 	}
 
-	const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-		global: {
-			headers: {
-				authorization: `Bearer ${token}`
-			}
-		}
-	});
+	const anonClient = createClient(supabaseUrl, supabaseAnonKey);
 
 	const {
 		data: { user },
 		error: userError
-	} = await userClient.auth.getUser();
+	} = await anonClient.auth.getUser(token);
 
 	if (userError || !user) {
 		return { ok: false };
@@ -42,7 +36,7 @@ async function isRequesterAdmin(token: string): Promise<{ ok: boolean; userId?: 
 		return { ok: true, userId: user.id, email: user.email ?? undefined };
 	}
 
-	const { data: profile } = await userClient
+	const { data: profile } = await anonClient
 		.from('profiles')
 		.select('is_admin')
 		.eq('id', user.id)

@@ -304,26 +304,66 @@
 			{/if}
 
 			<!-- Stats cards -->
-			<div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-				<div class="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
-					<p class="text-sm text-gray-500 mb-1">Utilisateurs</p>
-					<p class="text-3xl font-bold text-gray-900">{stats.totalUsers}</p>
+			<div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+				<!-- Utilisateurs -->
+				<div class="bg-white rounded-xl border border-gray-100 p-4 shadow-sm flex items-center gap-3">
+					<div class="shrink-0 w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+						<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+						</svg>
+					</div>
+					<div>
+						<p class="text-xs text-gray-500">Utilisateurs</p>
+						<p class="text-2xl font-bold text-gray-900">{stats.totalUsers}</p>
+					</div>
 				</div>
-				<div class="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
-					<p class="text-sm text-gray-500 mb-1">Trajets actifs</p>
-					<p class="text-3xl font-bold text-gray-900">{stats.activeRides}</p>
+				<!-- Trajets actifs -->
+				<div class="bg-white rounded-xl border border-gray-100 p-4 shadow-sm flex items-center gap-3">
+					<div class="shrink-0 w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center">
+						<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+						</svg>
+					</div>
+					<div>
+						<p class="text-xs text-gray-500">Trajets actifs</p>
+						<p class="text-2xl font-bold text-gray-900">{stats.activeRides}</p>
+					</div>
 				</div>
-				<div class="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
-					<p class="text-sm text-gray-500 mb-1">Trajets termines</p>
-					<p class="text-3xl font-bold text-gray-900">{stats.completedRides}</p>
+				<!-- Trajets terminés -->
+				<div class="bg-white rounded-xl border border-gray-100 p-4 shadow-sm flex items-center gap-3">
+					<div class="shrink-0 w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
+						<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+						</svg>
+					</div>
+					<div>
+						<p class="text-xs text-gray-500">Terminés</p>
+						<p class="text-2xl font-bold text-gray-900">{stats.completedRides}</p>
+					</div>
 				</div>
-				<div class="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
-					<p class="text-sm text-gray-500 mb-1">Reservations en cours</p>
-					<p class="text-3xl font-bold text-gray-900">{stats.reservationsInProgress}</p>
+				<!-- Réservations -->
+				<div class="bg-white rounded-xl border border-gray-100 p-4 shadow-sm flex items-center gap-3">
+					<div class="shrink-0 w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center">
+						<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+						</svg>
+					</div>
+					<div>
+						<p class="text-xs text-gray-500">Réservations</p>
+						<p class="text-2xl font-bold text-gray-900">{stats.reservationsInProgress}</p>
+					</div>
 				</div>
-				<div class="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
-					<p class="text-sm text-gray-500 mb-1">Alertes</p>
-					<p class="text-3xl font-bold {stats.alerts.total > 0 ? 'text-orange-500' : 'text-gray-900'}">{stats.alerts.total}</p>
+				<!-- Alertes -->
+				<div class="bg-white rounded-xl border p-4 shadow-sm flex items-center gap-3 {stats.alerts.total > 0 ? 'border-orange-200' : 'border-gray-100'}">
+					<div class="shrink-0 w-10 h-10 rounded-lg flex items-center justify-center {stats.alerts.total > 0 ? 'bg-orange-50' : 'bg-gray-100'}">
+						<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 {stats.alerts.total > 0 ? 'text-orange-500' : 'text-gray-400'}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+						</svg>
+					</div>
+					<div>
+						<p class="text-xs text-gray-500">Alertes</p>
+						<p class="text-2xl font-bold {stats.alerts.total > 0 ? 'text-orange-500' : 'text-gray-900'}">{stats.alerts.total}</p>
+					</div>
 				</div>
 			</div>
 
@@ -350,33 +390,108 @@
 
 				<div class="p-6">
 					{#if activeTab === 'overview'}
-						<div class="grid md:grid-cols-2 gap-4">
-							<div class="rounded-xl border border-gray-100 bg-gray-50 p-4">
-								<p class="text-sm text-gray-500 mb-1">Etat des trajets</p>
-								<p class="text-base font-semibold text-gray-900">
-									{stats.activeRides} actifs / {stats.completedRides} termines
-								</p>
+						<div class="space-y-6">
+							<!-- Titre section -->
+							<div>
+								<h2 class="text-base font-semibold text-gray-900">Aperçu de la plateforme</h2>
+								<p class="text-sm text-gray-500 mt-0.5">Indicateurs clés en temps réel.</p>
 							</div>
-							<div class="rounded-xl border border-gray-100 bg-gray-50 p-4">
-								<p class="text-sm text-gray-500 mb-1">Reservations en cours</p>
-								<p class="text-base font-semibold text-gray-900">{stats.reservationsInProgress}</p>
+
+							<!-- Trajets -->
+							<div>
+								<h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Trajets</h3>
+								<div class="grid md:grid-cols-2 gap-4">
+									<div class="rounded-xl border border-green-200 bg-green-50 p-5">
+										<div class="flex items-center justify-between mb-2">
+											<p class="text-sm font-semibold text-green-800">Trajets actifs</p>
+											<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-700">{stats.activeRides}</span>
+										</div>
+										<p class="text-xs text-green-700 mb-3">Date de départ à venir — disponibles à la réservation.</p>
+										{#if stats.activeRides + stats.completedRides > 0}
+											<div>
+												<div class="flex justify-between text-xs text-green-700 mb-1">
+													<span>Part des actifs</span>
+													<span>{Math.round(stats.activeRides / (stats.activeRides + stats.completedRides) * 100)} %</span>
+												</div>
+												<div class="w-full bg-green-200 rounded-full h-1.5">
+													<div class="bg-green-500 h-1.5 rounded-full transition-all" style="width: {Math.round(stats.activeRides / (stats.activeRides + stats.completedRides) * 100)}%"></div>
+												</div>
+											</div>
+										{/if}
+									</div>
+									<div class="rounded-xl border border-gray-200 bg-gray-50 p-5">
+										<div class="flex items-center justify-between mb-2">
+											<p class="text-sm font-semibold text-gray-700">Trajets terminés</p>
+											<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-gray-200 text-gray-600">{stats.completedRides}</span>
+										</div>
+										<p class="text-xs text-gray-500 mb-1">Date de départ passée.</p>
+										<p class="text-xs text-gray-500">
+											Total créés : <span class="font-semibold text-gray-700">{stats.activeRides + stats.completedRides}</span>
+										</p>
+									</div>
+								</div>
 							</div>
-							<div class="rounded-xl border border-gray-100 bg-gray-50 p-4">
-								<p class="text-sm text-gray-500 mb-1">Revenus</p>
-								{#if stats.revenue.hasPaymentIntegration}
-									<p class="text-base font-semibold text-gray-900">Paiements integres</p>
-								{:else}
-									<p class="text-base font-semibold text-gray-900">
-										Estimation: {stats.revenue.estimatedRevenue.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} EUR
+
+							<!-- Réservations + Revenus -->
+							<div class="grid md:grid-cols-2 gap-4">
+								<div class="rounded-xl border border-purple-200 bg-purple-50 p-5">
+									<div class="flex items-center justify-between mb-2">
+										<p class="text-sm font-semibold text-purple-800">Réservations en cours</p>
+										<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-700">{stats.reservationsInProgress}</span>
+									</div>
+									<p class="text-xs text-purple-700">Statut <strong>En attente</strong> ou <strong>Confirmée</strong> — départ pas encore effectué.</p>
+								</div>
+								<div class="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
+									<div class="flex items-center justify-between mb-2">
+										<p class="text-sm font-semibold text-emerald-800">Revenus estimés</p>
+										{#if stats.revenue.hasPaymentIntegration}
+											<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-200 text-emerald-700">Intégré</span>
+										{:else}
+											<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">Estimation</span>
+										{/if}
+									</div>
+									<p class="text-2xl font-bold text-emerald-700">
+										{stats.revenue.estimatedRevenue.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
 									</p>
-									<p class="text-xs text-gray-500 mt-1">Paiements non integres, estimation basee sur les reservations confirmees.</p>
-								{/if}
+									{#if !stats.revenue.hasPaymentIntegration}
+										<p class="text-xs text-emerald-700 mt-1">Calculé sur les réservations confirmées (prix × sièges). Paiements non intégrés.</p>
+									{/if}
+								</div>
 							</div>
-							<div class="rounded-xl border border-gray-100 bg-gray-50 p-4">
-								<p class="text-sm text-gray-500 mb-1">Alertes</p>
-								<p class="text-base font-semibold text-gray-900">{stats.alerts.total} au total</p>
-								<p class="text-xs text-gray-600 mt-1">Signalements: {stats.alerts.reports}</p>
-								<p class="text-xs text-gray-600">Comptes a verifier: {stats.alerts.accountsToVerify}</p>
+
+							<!-- Alertes -->
+							<div>
+								<h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Alertes</h3>
+								<div class="grid md:grid-cols-2 gap-4">
+									<div class="rounded-xl border p-5 {stats.alerts.reports > 0 ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-gray-50'}">
+										<div class="flex items-center justify-between mb-2">
+											<p class="text-sm font-semibold {stats.alerts.reports > 0 ? 'text-red-800' : 'text-gray-600'}">Signalements</p>
+											<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold {stats.alerts.reports > 0 ? 'bg-red-100 text-red-700' : 'bg-gray-200 text-gray-600'}">{stats.alerts.reports}</span>
+										</div>
+										{#if stats.alerts.reports === 0}
+											<p class="text-xs text-gray-500">Aucun signalement en attente.</p>
+										{:else}
+											<p class="text-xs text-red-700 mb-2">Des signalements nécessitent une action.</p>
+											<button type="button" on:click={() => setTab('reports')} class="text-xs font-medium text-red-700 underline hover:text-red-900 cursor-pointer">
+												Voir les signalements →
+											</button>
+										{/if}
+									</div>
+									<div class="rounded-xl border p-5 {stats.alerts.accountsToVerify > 0 ? 'border-orange-200 bg-orange-50' : 'border-gray-200 bg-gray-50'}">
+										<div class="flex items-center justify-between mb-2">
+											<p class="text-sm font-semibold {stats.alerts.accountsToVerify > 0 ? 'text-orange-800' : 'text-gray-600'}">Comptes à vérifier</p>
+											<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold {stats.alerts.accountsToVerify > 0 ? 'bg-orange-100 text-orange-700' : 'bg-gray-200 text-gray-600'}">{stats.alerts.accountsToVerify}</span>
+										</div>
+										{#if stats.alerts.accountsToVerify === 0}
+											<p class="text-xs text-gray-500">Tous les comptes sont vérifiés.</p>
+										{:else}
+											<p class="text-xs text-orange-700 mb-2">Profils non vérifiés ou sans entrée dans la table profiles.</p>
+											<button type="button" on:click={() => setTab('users')} class="text-xs font-medium text-orange-700 underline hover:text-orange-900 cursor-pointer">
+												Voir les utilisateurs →
+											</button>
+										{/if}
+									</div>
+								</div>
 							</div>
 						</div>
 					{:else if activeTab === 'users'}
