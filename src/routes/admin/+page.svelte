@@ -38,6 +38,44 @@
 	let selectedProfile: AdminUser | null = null;
 	let profileRides: any[] = [];
 	let profileBookings: any[] = [];
+	type AdminVerificationDocument = {
+		id: string;
+		user_id: string;
+		document_type: string;
+		file_name: string;
+		storage_path: string;
+		mime_type: string | null;
+		file_size: number | null;
+		status: 'pending' | 'approved' | 'rejected';
+		admin_note: string | null;
+		reviewed_by: string | null;
+		reviewed_at: string | null;
+		created_at: string;
+		updated_at: string;
+		signed_url?: string | null;
+	};
+	let profileDocuments: AdminVerificationDocument[] = [];
+	let profileDocumentsLoading = false;
+	let profileDocumentsError = '';
+	let profileDocumentsMessage = '';
+	let profileDocumentActionId: string | null = null;
+	const documentTypeLabelMap: Record<string, string> = {
+		identity_card: 'Identity card',
+		driver_license: 'Driver license',
+		proof_of_address: 'Proof of address',
+		insurance: 'Insurance proof',
+		vehicle_registration: 'Vehicle registration',
+		other: 'Other document',
+		identity: 'Identity card',
+		id_card: 'Identity card',
+		license: 'Driver license',
+		driving_license: 'Driver license',
+		proof_address: 'Proof of address',
+		residence_proof: 'Proof of address',
+		insurance_proof: 'Insurance proof',
+		registration: 'Vehicle registration',
+		vehicle_papers: 'Vehicle registration'
+	};
 	let ridesLoading = false;
 	let statusActionInProgress = false;
 	let statusActionMessage = '';
@@ -467,7 +505,11 @@
 		showProfileModal = true;
 		profileRides = [];
 		profileBookings = [];
+		profileDocuments = [];
+		profileDocumentsError = '';
+		profileDocumentsMessage = '';
 		ridesLoading = true;
+		profileDocumentsLoading = true;
 
 		const {
 			data: { session }
@@ -491,7 +533,118 @@
 			profileBookings = payload.bookings ?? [];
 		}
 
+		await loadProfileDocuments(user.id);
+
 		ridesLoading = false;
+	}
+
+	async function loadProfileDocuments(userId: string) {
+		profileDocumentsLoading = true;
+		profileDocumentsError = '';
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			profileDocumentsError = 'Session expired. Please sign in again.';
+			profileDocuments = [];
+			profileDocumentsLoading = false;
+			return;
+		}
+
+		const response = await fetch(
+			`/api/admin/user-documents?userId=${encodeURIComponent(userId)}`,
+			{
+				method: 'GET',
+				headers: {
+					Authorization: `Bearer ${session.access_token}`
+				}
+			}
+		);
+
+		const payload = await response.json();
+		if (!response.ok) {
+			profileDocumentsError = payload?.error || 'Unable to load verification documents.';
+			profileDocuments = [];
+			profileDocumentsLoading = false;
+			return;
+		}
+
+		profileDocuments = (payload?.documents ?? []) as AdminVerificationDocument[];
+		profileDocumentsLoading = false;
+	}
+
+	async function reviewProfileDocument(
+		document: AdminVerificationDocument,
+		status: 'approved' | 'rejected'
+	) {
+		const selectedProfileId = selectedProfile?.id;
+		if (!selectedProfileId) return;
+
+		profileDocumentActionId = document.id;
+		profileDocumentsMessage = '';
+		profileDocumentsError = '';
+
+		const note =
+			status === 'rejected'
+				? (prompt('Add a rejection note (required):') ?? '').trim()
+				: (prompt('Optional admin note:') ?? '').trim();
+
+		if (status === 'rejected' && !note) {
+			profileDocumentsError = 'A rejection note is required.';
+			profileDocumentActionId = null;
+			return;
+		}
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			profileDocumentsError = 'Session expired. Please sign in again.';
+			profileDocumentActionId = null;
+			return;
+		}
+
+		const response = await fetch('/api/admin/user-documents', {
+			method: 'PATCH',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${session.access_token}`
+			},
+			body: JSON.stringify({
+				documentId: document.id,
+				status,
+				note
+			})
+		});
+
+		const payload = await response.json();
+		if (!response.ok) {
+			profileDocumentsError = payload?.error || 'Unable to review document.';
+			profileDocumentActionId = null;
+			return;
+		}
+
+		profileDocumentsMessage =
+			status === 'approved'
+				? 'Document approved and account verification updated.'
+				: 'Document rejected and account marked unverified.';
+
+		await loadProfileDocuments(selectedProfileId);
+		await loadUsers();
+		const refreshed = users.find((u) => u.id === selectedProfileId);
+		if (refreshed) {
+			selectedProfile = refreshed;
+		}
+
+		profileDocumentActionId = null;
+	}
+
+	function documentTypeLabel(value: string | null | undefined): string {
+		const normalized = (value || 'other').trim().toLowerCase().replace(/[\s-]+/g, '_');
+		return documentTypeLabelMap[normalized] || normalized.replaceAll('_', ' ');
 	}
 
 	function closeProfileModal() {
@@ -499,6 +652,10 @@
 		selectedProfile = null;
 		profileRides = [];
 		profileBookings = [];
+		profileDocuments = [];
+		profileDocumentsError = '';
+		profileDocumentsMessage = '';
+		profileDocumentActionId = null;
 		statusActionMessage = '';
 	}
 
@@ -2667,11 +2824,11 @@
 								<p class="font-medium text-gray-900">{selectedProfile.phone_number || '-'}</p>
 							</div>
 							<div>
-								<p class="text-gray-500">Note moyenne</p>
+								<p class="text-gray-500">Average rating</p>
 								<p class="font-medium text-gray-900">{selectedProfile.average_rating ? selectedProfile.average_rating.toFixed(1) + ' ⭐' : '-'}</p>
 							</div>
 							<div>
-								<p class="text-gray-500">Inscription</p>
+								<p class="text-gray-500">Created</p>
 								<p class="font-medium text-gray-900">{selectedProfile.created_at ? new Date(selectedProfile.created_at).toLocaleDateString('en-US') : '-'}</p>
 							</div>
 							<div>
@@ -2694,7 +2851,7 @@
 								on:click={() => changeUserStatus('active')}
 								class="w-full px-4 py-2 rounded-lg border text-sm font-medium {selectedProfile.user_status === 'active' ? 'border-green-300 bg-green-50 text-green-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'} disabled:opacity-50"
 							>
-								{selectedProfile.user_status === 'active' ? '✓' : ''} Activer le compte
+								{selectedProfile.user_status === 'active' ? '✓' : ''} Activate account
 							</button>
 							<button
 								type="button"
@@ -2721,6 +2878,69 @@
 								Reset password
 							</button>
 						</div>
+					</div>
+
+					<!-- Verification Documents -->
+					<div>
+						<h3 class="text-sm font-semibold text-gray-900 mb-3">Verification documents</h3>
+						{#if profileDocumentsError}
+							<p class="text-sm bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 mb-3">{profileDocumentsError}</p>
+						{/if}
+						{#if profileDocumentsMessage}
+							<p class="text-sm bg-green-50 border border-green-200 text-green-700 rounded-lg px-3 py-2 mb-3">{profileDocumentsMessage}</p>
+						{/if}
+
+						{#if profileDocumentsLoading}
+							<p class="text-sm text-gray-500">Loading verification documents...</p>
+						{:else if profileDocuments.length === 0}
+							<p class="text-sm text-gray-500 italic">No verification documents uploaded.</p>
+						{:else}
+							<div class="space-y-2">
+								{#each profileDocuments as doc}
+									<div class="border border-gray-200 rounded-lg p-3">
+										<div class="flex items-start justify-between gap-3">
+											<div>
+												<p class="text-sm font-semibold text-gray-900">{documentTypeLabel(doc.document_type)}</p>
+												<p class="text-xs text-gray-500">{doc.file_name} • {new Date(doc.created_at).toLocaleDateString('en-US')}</p>
+												{#if doc.admin_note}
+													<p class="text-xs text-red-600 mt-1">Note: {doc.admin_note}</p>
+												{/if}
+											</div>
+											<div class="flex items-center gap-2">
+												<span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+													doc.status === 'approved'
+														? 'bg-green-100 text-green-700'
+														: doc.status === 'rejected'
+															? 'bg-red-100 text-red-700'
+															: 'bg-amber-100 text-amber-700'
+												}`}>
+													{doc.status === 'approved' ? 'Approved' : doc.status === 'rejected' ? 'Rejected' : 'Pending'}
+												</span>
+												{#if doc.signed_url}
+													<a href={doc.signed_url} target="_blank" rel="noopener noreferrer" class="px-2 py-1 rounded text-xs border border-blue-200 text-blue-700 hover:bg-blue-50">Open</a>
+												{/if}
+												<button
+													type="button"
+													disabled={profileDocumentActionId === doc.id}
+													on:click={() => reviewProfileDocument(doc, 'approved')}
+													class="px-2 py-1 rounded text-xs border border-green-200 text-green-700 hover:bg-green-50 disabled:opacity-50"
+												>
+													Approve
+												</button>
+												<button
+													type="button"
+													disabled={profileDocumentActionId === doc.id}
+													on:click={() => reviewProfileDocument(doc, 'rejected')}
+													class="px-2 py-1 rounded text-xs border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
+												>
+													Reject
+												</button>
+											</div>
+										</div>
+									</div>
+								{/each}
+							</div>
+						{/if}
 					</div>
 
 					<!-- Rides History -->

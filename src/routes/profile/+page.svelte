@@ -28,6 +28,20 @@
 		status: string;
 	};
 
+	type VerificationDocument = {
+		id: string;
+		document_type: string;
+		file_name: string;
+		storage_path: string;
+		mime_type: string | null;
+		file_size: number | null;
+		status: 'pending' | 'approved' | 'rejected';
+		admin_note: string | null;
+		reviewed_at: string | null;
+		created_at: string;
+		signed_url?: string | null;
+	};
+
 	let currentUser: User | null = null;
 	let loading = true;
 	let saving = false;
@@ -62,6 +76,43 @@
 	let formData = { ...profile };
 	let selectedFile: File | null = null;
 	let previewUrl = '';
+
+	// Verification documents
+	let documentsLoading = false;
+	let documentsError = '';
+	let documentsMessage = '';
+	let uploadingDocument = false;
+	let deletingDocumentId: string | null = null;
+	let verificationDocuments: VerificationDocument[] = [];
+	let selectedDocumentType = 'identity_card';
+	let selectedDocumentFile: File | null = null;
+
+	const documentTypeOptions = [
+		{ value: 'identity_card', label: 'Identity card' },
+		{ value: 'driver_license', label: 'Driver license' },
+		{ value: 'proof_of_address', label: 'Proof of address' },
+		{ value: 'insurance', label: 'Insurance proof' },
+		{ value: 'vehicle_registration', label: 'Vehicle registration' },
+		{ value: 'other', label: 'Other document' }
+	];
+
+	const documentTypeLabelMap: Record<string, string> = {
+		identity_card: 'Identity card',
+		driver_license: 'Driver license',
+		proof_of_address: 'Proof of address',
+		insurance: 'Insurance proof',
+		vehicle_registration: 'Vehicle registration',
+		other: 'Other document',
+		identity: 'Identity card',
+		id_card: 'Identity card',
+		license: 'Driver license',
+		driving_license: 'Driver license',
+		proof_address: 'Proof of address',
+		residence_proof: 'Proof of address',
+		insurance_proof: 'Insurance proof',
+		registration: 'Vehicle registration',
+		vehicle_papers: 'Vehicle registration'
+	};
 
 	// Available options
 	const genderOptions = [
@@ -267,6 +318,179 @@
 			console.log('No profile found, will create one');
 		} finally {
 			loading = false;
+			await loadVerificationDocuments();
+		}
+	}
+
+	async function getSessionAccessToken(): Promise<string | null> {
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		return session?.access_token ?? null;
+	}
+
+	function formatFileSize(fileSize: number | null): string {
+		if (!fileSize || fileSize <= 0) return '-';
+		if (fileSize < 1024) return `${fileSize} B`;
+		if (fileSize < 1024 * 1024) return `${(fileSize / 1024).toFixed(1)} KB`;
+		return `${(fileSize / (1024 * 1024)).toFixed(1)} MB`;
+	}
+
+	function documentStatusClass(status: VerificationDocument['status']): string {
+		if (status === 'approved') return 'bg-green-100 text-green-700';
+		if (status === 'rejected') return 'bg-red-100 text-red-700';
+		return 'bg-amber-100 text-amber-700';
+	}
+
+	function documentStatusLabel(status: VerificationDocument['status']): string {
+		if (status === 'approved') return 'Approved';
+		if (status === 'rejected') return 'Rejected';
+		return 'Pending review';
+	}
+
+	function documentTypeLabel(value: string | null | undefined): string {
+		const normalized = (value || 'other').trim().toLowerCase().replace(/[\s-]+/g, '_');
+		return documentTypeLabelMap[normalized] || normalized.replaceAll('_', ' ');
+	}
+
+	async function loadVerificationDocuments() {
+		if (!currentUser) {
+			verificationDocuments = [];
+			return;
+		}
+
+		documentsLoading = true;
+		documentsError = '';
+
+		try {
+			const token = await getSessionAccessToken();
+			if (!token) {
+				documentsError = 'Session expired. Please sign in again.';
+				verificationDocuments = [];
+				return;
+			}
+
+			const response = await fetch('/api/profile/documents', {
+				method: 'GET',
+				headers: {
+					Authorization: `Bearer ${token}`
+				}
+			});
+
+			const payload = await response.json();
+			if (!response.ok) {
+				documentsError = payload?.error || 'Unable to load verification documents.';
+				verificationDocuments = [];
+				return;
+			}
+
+			verificationDocuments = (payload?.documents ?? []) as VerificationDocument[];
+		} catch (error) {
+			documentsError = error instanceof Error ? error.message : 'Unable to load verification documents.';
+			verificationDocuments = [];
+		} finally {
+			documentsLoading = false;
+		}
+	}
+
+	function handleVerificationDocumentSelect(event: Event) {
+		const target = event.target as HTMLInputElement;
+		selectedDocumentFile = target.files?.[0] ?? null;
+		documentsMessage = '';
+		documentsError = '';
+	}
+
+	async function uploadVerificationDocument() {
+		if (!currentUser || !selectedDocumentFile) return;
+
+		if (selectedDocumentFile.size > 10 * 1024 * 1024) {
+			documentsError = 'Document size must be 10MB or less.';
+			return;
+		}
+
+		uploadingDocument = true;
+		documentsError = '';
+		documentsMessage = '';
+
+		try {
+			const token = await getSessionAccessToken();
+			if (!token) {
+				documentsError = 'Session expired. Please sign in again.';
+				return;
+			}
+
+			const formData = new FormData();
+			formData.append('documentType', selectedDocumentType);
+			formData.append('file', selectedDocumentFile);
+
+			const response = await fetch('/api/profile/documents', {
+				method: 'POST',
+				headers: {
+					Authorization: `Bearer ${token}`
+				},
+				body: formData
+			});
+
+			const payload = await response.json();
+			if (!response.ok) {
+				documentsError = payload?.error || 'Unable to register document upload.';
+				return;
+			}
+
+			documentsMessage = 'Document uploaded. It is now pending admin review.';
+			selectedDocumentFile = null;
+			await loadVerificationDocuments();
+		} catch (error) {
+			documentsError = error instanceof Error ? error.message : 'Unable to upload document.';
+		} finally {
+			uploadingDocument = false;
+		}
+	}
+
+	async function deleteVerificationDocument(document: VerificationDocument) {
+		if (document.status !== 'pending') {
+			documentsError = 'Only pending documents can be deleted.';
+			return;
+		}
+
+		if (!confirm(`Delete ${document.file_name}?`)) {
+			return;
+		}
+
+		deletingDocumentId = document.id;
+		documentsError = '';
+		documentsMessage = '';
+
+		try {
+			const token = await getSessionAccessToken();
+			if (!token) {
+				documentsError = 'Session expired. Please sign in again.';
+				return;
+			}
+
+			const response = await fetch(
+				`/api/profile/documents?documentId=${encodeURIComponent(document.id)}`,
+				{
+					method: 'DELETE',
+					headers: {
+						Authorization: `Bearer ${token}`
+					}
+				}
+			);
+
+			const payload = await response.json();
+			if (!response.ok) {
+				documentsError = payload?.error || 'Unable to delete document.';
+				return;
+			}
+
+			documentsMessage = 'Document deleted.';
+			await loadVerificationDocuments();
+		} catch (error) {
+			documentsError = error instanceof Error ? error.message : 'Unable to delete document.';
+		} finally {
+			deletingDocumentId = null;
 		}
 	}
 
@@ -545,6 +769,105 @@
 			</div>
 
 			<!-- Profile Form -->
+			<div class="profile-card p-7 mb-6">
+				<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+					<div>
+						<h2 class="text-xl font-semibold text-slate-900">Verification Documents</h2>
+						<p class="text-sm text-slate-600 mt-1">Upload required documents so admins can verify your account.</p>
+					</div>
+					<div class="text-sm text-slate-500">
+						Accepted: PDF, PNG, JPG, JPEG, WEBP (max 10MB)
+					</div>
+				</div>
+
+				<div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+					<select
+						bind:value={selectedDocumentType}
+						class="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+					>
+						{#each documentTypeOptions as option (option.value)}
+							<option value={option.value}>{option.label}</option>
+						{/each}
+					</select>
+					<input
+						type="file"
+						accept=".pdf,.png,.jpg,.jpeg,.webp"
+						on:change={handleVerificationDocumentSelect}
+						class="text-sm text-gray-600 file:mr-3 file:rounded-md file:border-0 file:bg-emerald-100 file:px-3 file:py-2 file:font-semibold file:text-emerald-700"
+					/>
+					<button
+						type="button"
+						on:click={uploadVerificationDocument}
+						disabled={!selectedDocumentFile || uploadingDocument}
+						class="px-4 py-2 rounded-md bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50"
+					>
+						{uploadingDocument ? 'Uploading...' : 'Upload document'}
+					</button>
+				</div>
+
+				{#if documentsError}
+					<p class="mt-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">{documentsError}</p>
+				{/if}
+				{#if documentsMessage}
+					<p class="mt-3 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2">{documentsMessage}</p>
+				{/if}
+
+				<div class="mt-4 border border-slate-200 rounded-xl overflow-hidden">
+					{#if documentsLoading}
+						<p class="px-4 py-3 text-sm text-slate-500">Loading documents...</p>
+					{:else if verificationDocuments.length === 0}
+						<p class="px-4 py-3 text-sm text-slate-500">No documents uploaded yet.</p>
+					{:else}
+						<table class="w-full text-sm">
+							<thead class="bg-slate-50 text-slate-600 text-left">
+								<tr>
+									<th class="px-4 py-3 font-medium">Type</th>
+									<th class="px-4 py-3 font-medium">File</th>
+									<th class="px-4 py-3 font-medium">Status</th>
+									<th class="px-4 py-3 font-medium">Uploaded</th>
+									<th class="px-4 py-3 font-medium">Actions</th>
+								</tr>
+							</thead>
+							<tbody class="divide-y divide-slate-100">
+								{#each verificationDocuments as doc (doc.id)}
+									<tr>
+										<td class="px-4 py-3">{documentTypeLabel(doc.document_type)}</td>
+										<td class="px-4 py-3">
+											<p class="font-medium text-slate-900">{doc.file_name}</p>
+											<p class="text-xs text-slate-500">{formatFileSize(doc.file_size)}</p>
+											{#if doc.admin_note}
+												<p class="text-xs text-red-600 mt-1">Admin note: {doc.admin_note}</p>
+											{/if}
+										</td>
+										<td class="px-4 py-3">
+											<span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${documentStatusClass(doc.status)}`}>
+												{documentStatusLabel(doc.status)}
+											</span>
+										</td>
+										<td class="px-4 py-3 text-slate-600">{new Date(doc.created_at).toLocaleDateString('en-US')}</td>
+										<td class="px-4 py-3">
+											<div class="flex gap-2">
+												{#if doc.signed_url}
+													<a href={doc.signed_url} target="_blank" rel="noopener noreferrer" class="px-2 py-1 rounded border border-blue-200 text-blue-700 hover:bg-blue-50">Open</a>
+												{/if}
+												<button
+													type="button"
+													on:click={() => deleteVerificationDocument(doc)}
+													disabled={doc.status !== 'pending' || deletingDocumentId === doc.id}
+													class="px-2 py-1 rounded border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
+												>
+													{deletingDocumentId === doc.id ? 'Deleting...' : 'Delete'}
+												</button>
+											</div>
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					{/if}
+				</div>
+			</div>
+
 			<div class="profile-card p-7">
 				{#if !isEditing}
 					<!-- View Mode -->

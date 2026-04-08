@@ -120,7 +120,7 @@ export const GET: RequestHandler = async ({ request }) => {
 		if (ids.length > 0) {
 			const { data: profileRows, error: profilesError } = await adminClient
 				.from('profiles')
-				.select('id, first_name, last_name, email, phone_number, is_admin, is_verified, created_at')
+				.select('id, first_name, last_name, email, phone_number, is_admin, is_verified, user_status, average_rating, created_at')
 				.in('id', ids);
 
 			if (profilesError) {
