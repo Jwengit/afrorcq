@@ -10,8 +10,11 @@ type ProfileRow = {
 	first_name: string | null;
 	last_name: string | null;
 	email: string | null;
+	phone_number: string | null;
 	is_admin: boolean | null;
 	is_verified: boolean | null;
+	user_status: string | null;
+	average_rating: number | null;
 	created_at: string | null;
 };
 
@@ -117,7 +120,7 @@ export const GET: RequestHandler = async ({ request }) => {
 		if (ids.length > 0) {
 			const { data: profileRows, error: profilesError } = await adminClient
 				.from('profiles')
-				.select('id, first_name, last_name, email, is_admin, is_verified, created_at')
+				.select('id, first_name, last_name, email, phone_number, is_admin, is_verified, user_status, average_rating, created_at')
 				.in('id', ids);
 
 			if (profilesError) {
@@ -143,8 +146,11 @@ export const GET: RequestHandler = async ({ request }) => {
 				first_name: profile?.first_name ?? parsedFirstName,
 				last_name: profile?.last_name ?? parsedLastName,
 				email: profile?.email ?? authUser.email,
+				phone_number: profile?.phone_number ?? null,
 				is_admin: profile?.is_admin ?? false,
 				is_verified: profile?.is_verified ?? false,
+				user_status: profile?.user_status ?? 'active',
+				average_rating: profile?.average_rating ?? null,
 				created_at: profile?.created_at ?? authUser.created_at,
 				has_profile: Boolean(profile)
 			};

@@ -16,8 +16,11 @@
 		first_name: string | null;
 		last_name: string | null;
 		email: string | null;
+		phone_number: string | null;
 		is_admin: boolean | null;
 		is_verified: boolean | null;
+		user_status: string | null;
+		average_rating: number | null;
 		created_at: string | null;
 		has_profile?: boolean;
 	};
@@ -29,6 +32,48 @@
 	let users: AdminUser[] = [];
 	let actionUserId: string | null = null;
 	let statsError = '';
+
+	// Modal states
+	let showProfileModal = false;
+	let selectedProfile: AdminUser | null = null;
+	let profileRides: any[] = [];
+	let profileBookings: any[] = [];
+	let ridesLoading = false;
+	let statusActionInProgress = false;
+	let statusActionMessage = '';
+
+	// Rides management
+	type AdminRide = {
+		id: string;
+		city_from: string;
+		city_to: string;
+		ride_date: string;
+		price: number;
+		available_seats: number;
+		driver_id: string;
+		status: string;
+		bookedSeats: number;
+		profiles: {
+			first_name: string | null;
+			last_name: string | null;
+			email: string | null;
+		};
+	};
+
+	let ridesManagementLoading = false;
+	let ridesManagementError = '';
+	let ridesManagementActionMessage = '';
+	let rides: AdminRide[] = [];
+	let filteredRides: AdminRide[] = [];
+	let rideFilterCityFrom = '';
+	let rideFilterCityTo = '';
+	let rideFilterStatus = '';
+	let rideFilterFromDate = '';
+	let selectedRideForBookings: AdminRide | null = null;
+	let showRideBookingsModal = false;
+	let rideBookings: any[] = [];
+	let rideBookingsLoading = false;
+	let deletingRideId: string | null = null;
 
 	// Dashboard overview stats
 	let stats = {
@@ -115,6 +160,7 @@
 			isAdmin = true;
 			await loadStats();
 			await loadUsers();
+			await loadRides();
 			loading = false;
 		}
 
@@ -257,6 +303,257 @@
 
 	function setTab(tab: string) {
 		activeTab = tab;
+	}
+
+	async function openProfileModal(user: AdminUser) {
+		selectedProfile = user;
+		showProfileModal = true;
+		profileRides = [];
+		profileBookings = [];
+		ridesLoading = true;
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			ridesLoading = false;
+			return;
+		}
+
+		const response = await fetch(`/api/admin/user-rides?userId=${encodeURIComponent(user.id)}`, {
+			method: 'GET',
+			headers: {
+				Authorization: `Bearer ${session.access_token}`
+			}
+		});
+
+		const payload = await response.json();
+		if (response.ok) {
+			profileRides = payload.driverRides ?? [];
+			profileBookings = payload.bookings ?? [];
+		}
+
+		ridesLoading = false;
+	}
+
+	function closeProfileModal() {
+		showProfileModal = false;
+		selectedProfile = null;
+		profileRides = [];
+		profileBookings = [];
+		statusActionMessage = '';
+	}
+
+	async function changeUserStatus(status: 'active' | 'suspended' | 'banned') {
+		if (!selectedProfile) return;
+
+		statusActionInProgress = true;
+		statusActionMessage = '';
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			statusActionMessage = 'Session expirée. Merci de te reconnecter.';
+			statusActionInProgress = false;
+			return;
+		}
+
+		const response = await fetch('/api/admin/user-status', {
+			method: 'PATCH',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${session.access_token}`
+			},
+			body: JSON.stringify({
+				userId: selectedProfile.id,
+				status
+			})
+		});
+
+		const payload = await response.json();
+		if (!response.ok) {
+			statusActionMessage = payload?.error || 'Erreur lors du changement de statut.';
+			statusActionInProgress = false;
+			return;
+		}
+
+		selectedProfile = { ...selectedProfile, user_status: status };
+		users = users.map((u) =>
+			u.id === selectedProfile?.id ? { ...u, user_status: status } : u
+		);
+
+		const statusLabels: Record<string, string> = {
+			active: 'Compte activé',
+			suspended: 'Compte suspendu',
+			banned: 'Compte banni'
+		};
+
+		statusActionMessage = statusLabels[status] || 'Statut mis à jour';
+		statusActionInProgress = false;
+	}
+
+	async function resetUserPassword() {
+		if (!selectedProfile) return;
+
+		statusActionInProgress = true;
+		statusActionMessage = '';
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			statusActionMessage = 'Session expirée. Merci de te reconnecter.';
+			statusActionInProgress = false;
+			return;
+		}
+
+		const response = await fetch('/api/admin/reset-password', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${session.access_token}`
+			},
+			body: JSON.stringify({
+				userId: selectedProfile.id,
+				email: selectedProfile.email
+			})
+		});
+
+		const payload = await response.json();
+		if (!response.ok) {
+			statusActionMessage = payload?.error || 'Erreur lors de la réinitialisation du mot de passe.';
+			statusActionInProgress = false;
+			return;
+		}
+
+		statusActionMessage = `Email de réinitialisation envoyé à ${selectedProfile.email}`;
+		statusActionInProgress = false;
+	}
+
+	async function loadRides() {
+		ridesManagementLoading = true;
+		ridesManagementError = '';
+		ridesManagementActionMessage = '';
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			ridesManagementError = 'Session expirée. Merci de te reconnecter.';
+			ridesManagementLoading = false;
+			return;
+		}
+
+		const params = new URLSearchParams();
+		if (rideFilterCityFrom) params.append('cityFrom', rideFilterCityFrom);
+		if (rideFilterCityTo) params.append('cityTo', rideFilterCityTo);
+		if (rideFilterStatus) params.append('status', rideFilterStatus);
+		if (rideFilterFromDate) params.append('fromDate', rideFilterFromDate);
+
+		const response = await fetch(`/api/admin/rides?${params.toString()}`, {
+			method: 'GET',
+			headers: {
+				Authorization: `Bearer ${session.access_token}`
+			}
+		});
+
+		const payload = await response.json();
+		if (!response.ok) {
+			ridesManagementError = payload?.error || 'Impossible de charger les trajets.';
+			rides = [];
+			ridesManagementLoading = false;
+			return;
+		}
+
+		rides = (payload?.rides ?? []) as AdminRide[];
+		applyRideFilters();
+		ridesManagementLoading = false;
+	}
+
+	function applyRideFilters() {
+		filteredRides = rides.slice();
+	}
+
+	async function deleteRide(ride: AdminRide) {
+		if (!confirm(`Confirmer la suppression du trajet de ${ride.city_from} à ${ride.city_to} ?`)) {
+			return;
+		}
+
+		deletingRideId = ride.id;
+		ridesManagementActionMessage = '';
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			ridesManagementActionMessage = 'Session expirée. Merci de te reconnecter.';
+			deletingRideId = null;
+			return;
+		}
+
+		const response = await fetch(`/api/admin/rides?rideId=${encodeURIComponent(ride.id)}`, {
+			method: 'DELETE',
+			headers: {
+				Authorization: `Bearer ${session.access_token}`
+			}
+		});
+
+		const payload = await response.json();
+		if (!response.ok) {
+			ridesManagementActionMessage = payload?.error || 'Erreur lors de la suppression.';
+			deletingRideId = null;
+			return;
+		}
+
+		rides = rides.filter((r) => r.id !== ride.id);
+		applyRideFilters();
+		ridesManagementActionMessage = 'Trajet supprimé avec succès.';
+		deletingRideId = null;
+	}
+
+	async function showRideBookings(ride: AdminRide) {
+		selectedRideForBookings = ride;
+		showRideBookingsModal = true;
+		rideBookings = [];
+		rideBookingsLoading = true;
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			rideBookingsLoading = false;
+			return;
+		}
+
+		const response = await fetch(
+			`/api/admin/ride-bookings?rideId=${encodeURIComponent(ride.id)}`,
+			{
+				method: 'GET',
+				headers: {
+					Authorization: `Bearer ${session.access_token}`
+				}
+			}
+		);
+
+		const payload = await response.json();
+		if (response.ok) {
+			rideBookings = payload.bookings ?? [];
+		}
+
+		rideBookingsLoading = false;
+	}
+
+	function closeRideBookingsModal() {
+		showRideBookingsModal = false;
+		selectedRideForBookings = null;
+		rideBookings = [];
 	}
 </script>
 
@@ -534,7 +831,9 @@
 										<thead class="bg-gray-50 text-left text-gray-600">
 											<tr>
 												<th class="px-4 py-3 font-medium">Utilisateur</th>
-												<th class="px-4 py-3 font-medium">Statut</th>
+												<th class="px-4 py-3 font-medium">Vérification</th>
+												<th class="px-4 py-3 font-medium">Status</th>
+												<th class="px-4 py-3 font-medium">Note</th>
 												<th class="px-4 py-3 font-medium">Inscription</th>
 												<th class="px-4 py-3 font-medium">Actions</th>
 											</tr>
@@ -547,20 +846,30 @@
 															{`${adminUser.first_name ?? ''} ${adminUser.last_name ?? ''}`.trim() || 'Sans nom'}
 														</p>
 														<p class="text-xs text-gray-500">{adminUser.email ?? 'Email non renseigne'}</p>
+														{#if adminUser.phone_number}
+															<p class="text-xs text-gray-500">{adminUser.phone_number}</p>
+														{/if}
 														<p class="text-xs text-gray-400 break-all">{adminUser.id}</p>
 														{#if adminUser.has_profile === false}
-															<p class="text-xs text-amber-600">Profil manquant dans profiles (compte auth detecte)</p>
+															<p class="text-xs text-amber-600">Profil manquant</p>
 														{/if}
 													</td>
 													<td class="px-4 py-3 align-top">
-														<div class="flex flex-wrap gap-2">
-															<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium {adminUser.is_admin ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-700'}">
-																{adminUser.is_admin ? 'Admin' : 'Utilisateur'}
-															</span>
-															<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium {adminUser.is_verified ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">
-																{adminUser.is_verified ? 'Verifie' : 'Non verifie'}
-															</span>
-														</div>
+														<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium {adminUser.is_verified ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">
+															{adminUser.is_verified ? 'Verifie' : 'Non verifie'}
+														</span>
+													</td>
+													<td class="px-4 py-3 align-top">
+														<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium {adminUser.user_status === 'active' ? 'bg-green-100 text-green-700' : adminUser.user_status === 'suspended' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}">
+															{adminUser.user_status === 'active' ? 'Actif' : adminUser.user_status === 'suspended' ? 'Suspendu' : 'Banni'}
+														</span>
+													</td>
+													<td class="px-4 py-3 align-top text-gray-600">
+														{#if adminUser.average_rating}
+															<span class="text-sm font-medium">{adminUser.average_rating.toFixed(1)} *</span>
+														{:else}
+															<span class="text-xs text-gray-400">-</span>
+														{/if}
 													</td>
 													<td class="px-4 py-3 align-top text-gray-500">
 														{#if adminUser.created_at}
@@ -570,20 +879,19 @@
 														{/if}
 													</td>
 													<td class="px-4 py-3 align-top">
-														<div class="flex flex-wrap gap-2">
+														<div class="flex flex-wrap gap-1">
 															<button
 																type="button"
-																disabled={actionUserId === adminUser.id}
-																on:click={() => updateUserFlag(adminUser, 'is_admin', !adminUser.is_admin)}
-																class="px-3 py-1.5 rounded-lg text-xs font-medium border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+																on:click={() => openProfileModal(adminUser)}
+																class="px-2 py-1.5 rounded text-xs font-medium border border-blue-200 text-blue-700 hover:bg-blue-50"
 															>
-																{adminUser.is_admin ? 'Retirer admin' : 'Rendre admin'}
+																Profil
 															</button>
 															<button
 																type="button"
 																disabled={actionUserId === adminUser.id}
 																on:click={() => updateUserFlag(adminUser, 'is_verified', !adminUser.is_verified)}
-																class="px-3 py-1.5 rounded-lg text-xs font-medium border border-emerald-200 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+																class="px-2 py-1.5 rounded text-xs font-medium border border-emerald-200 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
 															>
 																{adminUser.is_verified ? 'Passer non verifie' : 'Verifier'}
 															</button>
@@ -597,7 +905,168 @@
 							{/if}
 						</div>
 					{:else if activeTab === 'rides'}
-						<p class="text-gray-400 text-sm italic">Gestion des trajets — à venir</p>
+						<div class="space-y-6">
+							<!-- Filters Section -->
+							<div class="bg-white rounded-xl p-4 border border-gray-200">
+								<h3 class="text-sm font-semibold text-gray-900 mb-4">Filtres</h3>
+								<div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+									<input
+										type="text"
+										placeholder="Ville départ"
+										class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+										bind:value={rideFilterCityFrom}
+										on:change={loadRides}
+									/>
+									<input
+										type="text"
+										placeholder="Ville arrivée"
+										class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+										bind:value={rideFilterCityTo}
+										on:change={loadRides}
+									/>
+									<input
+										type="date"
+										class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+										bind:value={rideFilterFromDate}
+										on:change={loadRides}
+									/>
+									<select
+										class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+										bind:value={rideFilterStatus}
+										on:change={loadRides}
+									>
+										<option value="">Tous les statuts</option>
+										<option value="Actif">Actif</option>
+										<option value="Complet">Complet</option>
+										<option value="Annulé">Annulé</option>
+										<option value="Terminé">Terminé</option>
+									</select>
+									<button
+										on:click={loadRides}
+										class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 font-medium"
+									>
+										Charger trajets
+									</button>
+								</div>
+								{#if ridesManagementActionMessage}
+									<div class="text-sm text-green-600 px-3 py-2 mt-2">{ridesManagementActionMessage}</div>
+								{/if}
+							</div>
+
+							{#if ridesManagementLoading}
+								<div class="text-center py-8">
+									<div class="inline-block animate-spin">
+										<svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+											<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+										</svg>
+									</div>
+								</div>
+							{:else if ridesManagementError}
+								<div class="bg-red-50 border border-red-200 rounded-lg p-4">
+									<p class="text-sm text-red-600">{ridesManagementError}</p>
+									<button
+										on:click={loadRides}
+										class="mt-2 px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700"
+									>
+										Réessayer
+									</button>
+								</div>
+							{:else if filteredRides.length === 0}
+								<div class="bg-gray-50 rounded-xl p-8 text-center">
+									<p class="text-gray-500 text-sm">Aucun trajet trouvé.</p>
+									<button
+										on:click={loadRides}
+										class="mt-3 px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700"
+									>
+										Recharger
+									</button>
+								</div>
+							{:else}
+								<div class="overflow-x-auto">
+									<table class="w-full text-sm">
+										<thead class="bg-gray-50 border-b border-gray-200">
+											<tr>
+												<th class="px-4 py-3 text-left font-semibold text-gray-900">Conducteur</th>
+												<th class="px-4 py-3 text-left font-semibold text-gray-900">Trajet</th>
+												<th class="px-4 py-3 text-left font-semibold text-gray-900">Date</th>
+												<th class="px-4 py-3 text-left font-semibold text-gray-900">Prix</th>
+												<th class="px-4 py-3 text-left font-semibold text-gray-900">Places</th>
+												<th class="px-4 py-3 text-left font-semibold text-gray-900">Statut</th>
+												<th class="px-4 py-3 text-left font-semibold text-gray-900">Actions</th>
+											</tr>
+										</thead>
+										<tbody>
+											{#each filteredRides as ride}
+												<tr class="border-b border-gray-200 hover:bg-gray-50">
+													<td class="px-4 py-3">
+														<div class="text-sm font-medium text-gray-900">
+															{ride.profiles?.first_name} {ride.profiles?.last_name}
+														</div>
+														<div class="text-xs text-gray-500">{ride.profiles?.email}</div>
+													</td>
+													<td class="px-4 py-3">
+														<div class="text-sm text-gray-900">{ride.city_from} → {ride.city_to}</div>
+													</td>
+													<td class="px-4 py-3">
+														<div class="text-sm text-gray-600">
+															{new Date(ride.ride_date).toLocaleDateString('fr-FR', {
+																day: '2-digit',
+																month: '2-digit',
+																year: 'numeric'
+															})}
+														</div>
+													</td>
+													<td class="px-4 py-3">
+														<div class="text-sm font-medium text-gray-900">
+															{new Intl.NumberFormat('en-US', {
+																style: 'currency',
+																currency: 'USD'
+															}).format(ride.price)}
+														</div>
+													</td>
+													<td class="px-4 py-3">
+														<div class="text-sm text-gray-600">
+															{ride.bookedSeats}/{ride.available_seats}
+														</div>
+													</td>
+													<td class="px-4 py-3">
+														<span class={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+															ride.status === 'Actif'
+																? 'bg-green-100 text-green-800'
+																: ride.status === 'Complet'
+																	? 'bg-yellow-100 text-yellow-800'
+																	: ride.status === 'Annulé'
+																		? 'bg-red-100 text-red-800'
+																		: 'bg-gray-100 text-gray-800'
+														}`}>
+															{ride.status}
+														</span>
+													</td>
+													<td class="px-4 py-3">
+														<div class="flex gap-2">
+															<button
+																on:click={() => showRideBookings(ride)}
+																class="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+															>
+																Réservations
+															</button>
+															<button
+																on:click={() => deleteRide(ride)}
+																disabled={deletingRideId === ride.id}
+																class="px-3 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 disabled:opacity-50"
+															>
+																{deletingRideId === ride.id ? 'Suppression...' : 'Supprimer'}
+															</button>
+														</div>
+													</td>
+												</tr>
+											{/each}
+										</tbody>
+									</table>
+								</div>
+							{/if}
+						</div>
 					{:else if activeTab === 'reports'}
 						<p class="text-gray-400 text-sm italic">Gestion des signalements — à venir</p>
 					{/if}
@@ -605,4 +1074,210 @@
 			</div>
 		</div>
 	</div>
+	<!-- Ride Bookings Modal -->
+	{#if showRideBookingsModal && selectedRideForBookings}
+		<div class="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
+			<div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+				<!-- Modal Header -->
+				<div class="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white">
+					<div>
+						<h2 class="text-lg font-bold text-gray-900">Réservations</h2>
+						<p class="text-sm text-gray-500">{selectedRideForBookings.city_from} → {selectedRideForBookings.city_to}</p>
+					</div>
+					<button
+						on:click={closeRideBookingsModal}
+						class="text-gray-400 hover:text-gray-600 text-xl font-semibold p-1"
+						aria-label="Fermer"
+						title="Fermer la modale"
+					>
+						×
+					</button>
+				</div>
+
+				<!-- Modal Content -->
+				<div class="p-6">
+					{#if rideBookingsLoading}
+						<div class="text-center py-8">
+							<div class="inline-block animate-spin">
+								<svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+									<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+								</svg>
+							</div>
+						</div>
+					{:else if rideBookings.length === 0}
+						<p class="text-gray-500 text-center py-4">Aucune réservation pour ce trajet.</p>
+					{:else}
+						<div class="space-y-4">
+							{#each rideBookings as booking}
+								<div class="border border-gray-200 rounded-lg p-4">
+									<div class="flex items-center justify-between mb-2">
+										<div>
+											<h3 class="text-sm font-semibold text-gray-900">
+												{booking.profiles?.first_name} {booking.profiles?.last_name}
+											</h3>
+											<p class="text-xs text-gray-500">{booking.profiles?.email}</p>
+										</div>
+										<span class={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+											booking.status === 'Confirmed'
+												? 'bg-green-100 text-green-800'
+												: booking.status === 'Cancelled'
+													? 'bg-red-100 text-red-800'
+													: 'bg-gray-100 text-gray-800'
+										}`}>
+											{booking.status === 'Confirmed' ? 'Confirmée' : booking.status === 'Cancelled' ? 'Annulée' : booking.status}
+										</span>
+									</div>
+									<div class="text-sm text-gray-600">
+										<p><strong>Places réservées:</strong> {booking.seats_booked}</p>
+										<p><strong>Réservé le:</strong> {new Date(booking.created_at).toLocaleDateString('fr-FR')}</p>
+									</div>
+								</div>
+							{/each}
+						</div>
+					{/if}
+				</div>
+			</div>
+		</div>
+	{/if}
+	<!-- Profile Modal -->
+	{#if showProfileModal && selectedProfile}
+		<div class="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
+			<div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+				<!-- Modal Header -->
+				<div class="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white">
+					<div>
+						<h2 class="text-lg font-bold text-gray-900">{selectedProfile.first_name} {selectedProfile.last_name}</h2>
+						<p class="text-sm text-gray-500">{selectedProfile.email}</p>
+					</div>
+					<button
+						type="button"
+						on:click={closeProfileModal}
+						class="text-gray-400 hover:text-gray-600"
+						aria-label="Fermer"
+						title="Fermer"
+					>
+						<span class="sr-only">Fermer</span>
+						<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+						</svg>
+					</button>
+				</div>
+
+				<!-- Modal Body -->
+				<div class="p-6 space-y-6">
+					<!-- Profile Info -->
+					<div>
+						<h3 class="text-sm font-semibold text-gray-900 mb-3">Informations personnelles</h3>
+						<div class="grid grid-cols-2 gap-4 text-sm">
+							<div>
+								<p class="text-gray-500">Téléphone</p>
+								<p class="font-medium text-gray-900">{selectedProfile.phone_number || '-'}</p>
+							</div>
+							<div>
+								<p class="text-gray-500">Note moyenne</p>
+								<p class="font-medium text-gray-900">{selectedProfile.average_rating ? selectedProfile.average_rating.toFixed(1) + ' ⭐' : '-'}</p>
+							</div>
+							<div>
+								<p class="text-gray-500">Inscription</p>
+								<p class="font-medium text-gray-900">{selectedProfile.created_at ? new Date(selectedProfile.created_at).toLocaleDateString('fr-FR') : '-'}</p>
+							</div>
+							<div>
+								<p class="text-gray-500">Rôle</p>
+								<p class="font-medium text-gray-900">{selectedProfile.is_admin ? 'Admin' : 'Utilisateur'}</p>
+							</div>
+						</div>
+					</div>
+
+					<!-- Status Actions -->
+					<div>
+						<h3 class="text-sm font-semibold text-gray-900 mb-3">Gestion du compte</h3>
+						{#if statusActionMessage}
+							<p class="text-sm bg-green-50 border border-green-200 text-green-700 rounded-lg px-3 py-2 mb-3">{statusActionMessage}</p>
+						{/if}
+						<div class="space-y-2">
+							<button
+								type="button"
+								disabled={statusActionInProgress}
+								on:click={() => changeUserStatus('active')}
+								class="w-full px-4 py-2 rounded-lg border text-sm font-medium {selectedProfile.user_status === 'active' ? 'border-green-300 bg-green-50 text-green-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'} disabled:opacity-50"
+							>
+								{selectedProfile.user_status === 'active' ? '✓' : ''} Activer le compte
+							</button>
+							<button
+								type="button"
+								disabled={statusActionInProgress}
+								on:click={() => changeUserStatus('suspended')}
+								class="w-full px-4 py-2 rounded-lg border text-sm font-medium {selectedProfile.user_status === 'suspended' ? 'border-yellow-300 bg-yellow-50 text-yellow-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'} disabled:opacity-50"
+							>
+								{selectedProfile.user_status === 'suspended' ? '✓' : ''} Suspendre le compte
+							</button>
+							<button
+								type="button"
+								disabled={statusActionInProgress}
+								on:click={() => changeUserStatus('banned')}
+								class="w-full px-4 py-2 rounded-lg border text-sm font-medium {selectedProfile.user_status === 'banned' ? 'border-red-300 bg-red-50 text-red-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'} disabled:opacity-50"
+							>
+								{selectedProfile.user_status === 'banned' ? '✓' : ''} Bannir le compte
+							</button>
+							<button
+								type="button"
+								disabled={statusActionInProgress}
+								on:click={resetUserPassword}
+								class="w-full px-4 py-2 rounded-lg border border-blue-300 text-blue-700 bg-blue-50 text-sm font-medium hover:bg-blue-100 disabled:opacity-50"
+							>
+								Réinitialiser le mot de passe
+							</button>
+						</div>
+					</div>
+
+					<!-- Rides History -->
+					<div>
+						<h3 class="text-sm font-semibold text-gray-900 mb-3">Historique des trajets</h3>
+						{#if ridesLoading}
+							<p class="text-sm text-gray-500">Chargement...</p>
+						{:else if profileRides.length === 0 && profileBookings.length === 0}
+							<p class="text-sm text-gray-500 italic">Aucun trajet pour cet utilisateur.</p>
+						{:else}
+							<div class="space-y-3">
+								{#if profileRides.length > 0}
+									<div>
+										<p class="text-xs font-medium text-gray-600 mb-2">Trajets en tant que conducteur</p>
+										{#each profileRides as ride}
+											<div class="text-xs border border-gray-200 rounded p-2 mb-2">
+												<p><strong>{ride.city_from}</strong> → <strong>{ride.city_to}</strong></p>
+												<p class="text-gray-600">{new Date(ride.ride_date).toLocaleDateString('fr-FR')} • {ride.available_seats} places • {ride.price}€</p>
+											</div>
+										{/each}
+									</div>
+								{/if}
+								{#if profileBookings.length > 0}
+									<div>
+										<p class="text-xs font-medium text-gray-600 mb-2">Trajets réservés</p>
+										{#each profileBookings as booking}
+											<div class="text-xs border border-gray-200 rounded p-2 mb-2">
+												<p>{booking.ride?.[0]?.city_from || '-'} → {booking.ride?.[0]?.city_to || '-'} ({booking.seats_booked} places)</p>
+												<p class="text-gray-600">{booking.status}</p>
+											</div>
+										{/each}
+									</div>
+								{/if}
+							</div>
+						{/if}
+					</div>
+				</div>
+
+				<!-- Modal Footer -->
+				<div class="flex justify-end gap-2 p-6 border-t border-gray-200 bg-gray-50 sticky bottom-0">
+					<button
+						type="button"
+						on:click={closeProfileModal}
+						class="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-100"
+					>
+						Fermer
+					</button>
+				</div>
+			</div>
+		</div>
+	{/if}
 {/if}
