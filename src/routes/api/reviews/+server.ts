@@ -115,9 +115,10 @@ reviewer_id: user.id,
 reviewee_id,
 ride_id,
 rating,
-comment: (comment || '').trim() || null
+comment: (comment || '').trim() || null,
+status: 'pending'
 })
-.select('id,rating,comment,created_at,reviewer_id,reviewee_id,ride_id')
+.select('id,rating,comment,status,created_at,reviewer_id,reviewee_id,ride_id')
 .single();
 
 if (insertError) {
@@ -127,7 +128,7 @@ return json({ error: insertError.message }, { status: 400 });
 return json(inserted);
 };
 
-export const GET: RequestHandler = async ({ url }) => {
+export const GET: RequestHandler = async ({ request, url }) => {
 if (!supabaseUrl || !supabaseKey) {
 return json({ error: 'Server configuration error' }, { status: 500 });
 }
@@ -137,11 +138,13 @@ if (!userId) {
 return json({ error: 'Missing user_id parameter' }, { status: 400 });
 }
 
-const client = createClient(supabaseUrl, supabaseKey);
+const authHeader = request.headers.get('authorization');
+const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+const client = token ? getAuthedClient(token) : createClient(supabaseUrl, supabaseKey);
 const { data: reviews, error } = await client
 .from('reviews')
 .select(
-'id,rating,comment,created_at,reviewer_id,ride_id,reviewer:profiles!reviews_reviewer_id_fkey(id,first_name,last_name,profile_photo_url)'
+'id,rating,comment,status,created_at,reviewer_id,ride_id,reviewer:profiles!reviews_reviewer_id_fkey(id,first_name,last_name,profile_photo_url)'
 )
 .eq('reviewee_id', userId)
 .order('created_at', { ascending: false });
@@ -154,6 +157,7 @@ type ReviewRow = {
 	id: string;
 	rating: number;
 	comment: string | null;
+	status: 'pending' | 'approved' | 'rejected';
 	created_at: string;
 	reviewer_id: string;
 	ride_id: string;
@@ -177,6 +181,7 @@ const mapped = ((reviews || []) as ReviewRow[]).map((item) => ({
 id: item.id,
 rating: item.rating,
 comment: item.comment,
+status: item.status,
 created_at: item.created_at,
 reviewer_id: item.reviewer_id,
 ride_id: item.ride_id,

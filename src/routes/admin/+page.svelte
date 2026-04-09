@@ -183,6 +183,44 @@
 	let showReportHistoryModal = false;
 	let selectedReportHistory: AdminReport | null = null;
 
+	// Reviews moderation
+	type AdminReview = {
+		id: string;
+		reviewer_id: string;
+		reviewee_id: string;
+		ride_id: string;
+		rating: number;
+		comment: string | null;
+		status: 'pending' | 'approved' | 'rejected';
+		admin_note: string | null;
+		reviewed_by: string | null;
+		reviewed_at: string | null;
+		created_at: string;
+		updated_at: string;
+		reviewer_profile?: {
+			first_name: string | null;
+			last_name: string | null;
+			email: string | null;
+		} | null;
+		reviewee_profile?: {
+			first_name: string | null;
+			last_name: string | null;
+			email: string | null;
+		} | null;
+		ride?: {
+			departure: string | null;
+			arrival: string | null;
+			ride_date: string | null;
+		} | null;
+	};
+
+	let reviewsLoading = false;
+	let reviewsError = '';
+	let reviewsActionMessage = '';
+	let reviews: AdminReview[] = [];
+	let reviewFilterStatus = 'pending';
+	let reviewActionId: string | null = null;
+
 	// Support management (tickets + messages)
 	type SupportTicket = {
 		id: string;
@@ -299,6 +337,7 @@
 				await loadRides();
 				await loadBookings();
 				await loadReports();
+				await loadReviews();
 				await loadSupportTickets();
 				await loadTransactions();
 				await loadPlatformSettings();
@@ -353,6 +392,7 @@
 			await loadRides();
 			await loadBookings();
 			await loadReports();
+			await loadReviews();
 			await loadSupportTickets();
 			await loadTransactions();
 			await loadPlatformSettings();
@@ -498,6 +538,9 @@
 
 	function setTab(tab: string) {
 		activeTab = tab;
+		if (tab === 'reviews') {
+			void loadReviews();
+		}
 	}
 
 	async function openProfileModal(user: AdminUser) {
@@ -995,6 +1038,8 @@
 	}
 
 	function reportTypeLabel(type: string) {
+		if (type === 'user') return 'User report';
+		if (type === 'ride') return 'Ride report';
 		if (type === 'behavior') return 'Behavior';
 		if (type === 'spam') return 'Spam';
 		if (type === 'payment_issue') return 'Payment issue';
@@ -1106,6 +1151,106 @@
 	function closeReportHistoryModal() {
 		selectedReportHistory = null;
 		showReportHistoryModal = false;
+	}
+
+	async function loadReviews() {
+		reviewsLoading = true;
+		reviewsError = '';
+		reviewsActionMessage = '';
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			reviewsError = 'Session expired. Please sign in again.';
+			reviews = [];
+			reviewsLoading = false;
+			return;
+		}
+
+		const params = new URLSearchParams();
+		if (reviewFilterStatus) params.append('status', reviewFilterStatus);
+
+		const response = await fetch(`/api/admin/reviews?${params.toString()}`, {
+			method: 'GET',
+			headers: {
+				Authorization: `Bearer ${session.access_token}`
+			}
+		});
+
+		const payload = await response.json();
+		if (!response.ok) {
+			reviewsError = payload?.error || 'Unable to load reviews.';
+			reviews = [];
+			reviewsLoading = false;
+			return;
+		}
+
+		reviews = (payload?.reviews ?? []) as AdminReview[];
+		reviewsLoading = false;
+	}
+
+	async function moderateReview(review: AdminReview, status: 'approved' | 'rejected') {
+		reviewActionId = review.id;
+		reviewsActionMessage = '';
+
+		const note =
+			status === 'rejected'
+				? (prompt('Add a rejection note (required):') ?? '').trim()
+				: (prompt('Add an admin note (optional):') ?? '').trim();
+
+		if (status === 'rejected' && !note) {
+			reviewsError = 'A rejection note is required.';
+			reviewActionId = null;
+			return;
+		}
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			reviewsError = 'Session expired. Please sign in again.';
+			reviewActionId = null;
+			return;
+		}
+
+		const response = await fetch('/api/admin/reviews', {
+			method: 'PATCH',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${session.access_token}`
+			},
+			body: JSON.stringify({
+				reviewId: review.id,
+				status,
+				note
+			})
+		});
+
+		const payload = await response.json();
+		if (!response.ok) {
+			reviewsError = payload?.error || 'Unable to moderate review.';
+			reviewActionId = null;
+			return;
+		}
+
+		reviews = reviews.map((r) =>
+			r.id === review.id
+				? {
+					...r,
+					status,
+					admin_note: note || null,
+					reviewed_at: new Date().toISOString(),
+					updated_at: new Date().toISOString()
+				}
+				: r
+		);
+
+		reviewsActionMessage =
+			status === 'approved' ? 'Review approved.' : 'Review rejected.';
+		reviewActionId = null;
 	}
 
 	async function loadSupportTickets() {
@@ -1543,6 +1688,7 @@
 						{ id: 'users', label: 'Users' },
 						{ id: 'rides', label: 'Rides' },
 						{ id: 'bookings', label: 'Bookings' },
+						{ id: 'reviews', label: 'Reviews' },
 						{ id: 'transactions', label: 'Transactions' },
 						{ id: 'settings', label: 'Settings' },
 						{ id: 'reports', label: 'Reports' },
@@ -2084,6 +2230,8 @@
 										on:change={loadReports}
 									>
 										<option value="">Tous les types</option>
+										<option value="user">User report</option>
+										<option value="ride">Ride report</option>
 										<option value="behavior">Comportement</option>
 										<option value="spam">Spam</option>
 										<option value="payment_issue">Payment issue</option>
@@ -2133,11 +2281,15 @@
 												<tr class="hover:bg-gray-50">
 													<td class="px-4 py-3 align-top">
 														<span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-															report.type === 'behavior'
-																? 'bg-orange-100 text-orange-700'
-																: report.type === 'spam'
-																	? 'bg-purple-100 text-purple-700'
-																	: 'bg-blue-100 text-blue-700'
+																report.type === 'user'
+																	? 'bg-red-100 text-red-700'
+																	: report.type === 'ride'
+																		? 'bg-indigo-100 text-indigo-700'
+																		: report.type === 'behavior'
+																			? 'bg-orange-100 text-orange-700'
+																			: report.type === 'spam'
+																				? 'bg-purple-100 text-purple-700'
+																				: 'bg-blue-100 text-blue-700'
 														}`}>
 															{reportTypeLabel(report.type)}
 														</span>
@@ -2186,6 +2338,108 @@
 																class="px-2 py-1 rounded text-xs border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
 															>
 																Suspend account
+															</button>
+														</div>
+													</td>
+												</tr>
+											{/each}
+										</tbody>
+									</table>
+								</div>
+							{/if}
+						</div>
+					{:else if activeTab === 'reviews'}
+						<div class="space-y-6">
+							<div class="bg-white rounded-xl p-4 border border-gray-200">
+								<h3 class="text-sm font-semibold text-gray-900 mb-4">Review moderation</h3>
+								<div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+									<select
+										class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+										bind:value={reviewFilterStatus}
+										on:change={loadReviews}
+									>
+										<option value="">All statuses</option>
+										<option value="pending">Pending</option>
+										<option value="approved">Approved</option>
+										<option value="rejected">Rejected</option>
+									</select>
+									<button
+										on:click={loadReviews}
+										class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 font-medium"
+									>
+										Load reviews
+									</button>
+								</div>
+								{#if reviewsActionMessage}
+									<p class="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 mt-3">{reviewsActionMessage}</p>
+								{/if}
+							</div>
+
+							{#if reviewsLoading}
+								<p class="text-sm text-gray-500">Loading reviews...</p>
+							{:else if reviewsError}
+								<p class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{reviewsError}</p>
+							{:else if reviews.length === 0}
+								<p class="text-sm text-gray-500">No reviews right now.</p>
+							{:else}
+								<div class="overflow-x-auto border border-gray-100 rounded-xl">
+									<table class="w-full text-sm">
+										<thead class="bg-gray-50 text-left text-gray-600">
+											<tr>
+												<th class="px-4 py-3 font-medium">Review</th>
+												<th class="px-4 py-3 font-medium">Ride</th>
+												<th class="px-4 py-3 font-medium">Status</th>
+												<th class="px-4 py-3 font-medium">Action</th>
+											</tr>
+										</thead>
+										<tbody class="divide-y divide-gray-100">
+											{#each reviews as review}
+												<tr class="hover:bg-gray-50">
+													<td class="px-4 py-3 align-top">
+														<p class="text-sm font-semibold text-gray-900">{review.rating}/5</p>
+														<p class="text-xs text-gray-500 mt-1">
+															Reviewer: {review.reviewer_profile?.first_name} {review.reviewer_profile?.last_name}
+														</p>
+														<p class="text-xs text-gray-500">
+															Reviewee: {review.reviewee_profile?.first_name} {review.reviewee_profile?.last_name}
+														</p>
+														<p class="text-sm text-gray-700 mt-2">{review.comment || 'No comment'}</p>
+														{#if review.admin_note}
+															<p class="text-xs text-gray-500 mt-1">Admin note: {review.admin_note}</p>
+														{/if}
+													</td>
+													<td class="px-4 py-3 align-top text-xs text-gray-600">
+														<p>
+															{review.ride?.departure || '-'} -> {review.ride?.arrival || '-'}
+														</p>
+														<p class="mt-1">{review.ride?.ride_date ? new Date(review.ride.ride_date).toLocaleString('en-US') : '-'}</p>
+													</td>
+													<td class="px-4 py-3 align-top">
+														<span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+															review.status === 'pending'
+																? 'bg-yellow-100 text-yellow-700'
+																: review.status === 'approved'
+																	? 'bg-green-100 text-green-700'
+																	: 'bg-red-100 text-red-700'
+														}`}>
+															{review.status}
+														</span>
+													</td>
+													<td class="px-4 py-3 align-top">
+														<div class="flex flex-wrap gap-2">
+															<button
+																disabled={reviewActionId === review.id || review.status === 'approved'}
+																on:click={() => moderateReview(review, 'approved')}
+																class="px-3 py-1 rounded text-xs border border-green-200 text-green-700 hover:bg-green-50 disabled:opacity-50"
+															>
+																Approve
+															</button>
+															<button
+																disabled={reviewActionId === review.id || review.status === 'rejected'}
+																on:click={() => moderateReview(review, 'rejected')}
+																class="px-3 py-1 rounded text-xs border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
+															>
+																Reject
 															</button>
 														</div>
 													</td>

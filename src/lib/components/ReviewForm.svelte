@@ -20,7 +20,17 @@ void checkExistingReview();
 }
 
 async function checkExistingReview() {
-const response = await fetch(`/api/reviews?user_id=${revieweeId}`);
+const {
+data: { session }
+} = await supabase.auth.getSession();
+
+const response = await fetch(`/api/reviews?user_id=${revieweeId}`, {
+headers: session?.access_token
+? {
+Authorization: `Bearer ${session.access_token}`
+}
+: undefined
+});
 if (!response.ok) return;
 const reviews = await response.json();
 hasExistingReview = (reviews || []).some(
@@ -107,7 +117,7 @@ rows="4"
 <p class="error">{error}</p>
 {/if}
 {#if success}
-<p class="success">Review posted.</p>
+<p class="success">Review submitted. It will be visible after admin approval.</p>
 {/if}
 
 <button type="button" disabled={loading || !user} on:click={submitReview}>

@@ -27,6 +27,10 @@
 	let submitting = false;
 	let errorMessage = '';
 	let successMessage = '';
+	let reportDescription = '';
+	let reportingRide = false;
+	let reportMessage = '';
+	let reportError = '';
 
 	onMount(async () => {
 		const { data: { user } } = await supabase.auth.getUser();
@@ -92,6 +96,63 @@
 	function goBackToSearchResults() {
 		goto(resolve('/search'));
 	}
+
+	async function getSessionAccessToken(): Promise<string | null> {
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		return session?.access_token ?? null;
+	}
+
+	async function submitRideReport() {
+		if (!ride) return;
+
+		reportMessage = '';
+		reportError = '';
+
+		const description = reportDescription.trim();
+		if (!description) {
+			reportError = 'Please describe the issue.';
+			return;
+		}
+
+		const token = await getSessionAccessToken();
+		if (!token) {
+			reportError = 'Session expired. Please sign in again.';
+			goto(resolve('/auth/login'));
+			return;
+		}
+
+		reportingRide = true;
+		try {
+			const response = await fetch('/api/reports', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`
+				},
+				body: JSON.stringify({
+					targetType: 'ride',
+					targetRideId: ride.id,
+					description
+				})
+			});
+
+			const payload = await response.json();
+			if (!response.ok) {
+				reportError = payload?.error || 'Unable to send report right now.';
+				return;
+			}
+
+			reportMessage = 'Report sent. Our admin team will review it.';
+			reportDescription = '';
+		} catch {
+			reportError = 'Unexpected error while sending report.';
+		} finally {
+			reportingRide = false;
+		}
+	}
 </script>
 
 {#if loading}
@@ -130,6 +191,34 @@
 						View driver public profile
 					</button>
 				</div>
+
+				{#if currentUser && currentUser.id !== ride.driver_id}
+					<div class="mt-6 rounded-xl border border-red-200 bg-red-50 p-4">
+						<p class="text-sm font-semibold text-red-900">Report this ride</p>
+						<p class="text-xs text-red-700 mt-1">This text is only visible to admins.</p>
+						<textarea
+							bind:value={reportDescription}
+							rows="3"
+							maxlength="2000"
+							placeholder="Describe what happened..."
+							class="mt-3 w-full rounded-md border border-red-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+						></textarea>
+						{#if reportError}
+							<p class="mt-2 text-xs text-red-700">{reportError}</p>
+						{/if}
+						{#if reportMessage}
+							<p class="mt-2 text-xs text-green-700">{reportMessage}</p>
+						{/if}
+						<button
+							type="button"
+							disabled={reportingRide}
+							on:click={submitRideReport}
+							class="mt-3 inline-flex items-center rounded-md border border-red-300 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
+						>
+							{reportingRide ? 'Sending...' : 'Report ride'}
+						</button>
+					</div>
+				{/if}
 
 				<div class="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-4">
 					<div><p class="text-sm text-gray-500">Pickup</p><p class="text-base font-semibold text-gray-900">{ride.pickup}</p></div>

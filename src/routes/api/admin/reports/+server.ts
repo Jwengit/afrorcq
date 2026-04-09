@@ -93,16 +93,20 @@ export const GET: RequestHandler = async ({ request, url }) => {
 			return json({ error: error.message }, { status: 500 });
 		}
 
-		const normalizedReports = (data ?? []).map((report) => ({
-			...report,
-			rides: report.rides
-				? {
-					...report.rides,
-					city_from: report.rides.departure,
-					city_to: report.rides.arrival
-				}
-				: report.rides
-		}));
+		const normalizedReports = (data ?? []).map((report) => {
+			const ride = Array.isArray(report.rides) ? report.rides[0] : report.rides;
+
+			return {
+				...report,
+				rides: ride
+					? {
+						...ride,
+						city_from: ride.departure,
+						city_to: ride.arrival
+					}
+					: ride
+			};
+		});
 
 		return json({ reports: normalizedReports });
 	} catch (error) {

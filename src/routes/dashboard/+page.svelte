@@ -78,6 +78,12 @@
 	let bookingActionMessage = '';
 	let requestActionMessage = '';
 	let requestActionBookingId: string | null = null;
+	let reportActionMessage = '';
+	let reportActionError = '';
+	let reportingTargetId: string | null = null;
+	let quickReportRideId = '';
+	let quickReportDescription = '';
+	let quickReportingRide = false;
 
 	let myArchivedRides: Ride[] = [];
 	let myArchivedBookings: Booking[] = [];
@@ -619,6 +625,127 @@
 		cancellingBookingId = null;
 		bookingActionMessage = 'Booking cancelled successfully.';
 	}
+
+	async function getSessionAccessToken(): Promise<string | null> {
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		return session?.access_token ?? null;
+	}
+
+	async function submitReport(targetType: 'user' | 'ride', targetId: string) {
+		if (!targetId) return;
+
+		reportActionMessage = '';
+		reportActionError = '';
+
+		const description = prompt('Decris le probleme. Ce texte est visible uniquement par les admins.')?.trim();
+		if (!description) {
+			return;
+		}
+
+		const token = await getSessionAccessToken();
+		if (!token) {
+			reportActionError = 'Session expired. Please sign in again.';
+			goto(resolve('/auth/login'));
+			return;
+		}
+
+		reportingTargetId = `${targetType}:${targetId}`;
+		try {
+			const body =
+				targetType === 'user'
+					? { targetType, targetUserId: targetId, description }
+					: { targetType, targetRideId: targetId, description };
+
+			const response = await fetch('/api/reports', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`
+				},
+				body: JSON.stringify(body)
+			});
+
+			const payload = await response.json();
+			if (!response.ok) {
+				reportActionError = payload?.error || 'Unable to send report right now.';
+				return;
+			}
+
+			reportActionMessage = 'Signalement envoye. Notre equipe admin va le traiter.';
+		} catch {
+			reportActionError = 'Erreur inattendue lors de l envoi du signalement.';
+		} finally {
+			reportingTargetId = null;
+		}
+	}
+
+	async function submitQuickRideReport() {
+		reportActionMessage = '';
+		reportActionError = '';
+
+		const rideId = quickReportRideId.trim();
+		const description = quickReportDescription.trim();
+
+		if (!rideId) {
+			reportActionError = 'Ride ID requis.';
+			return;
+		}
+
+		if (!description) {
+			reportActionError = 'Merci de decrire le probleme.';
+			return;
+		}
+
+		const token = await getSessionAccessToken();
+		if (!token) {
+			reportActionError = 'Session expired. Please sign in again.';
+			goto(resolve('/auth/login'));
+			return;
+		}
+
+		quickReportingRide = true;
+		try {
+			const response = await fetch('/api/reports', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`
+				},
+				body: JSON.stringify({
+					targetType: 'ride',
+					targetRideId: rideId,
+					description
+				})
+			});
+
+			const payload = await response.json();
+			if (!response.ok) {
+				reportActionError = payload?.error || 'Impossible d envoyer le signalement pour le moment.';
+				return;
+			}
+
+			reportActionMessage = 'Signalement envoye. Notre equipe admin va le traiter.';
+			quickReportRideId = '';
+			quickReportDescription = '';
+		} catch {
+			reportActionError = 'Erreur inattendue lors de l envoi du signalement.';
+		} finally {
+			quickReportingRide = false;
+		}
+	}
+
+	function useRideIdForReport(rideId: string) {
+		quickReportRideId = rideId;
+		reportActionError = '';
+		reportActionMessage = '';
+
+		if (browser) {
+			window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+		}
+	}
 </script>
 
 {#if loading}
@@ -752,6 +879,7 @@
 								{:else}
 									<p class="text-xs text-gray-400">{new Date(ride.ride_date).toLocaleString()}</p>
 									<h3 class="text-base font-semibold text-gray-900 mt-1">{ride.departure} → {ride.arrival}</h3>
+									<p class="mt-1 text-xs text-gray-500">Ride ID: {ride.id}</p>
 									<p class="mt-2 text-sm text-gray-600">
 										{ride.seats} seat{ride.seats !== 1 ? 's' : ''} · ${ride.price}
 										{#if ride.girls_only}
@@ -766,6 +894,13 @@
 										>
 											Edit
 										</button>
+											<button
+												type="button"
+												on:click={() => useRideIdForReport(ride.id)}
+												class="px-3 py-2 rounded-md border border-red-300 text-red-700 text-sm font-medium hover:bg-red-50"
+											>
+												Utiliser pour signaler
+											</button>
 										{#if deletingRideId === ride.id}
 											<button
 												type="button"
@@ -801,6 +936,12 @@
 
 			<section id="ride-requests" class="dashboard-card p-6 scroll-mt-28">
 				<h2 class="text-xl font-semibold text-gray-900 mb-4">Booking requests</h2>
+				{#if reportActionError}
+					<p class="mb-3 text-sm text-red-600">{reportActionError}</p>
+				{/if}
+				{#if reportActionMessage}
+					<p class="mb-3 text-sm text-green-700">{reportActionMessage}</p>
+				{/if}
 				{#if requestActionMessage}
 					<p class="mb-3 text-sm text-green-700">{requestActionMessage}</p>
 				{/if}
@@ -819,6 +960,7 @@
 											: request.ride.departure}
 									</h3>
 									<p class="text-sm text-gray-500 mt-1">{formatRideDate(request.ride.ride_date)}</p>
+									<p class="text-xs text-gray-500 mt-1">Ride ID: {request.ride.id}</p>
 									<div class="mt-1 flex flex-wrap items-center gap-2 text-sm text-gray-600">
 										<span>Passenger:</span>
 										<a
@@ -864,6 +1006,23 @@
 											{openReviewFormId === `active-request:${request.id}` ? 'Hide review form' : 'Leave a review'}
 										</button>
 									{/if}
+									{#if request.passenger_id && request.passenger_id !== currentUser?.id}
+										<button
+											type="button"
+											on:click={() => submitReport('user', request.passenger_id)}
+											disabled={reportingTargetId === `user:${request.passenger_id}`}
+											class="px-3 py-2 rounded-md border border-red-300 text-red-700 text-sm font-medium hover:bg-red-50 disabled:opacity-60"
+										>
+											{reportingTargetId === `user:${request.passenger_id}` ? 'Envoi...' : 'Signaler utilisateur'}
+										</button>
+									{/if}
+									<button
+										type="button"
+										on:click={() => useRideIdForReport(request.ride.id)}
+										class="px-3 py-2 rounded-md border border-red-300 text-red-700 text-sm font-medium hover:bg-red-50"
+									>
+										Utiliser pour signaler trajet
+									</button>
 								</div>
 								{#if request.status === 'Confirmed' && hasRideEnded(request.ride.ride_date) && openReviewFormId === `active-request:${request.id}`}
 									<div class="w-full">
@@ -883,6 +1042,12 @@
 
 			<section id="my-bookings" class="dashboard-card p-6 scroll-mt-28">
 				<h2 class="text-xl font-semibold text-gray-900 mb-4">My bookings</h2>
+				{#if reportActionError}
+					<p class="mb-3 text-sm text-red-600">{reportActionError}</p>
+				{/if}
+				{#if reportActionMessage}
+					<p class="mb-3 text-sm text-green-700">{reportActionMessage}</p>
+				{/if}
 				{#if bookingActionMessage}
 					<p class="mb-3 text-sm text-green-700">{bookingActionMessage}</p>
 				{/if}
@@ -901,6 +1066,7 @@
 											: booking.ride.departure}
 									</h3>
 									<p class="text-sm text-gray-500 mt-1">{formatRideDate(booking.ride.ride_date)}</p>
+									<p class="text-xs text-gray-500 mt-1">Ride ID: {booking.ride_id}</p>
 									<p class="text-sm text-gray-600 mt-1">
 										{booking.seat_booked} seat{booking.seat_booked !== 1 ? 's' : ''}
 										· {booking.ride.price > 0 ? `$${booking.ride.price}` : 'Price unavailable'}
@@ -944,6 +1110,35 @@
 										class="rounded-md border border-emerald-300 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-50"
 									>
 										{openReviewFormId === `active-booking:${booking.id}` ? 'Hide review form' : 'Leave a review'}
+									</button>
+								{/if}
+								{#if booking.ride.driver_id && booking.ride.driver_id !== currentUser?.id}
+									<button
+										type="button"
+										on:click={() => submitReport('user', booking.ride.driver_id)}
+										disabled={reportingTargetId === `user:${booking.ride.driver_id}`}
+										class="px-3 py-2 rounded-md border border-red-300 text-red-700 text-sm font-medium hover:bg-red-50 disabled:opacity-60"
+									>
+										{reportingTargetId === `user:${booking.ride.driver_id}` ? 'Envoi...' : 'Signaler utilisateur'}
+									</button>
+								{/if}
+								{#if booking.ride_id}
+									<button
+										type="button"
+										on:click={() => submitReport('ride', booking.ride_id)}
+										disabled={reportingTargetId === `ride:${booking.ride_id}`}
+										class="px-3 py-2 rounded-md border border-red-300 text-red-700 text-sm font-medium hover:bg-red-50 disabled:opacity-60"
+									>
+										{reportingTargetId === `ride:${booking.ride_id}` ? 'Envoi...' : 'Signaler trajet'}
+									</button>
+								{/if}
+								{#if booking.ride_id}
+									<button
+										type="button"
+										on:click={() => useRideIdForReport(booking.ride_id)}
+										class="px-3 py-2 rounded-md border border-red-300 text-red-700 text-sm font-medium hover:bg-red-50"
+									>
+										Utiliser pour signaler trajet
 									</button>
 								{/if}
 							</div>
@@ -1030,6 +1225,16 @@
 													{openReviewFormId === `request:${request.id}` ? 'Hide review form' : 'Leave a review'}
 												</button>
 											{/if}
+											{#if request.passenger_id && request.passenger_id !== currentUser?.id}
+												<button
+													type="button"
+													on:click={() => submitReport('user', request.passenger_id)}
+													disabled={reportingTargetId === `user:${request.passenger_id}`}
+													class="px-3 py-1.5 rounded-md border border-red-300 text-red-700 text-sm font-medium hover:bg-red-50 disabled:opacity-60"
+												>
+													{reportingTargetId === `user:${request.passenger_id}` ? 'Envoi...' : 'Signaler utilisateur'}
+												</button>
+											{/if}
 										</div>
 										{#if request.status === 'Confirmed' && openReviewFormId === `request:${request.id}`}
 											<ReviewForm
@@ -1083,6 +1288,26 @@
 													{openReviewFormId === `booking:${booking.id}` ? 'Hide review form' : 'Leave a review'}
 												</button>
 											{/if}
+											{#if booking.ride.driver_id && booking.ride.driver_id !== currentUser?.id}
+												<button
+													type="button"
+													on:click={() => submitReport('user', booking.ride.driver_id)}
+													disabled={reportingTargetId === `user:${booking.ride.driver_id}`}
+													class="px-3 py-1.5 rounded-md border border-red-300 text-red-700 text-sm font-medium hover:bg-red-50 disabled:opacity-60"
+												>
+													{reportingTargetId === `user:${booking.ride.driver_id}` ? 'Envoi...' : 'Signaler utilisateur'}
+												</button>
+											{/if}
+											{#if booking.ride_id}
+												<button
+													type="button"
+													on:click={() => submitReport('ride', booking.ride_id)}
+													disabled={reportingTargetId === `ride:${booking.ride_id}`}
+													class="px-3 py-1.5 rounded-md border border-red-300 text-red-700 text-sm font-medium hover:bg-red-50 disabled:opacity-60"
+												>
+													{reportingTargetId === `ride:${booking.ride_id}` ? 'Envoi...' : 'Signaler trajet'}
+												</button>
+											{/if}
 										</div>
 										{#if booking.status === 'Confirmed' && booking.ride.driver_id && openReviewFormId === `booking:${booking.id}`}
 											<ReviewForm
@@ -1099,6 +1324,42 @@
 			{/if}
 		</section>
 		{/if}
+
+		<section class="dashboard-card p-6">
+			<h2 class="text-xl font-semibold text-gray-900 mb-2">Report a ride</h2>
+			<p class="text-sm text-gray-600 mb-4">Signale un trajet directement depuis le dashboard. Le texte est visible uniquement par les admins.</p>
+			<div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+				<input
+					type="text"
+					bind:value={quickReportRideId}
+					placeholder="Ride ID"
+					class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+				/>
+				<textarea
+					bind:value={quickReportDescription}
+					rows="2"
+					maxlength="2000"
+					placeholder="Decris le probleme..."
+					class="md:col-span-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+				></textarea>
+			</div>
+			<div class="mt-3">
+				<button
+					type="button"
+					on:click={submitQuickRideReport}
+					disabled={quickReportingRide}
+					class="px-4 py-2 rounded-md border border-red-300 text-red-700 text-sm font-medium hover:bg-red-50 disabled:opacity-60"
+				>
+					{quickReportingRide ? 'Envoi...' : 'Signaler trajet'}
+				</button>
+			</div>
+			{#if reportActionError}
+				<p class="mt-3 text-sm text-red-600">{reportActionError}</p>
+			{/if}
+			{#if reportActionMessage}
+				<p class="mt-3 text-sm text-green-700">{reportActionMessage}</p>
+			{/if}
+		</section>
 
 		</div>
 	</div>

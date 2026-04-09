@@ -26,6 +26,10 @@
 	let loading = true;
 	let viewingOwnProfile = true;
 	let viewedProfileId = '';
+	let reportDescription = '';
+	let reportingUser = false;
+	let reportMessage = '';
+	let reportError = '';
 	let profile: PublicProfile = {
 		first_name: '',
 		last_name: '',
@@ -175,6 +179,63 @@
 		goto(resolve(viewingOwnProfile ? '/profile' : '/dashboard'));
 	}
 
+	async function getSessionAccessToken(): Promise<string | null> {
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		return session?.access_token ?? null;
+	}
+
+	async function submitUserReport() {
+		if (viewingOwnProfile || !viewedProfileId) return;
+
+		reportMessage = '';
+		reportError = '';
+
+		const description = reportDescription.trim();
+		if (!description) {
+			reportError = 'Please describe the issue.';
+			return;
+		}
+
+		const token = await getSessionAccessToken();
+		if (!token) {
+			reportError = 'Session expired. Please sign in again.';
+			goto(resolve('/auth/login'));
+			return;
+		}
+
+		reportingUser = true;
+		try {
+			const response = await fetch('/api/reports', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`
+				},
+				body: JSON.stringify({
+					targetType: 'user',
+					targetUserId: viewedProfileId,
+					description
+				})
+			});
+
+			const payload = await response.json();
+			if (!response.ok) {
+				reportError = payload?.error || 'Unable to send report right now.';
+				return;
+			}
+
+			reportMessage = 'Report sent. Our admin team will review it.';
+			reportDescription = '';
+		} catch {
+			reportError = 'Unexpected error while sending report.';
+		} finally {
+			reportingUser = false;
+		}
+	}
+
 	onMount(async () => {
 		const { data: authData } = await supabase.auth.getUser();
 		if (!authData.user) {
@@ -313,6 +374,36 @@
 						</div>
 					</div>
 				</div>
+
+				{#if !viewingOwnProfile}
+					<div class="border-t border-slate-200 pt-6 mt-6">
+						<div class="rounded-xl border border-red-200 bg-red-50 p-4">
+							<p class="text-sm font-semibold text-red-900">Report this user</p>
+							<p class="text-xs text-red-700 mt-1">This text is only visible to admins.</p>
+							<textarea
+								bind:value={reportDescription}
+								rows="3"
+								maxlength="2000"
+								placeholder="Describe the issue with this user..."
+								class="mt-3 w-full rounded-md border border-red-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+							></textarea>
+							{#if reportError}
+								<p class="mt-2 text-xs text-red-700">{reportError}</p>
+							{/if}
+							{#if reportMessage}
+								<p class="mt-2 text-xs text-green-700">{reportMessage}</p>
+							{/if}
+							<button
+								type="button"
+								disabled={reportingUser}
+								on:click={submitUserReport}
+								class="mt-3 inline-flex items-center rounded-md border border-red-300 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
+							>
+								{reportingUser ? 'Sending...' : 'Report user'}
+							</button>
+						</div>
+					</div>
+				{/if}
 
 			</div>
 
