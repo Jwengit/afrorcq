@@ -766,10 +766,25 @@
 </script>
 
 {#if loading}
-	<div class="min-h-screen flex items-center justify-center">
-		<div class="text-center">
-			<div class="animate-spin rounded-full h-32 w-32 border-b-2 border-green-600"></div>
-			<p class="mt-4 text-gray-600">Loading profile...</p>
+	<div class="min-h-screen profile-page-bg py-10 px-4 sm:px-6 lg:px-8">
+		<div class="max-w-4xl mx-auto">
+			<div class="profile-card p-7 animate-pulse">
+				<div class="h-7 w-48 bg-slate-200 rounded mb-6"></div>
+				<div class="flex items-center gap-4 mb-6">
+					<div class="h-20 w-20 rounded-full bg-slate-200"></div>
+					<div class="space-y-2">
+						<div class="h-4 w-48 bg-slate-200 rounded"></div>
+						<div class="h-3 w-32 bg-slate-200 rounded"></div>
+					</div>
+				</div>
+				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+					<div class="h-20 bg-slate-100 rounded-xl"></div>
+					<div class="h-20 bg-slate-100 rounded-xl"></div>
+					<div class="h-20 bg-slate-100 rounded-xl"></div>
+					<div class="h-20 bg-slate-100 rounded-xl"></div>
+				</div>
+			</div>
+			<p class="mt-4 text-center text-sm text-slate-600">Chargement du profil...</p>
 		</div>
 	</div>
 {:else if currentUser}
@@ -783,14 +798,14 @@
 			{/if}
 			<!-- Header -->
 			<div class="rounded-2xl bg-linear-to-r from-emerald-600 via-emerald-500 to-teal-500 p-7 shadow-xl mb-6 text-white border border-emerald-300/30">
-				<div class="flex items-center justify-between">
+				<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
 					<div>
 						<h1 class="text-3xl font-bold tracking-tight">My Profile</h1>
 						<p class="text-emerald-50/95 mt-1">Manage your account information</p>
 					</div>
 					<button
 						on:click={openDeleteModal}
-						class="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-red-600/80 hover:bg-red-700 transition-colors cursor-pointer"
+						class="w-full md:w-auto px-4 py-2 rounded-lg text-sm font-semibold text-white bg-red-600/80 hover:bg-red-700 transition-colors cursor-pointer"
 					>
 						Delete Account
 					</button>
@@ -814,124 +829,24 @@
 				</div>
 			</div>
 
-			<!-- Profile Form -->
-			<div class="profile-card p-7 mb-6">
-				<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-					<div>
-						<h2 class="text-xl font-semibold text-slate-900">Verification Documents</h2>
-						<p class="text-sm text-slate-600 mt-1">Upload required documents so admins can verify your account.</p>
-					</div>
-					<div class="text-sm text-slate-500">
-						Accepted: PDF, PNG, JPG, JPEG, WEBP (max 10MB)
-					</div>
-				</div>
-
-				<div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-					<select
-						bind:value={selectedDocumentType}
-						class="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
-					>
-						{#each documentTypeOptions as option (option.value)}
-							<option value={option.value}>{option.label}</option>
-						{/each}
-					</select>
-					<input
-						type="file"
-						accept=".pdf,.png,.jpg,.jpeg,.webp"
-						on:change={handleVerificationDocumentSelect}
-						class="text-sm text-gray-600 file:mr-3 file:rounded-md file:border-0 file:bg-emerald-100 file:px-3 file:py-2 file:font-semibold file:text-emerald-700"
-					/>
-					<button
-						type="button"
-						on:click={uploadVerificationDocument}
-						disabled={!selectedDocumentFile || uploadingDocument}
-						class="px-4 py-2 rounded-md bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50"
-					>
-						{uploadingDocument ? 'Uploading...' : 'Upload document'}
-					</button>
-				</div>
-
-				{#if documentsError}
-					<p class="mt-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">{documentsError}</p>
-				{/if}
-				{#if documentsMessage}
-					<p class="mt-3 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2">{documentsMessage}</p>
-				{/if}
-
-				<div class="mt-4 border border-slate-200 rounded-xl overflow-hidden">
-					{#if documentsLoading}
-						<p class="px-4 py-3 text-sm text-slate-500">Loading documents...</p>
-					{:else if verificationDocuments.length === 0}
-						<p class="px-4 py-3 text-sm text-slate-500">No documents uploaded yet.</p>
-					{:else}
-						<table class="w-full text-sm">
-							<thead class="bg-slate-50 text-slate-600 text-left">
-								<tr>
-									<th class="px-4 py-3 font-medium">Type</th>
-									<th class="px-4 py-3 font-medium">File</th>
-									<th class="px-4 py-3 font-medium">Status</th>
-									<th class="px-4 py-3 font-medium">Uploaded</th>
-									<th class="px-4 py-3 font-medium">Actions</th>
-								</tr>
-							</thead>
-							<tbody class="divide-y divide-slate-100">
-								{#each verificationDocuments as doc (doc.id)}
-									<tr>
-										<td class="px-4 py-3">{documentTypeLabel(doc.document_type)}</td>
-										<td class="px-4 py-3">
-											<p class="font-medium text-slate-900">{doc.file_name}</p>
-											<p class="text-xs text-slate-500">{formatFileSize(doc.file_size)}</p>
-											{#if doc.admin_note}
-												<p class="text-xs text-red-600 mt-1">Admin note: {doc.admin_note}</p>
-											{/if}
-										</td>
-										<td class="px-4 py-3">
-											<span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${documentStatusClass(doc.status)}`}>
-												{documentStatusLabel(doc.status)}
-											</span>
-										</td>
-										<td class="px-4 py-3 text-slate-600">{new Date(doc.created_at).toLocaleDateString('en-US')}</td>
-										<td class="px-4 py-3">
-											<div class="flex gap-2">
-												{#if doc.signed_url}
-													<a href={doc.signed_url} target="_blank" rel="noopener noreferrer" class="px-2 py-1 rounded border border-blue-200 text-blue-700 hover:bg-blue-50">Open</a>
-												{/if}
-												<button
-													type="button"
-													on:click={() => deleteVerificationDocument(doc)}
-													disabled={doc.status !== 'pending' || deletingDocumentId === doc.id}
-													class="px-2 py-1 rounded border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
-												>
-													{deletingDocumentId === doc.id ? 'Deleting...' : 'Delete'}
-												</button>
-											</div>
-										</td>
-									</tr>
-								{/each}
-							</tbody>
-						</table>
-					{/if}
-				</div>
-			</div>
-
 			<div class="profile-card p-7">
 				{#if !isEditing}
 					<!-- View Mode -->
 					<div class="space-y-6">
-						<div class="flex items-center justify-between">
+						<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 							<h2 class="text-2xl font-semibold text-slate-900">Profile Information</h2>
-							<div class="space-x-2">
+							<div class="flex flex-col gap-2 sm:flex-row sm:gap-2">
 								<button
 									type="button"
 									on:click={viewPublicProfile}
-									class="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+									class="w-full sm:w-auto px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
 								>
 									View my public profile
 								</button>
 								<button
 									type="button"
 									on:click={startEditing}
-									class="px-4 py-2 rounded-lg bg-linear-to-r from-emerald-600 to-teal-500 text-white hover:from-emerald-700 hover:to-teal-600 transition-all shadow-md cursor-pointer"
+									class="w-full sm:w-auto px-4 py-2 rounded-lg bg-linear-to-r from-emerald-600 to-teal-500 text-white hover:from-emerald-700 hover:to-teal-600 transition-all shadow-md cursor-pointer"
 								>
 									Edit Profile
 								</button>
@@ -1334,6 +1249,106 @@
 
 					</form>
 				{/if}
+			</div>
+
+			<!-- Verification Documents -->
+			<div class="profile-card p-7 mt-6">
+				<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+					<div>
+						<h2 class="text-xl font-semibold text-slate-900">Verification Documents</h2>
+						<p class="text-sm text-slate-600 mt-1">Upload required documents so admins can verify your account.</p>
+					</div>
+					<div class="text-sm text-slate-500">
+						Accepted: PDF, PNG, JPG, JPEG, WEBP (max 10MB)
+					</div>
+				</div>
+
+				<div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+					<select
+						bind:value={selectedDocumentType}
+						class="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+					>
+						{#each documentTypeOptions as option (option.value)}
+							<option value={option.value}>{option.label}</option>
+						{/each}
+					</select>
+					<input
+						type="file"
+						accept=".pdf,.png,.jpg,.jpeg,.webp"
+						on:change={handleVerificationDocumentSelect}
+						class="text-sm text-gray-600 file:mr-3 file:rounded-md file:border-0 file:bg-emerald-100 file:px-3 file:py-2 file:font-semibold file:text-emerald-700"
+					/>
+					<button
+						type="button"
+						on:click={uploadVerificationDocument}
+						disabled={!selectedDocumentFile || uploadingDocument}
+						class="px-4 py-2 rounded-md bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50"
+					>
+						{uploadingDocument ? 'Uploading...' : 'Upload document'}
+					</button>
+				</div>
+
+				{#if documentsError}
+					<p class="mt-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">{documentsError}</p>
+				{/if}
+				{#if documentsMessage}
+					<p class="mt-3 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2">{documentsMessage}</p>
+				{/if}
+
+				<div class="mt-4 border border-slate-200 rounded-xl overflow-hidden">
+					{#if documentsLoading}
+						<p class="px-4 py-3 text-sm text-slate-500">Loading documents...</p>
+					{:else if verificationDocuments.length === 0}
+						<p class="px-4 py-3 text-sm text-slate-500">No documents uploaded yet.</p>
+					{:else}
+						<table class="w-full text-sm">
+							<thead class="bg-slate-50 text-slate-600 text-left">
+								<tr>
+									<th class="px-4 py-3 font-medium">Type</th>
+									<th class="px-4 py-3 font-medium">File</th>
+									<th class="px-4 py-3 font-medium">Status</th>
+									<th class="px-4 py-3 font-medium">Uploaded</th>
+									<th class="px-4 py-3 font-medium">Actions</th>
+								</tr>
+							</thead>
+							<tbody class="divide-y divide-slate-100">
+								{#each verificationDocuments as doc (doc.id)}
+									<tr>
+										<td class="px-4 py-3">{documentTypeLabel(doc.document_type)}</td>
+										<td class="px-4 py-3">
+											<p class="font-medium text-slate-900">{doc.file_name}</p>
+											<p class="text-xs text-slate-500">{formatFileSize(doc.file_size)}</p>
+											{#if doc.admin_note}
+												<p class="text-xs text-red-600 mt-1">Admin note: {doc.admin_note}</p>
+											{/if}
+										</td>
+										<td class="px-4 py-3">
+											<span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${documentStatusClass(doc.status)}`}>
+												{documentStatusLabel(doc.status)}
+											</span>
+										</td>
+										<td class="px-4 py-3 text-slate-600">{new Date(doc.created_at).toLocaleDateString('en-US')}</td>
+										<td class="px-4 py-3">
+											<div class="flex gap-2">
+												{#if doc.signed_url}
+													<a href={doc.signed_url} target="_blank" rel="noopener noreferrer" class="px-2 py-1 rounded border border-blue-200 text-blue-700 hover:bg-blue-50">Open</a>
+												{/if}
+												<button
+													type="button"
+													on:click={() => deleteVerificationDocument(doc)}
+													disabled={doc.status !== 'pending' || deletingDocumentId === doc.id}
+													class="px-2 py-1 rounded border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
+												>
+													{deletingDocumentId === doc.id ? 'Deleting...' : 'Delete'}
+												</button>
+											</div>
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					{/if}
+				</div>
 			</div>
 		</div>
 	</div>

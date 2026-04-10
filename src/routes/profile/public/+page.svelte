@@ -313,10 +313,24 @@
 </script>
 
 {#if loading}
-	<div class="min-h-screen flex items-center justify-center">
-		<div class="text-center">
-			<div class="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
-			<p class="mt-3 text-gray-600">Loading public profile...</p>
+	<div class="min-h-screen public-profile-bg py-10 px-4 sm:px-6 lg:px-8">
+		<div class="max-w-4xl mx-auto">
+			<div class="profile-card p-7 animate-pulse">
+				<div class="h-8 w-56 bg-slate-200 rounded mb-6"></div>
+				<div class="flex items-center gap-4 mb-6">
+					<div class="h-20 w-20 rounded-full bg-slate-200"></div>
+					<div class="space-y-2">
+						<div class="h-4 w-40 bg-slate-200 rounded"></div>
+						<div class="h-3 w-28 bg-slate-200 rounded"></div>
+					</div>
+				</div>
+				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+					<div class="h-20 bg-slate-100 rounded-xl"></div>
+					<div class="h-20 bg-slate-100 rounded-xl"></div>
+					<div class="h-20 bg-slate-100 rounded-xl md:col-span-2"></div>
+				</div>
+			</div>
+			<p class="mt-4 text-center text-sm text-slate-600">Chargement du profil public...</p>
 		</div>
 	</div>
 {:else}
@@ -329,7 +343,7 @@
 				</div>
 			{/if}
 			<div class="rounded-2xl bg-linear-to-r from-emerald-600 via-emerald-500 to-teal-500 p-7 shadow-xl mb-6 text-white border border-emerald-300/30">
-				<div class="flex items-center justify-between">
+				<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
 					<div>
 						<h1 class="text-3xl font-bold tracking-tight">Public Profile</h1>
 						<p class="text-emerald-50/95 mt-1">
@@ -340,7 +354,7 @@
 					</div>
 					<button
 						on:click={goBackFromPublicProfile}
-						class="px-4 py-2 rounded-lg text-sm font-semibold text-emerald-700 bg-white hover:bg-emerald-50 transition-colors"
+						class="w-full md:w-auto px-4 py-2 rounded-lg text-sm font-semibold text-emerald-700 bg-white hover:bg-emerald-50 transition-colors"
 					>
 						{#if !viewingOwnProfile && hasSavedSearchUrl()}
 							← Back to search results
@@ -352,7 +366,7 @@
 			</div>
 
 			<div class="profile-card p-7">
-				<div class="flex items-center space-x-4 mb-6 rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4">
+				<div class="flex flex-col sm:flex-row sm:items-center gap-4 mb-6 rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4">
 					<div class="relative w-24 h-24 overflow-visible">
 						<div class="w-24 h-24 rounded-full bg-slate-200 flex items-center justify-center overflow-hidden ring-4 ring-white shadow-md">
 							{#if profile.profile_photo_url}
