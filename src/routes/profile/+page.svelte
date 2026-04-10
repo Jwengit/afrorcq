@@ -784,7 +784,7 @@
 					<div class="h-20 bg-slate-100 rounded-xl"></div>
 				</div>
 			</div>
-			<p class="mt-4 text-center text-sm text-slate-600">Chargement du profil...</p>
+			<p class="mt-4 text-center text-sm text-slate-600">Loading profile...</p>
 		</div>
 	</div>
 {:else if currentUser}

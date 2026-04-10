@@ -330,7 +330,7 @@
 					<div class="h-20 bg-slate-100 rounded-xl md:col-span-2"></div>
 				</div>
 			</div>
-			<p class="mt-4 text-center text-sm text-slate-600">Chargement du profil public...</p>
+			<p class="mt-4 text-center text-sm text-slate-600">Loading public profile...</p>
 		</div>
 	</div>
 {:else}

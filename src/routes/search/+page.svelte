@@ -15,6 +15,15 @@
 		price: number;
 		girls_only: boolean;
 		driver_id: string;
+		driver_profile?: DriverProfile | null;
+	};
+
+	type DriverProfile = {
+		id: string;
+		first_name: string | null;
+		last_name: string | null;
+		profile_photo_url: string | null;
+		is_verified: boolean;
 	};
 
 	let departure = '';
@@ -48,6 +57,13 @@
 		return `${resolve('/profile/public')}?id=${encodeURIComponent(driverId)}`;
 	}
 
+	function driverDisplayName(ride: Ride): string {
+		const first = ride.driver_profile?.first_name?.trim() ?? '';
+		const last = ride.driver_profile?.last_name?.trim() ?? '';
+		const full = `${first} ${last}`.trim();
+		return full || 'Conducteur';
+	}
+
 	async function searchRides() {
 		const dep = departure.trim();
 		const arr = arrival.trim();
@@ -71,10 +87,54 @@
 			errorMessage = 'Search failed. Please try again.';
 		} else {
 			const allRides = (data as Ride[]) ?? [];
+			const driverIds = Array.from(new Set(allRides.map((ride) => ride.driver_id).filter(Boolean)));
+			let driversById = new Map<string, DriverProfile>();
+
+			if (driverIds.length > 0) {
+				let { data: driverProfiles, error: driverProfilesError } = await supabase
+					.from('profiles')
+					.select('id, first_name, last_name, profile_photo_url, is_verified')
+					.in('id', driverIds);
+
+				if (driverProfilesError?.message?.toLowerCase().includes('is_verified')) {
+					const fallback = await supabase
+						.from('profiles')
+						.select('id, first_name, last_name, profile_photo_url')
+						.in('id', driverIds);
+
+					driverProfiles = (fallback.data ?? []).map((profile) => ({
+						...profile,
+						is_verified: false
+					}));
+					driverProfilesError = fallback.error;
+				}
+
+				if (driverProfilesError) {
+					console.error('Driver profiles search error:', driverProfilesError);
+				} else {
+					driversById = new Map(
+						(driverProfiles ?? []).map((profile) => [
+							profile.id,
+							{
+								id: profile.id,
+								first_name: profile.first_name ?? null,
+								last_name: profile.last_name ?? null,
+								profile_photo_url: profile.profile_photo_url ?? null,
+								is_verified: Boolean(profile.is_verified)
+							}
+						])
+					);
+				}
+			}
+
+			const ridesWithDrivers = allRides.map((ride) => ({
+				...ride,
+				driver_profile: driversById.get(ride.driver_id) ?? null
+			}));
 			const depLower = dep.toLowerCase();
 			const arrLower = arr.toLowerCase();
 
-			results = allRides.filter((ride) => {
+			results = ridesWithDrivers.filter((ride) => {
 				const rideDeparture = ride.departure.toLowerCase();
 				const rideArrival = ride.arrival.toLowerCase();
 
@@ -201,6 +261,43 @@
 					<div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5 hover:shadow-md hover:border-green-300 transition-all">
 						<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
 							<div>
+								<div class="flex items-center gap-3 mb-2">
+									<a
+										href={driverPublicProfileHref(ride.driver_id)}
+										on:click={persistSearchState}
+										class="relative inline-flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-200 ring-2 ring-white"
+										aria-label="View driver profile"
+									>
+										{#if ride.driver_profile?.profile_photo_url}
+											<img
+												src={ride.driver_profile.profile_photo_url}
+												alt={driverDisplayName(ride)}
+												class="h-full w-full object-cover"
+											/>
+										{:else}
+											<svg class="h-5 w-5 text-slate-500" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+												<path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z"/>
+											</svg>
+										{/if}
+									</a>
+									<div class="flex items-center gap-2 min-w-0">
+										<a
+											href={driverPublicProfileHref(ride.driver_id)}
+											on:click={persistSearchState}
+											class="text-sm font-semibold text-slate-800 hover:text-green-700 truncate"
+										>
+											{driverDisplayName(ride)}
+										</a>
+										{#if ride.driver_profile?.is_verified}
+											<span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+												<svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+													<path fill-rule="evenodd" d="M16.704 5.29a1 1 0 010 1.42l-7.02 7.02a1 1 0 01-1.415 0L4.29 9.752a1 1 0 111.415-1.415l3.271 3.272 6.313-6.313a1 1 0 011.415-.006z" clip-rule="evenodd" />
+												</svg>
+												Verified
+											</span>
+										{/if}
+									</div>
+								</div>
 								<h2 class="text-base font-semibold text-gray-900">
 									{ride.departure} → {ride.arrival}
 								</h2>
