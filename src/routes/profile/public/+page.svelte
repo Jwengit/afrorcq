@@ -9,6 +9,7 @@
 	type PublicProfile = {
 		first_name: string;
 		last_name: string;
+		is_verified: boolean;
 		car_make: string;
 		car_year: string;
 		phone_number: string;
@@ -33,6 +34,7 @@
 	let profile: PublicProfile = {
 		first_name: '',
 		last_name: '',
+		is_verified: false,
 		car_make: '',
 		car_year: '',
 		phone_number: '',
@@ -250,7 +252,7 @@
 
 		const { data, error } = await supabase
 			.from('profiles')
-			.select('first_name,last_name,car_make,car_year,phone_number,date_of_birth,city_of_birth,address,zip_code,gender,bio,languages,ride_preferences,profile_photo_url')
+			.select('first_name,last_name,is_verified,car_make,car_year,phone_number,date_of_birth,city_of_birth,address,zip_code,gender,bio,languages,ride_preferences,profile_photo_url')
 			.eq('id', profileId)
 			.maybeSingle();
 
@@ -260,6 +262,7 @@
 			profile = {
 				first_name: data.first_name ?? '',
 				last_name: data.last_name ?? '',
+				is_verified: data.is_verified ?? false,
 				car_make: data.car_make ?? '',
 				car_year: data.car_year ? String(data.car_year) : '',
 				phone_number: data.phone_number ?? '',
@@ -315,7 +318,7 @@
 
 			<div class="profile-card p-7">
 				<div class="flex items-center space-x-4 mb-6 rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4">
-					<div class="w-24 h-24 rounded-full bg-slate-200 flex items-center justify-center overflow-hidden ring-4 ring-white shadow-md">
+					<div class="relative w-24 h-24 rounded-full bg-slate-200 flex items-center justify-center overflow-hidden ring-4 ring-white shadow-md">
 						{#if profile.profile_photo_url}
 							<img src={profile.profile_photo_url} alt="Profile" class="w-full h-full object-cover" />
 						{:else}
@@ -323,10 +326,24 @@
 								<path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z"/>
 							</svg>
 						{/if}
+						{#if profile.is_verified}
+							<span
+								class="absolute right-0 bottom-0 inline-flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-emerald-600 text-white shadow"
+								title="Verified member"
+								aria-label="Verified member"
+							>
+								<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+									<path fill-rule="evenodd" d="M16.704 5.29a1 1 0 010 1.42l-7.02 7.02a1 1 0 01-1.415 0L4.29 9.752a1 1 0 111.415-1.415l3.271 3.272 6.313-6.313a1 1 0 011.415-.006z" clip-rule="evenodd" />
+								</svg>
+							</span>
+						{/if}
 					</div>
 					<div>
 						<h2 class="text-2xl font-semibold text-slate-900">{(profile.first_name || profile.last_name) ? `${profile.first_name} ${profile.last_name}`.trim() : 'No name set'}</h2>
 						<p class="text-slate-600 capitalize">{profile.gender || 'Gender not set'}</p>
+						{#if profile.is_verified}
+							<p class="text-xs font-semibold text-emerald-700 mt-1">Verified member</p>
+						{/if}
 					</div>
 				</div>
 
