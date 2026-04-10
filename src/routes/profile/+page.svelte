@@ -10,6 +10,7 @@
 	type Profile = {
 		first_name: string;
 		last_name: string;
+		is_verified: boolean;
 		phone_number: string;
 		date_of_birth: string;
 		city_of_birth: string;
@@ -46,12 +47,14 @@
 	let loading = true;
 	let saving = false;
 	let isEditing = false;
+	let profileError = '';
 	let profileLoaded = false;
 	let authChecked = false;
 
 	const emptyProfile: Profile = {
 		first_name: '',
 		last_name: '',
+		is_verified: false,
 		phone_number: '',
 		date_of_birth: '',
 		city_of_birth: '',
@@ -272,11 +275,15 @@
 	}
 
 	function normalizeProfile(data?: Partial<Profile> | null): Profile {
+		const legacyStatus = (data?.status ?? '').toString().toLowerCase();
+		const isVerified = Boolean(data?.is_verified) || legacyStatus === 'verified';
+
 		return {
 			...emptyProfile,
 			...data,
 			first_name: data?.first_name ?? '',
 			last_name: (data?.last_name as string) ?? '',
+			is_verified: isVerified,
 			phone_number: (data?.phone_number as string) ?? '',
 			date_of_birth: (data?.date_of_birth as string) ?? '',
 			city_of_birth: (data?.city_of_birth as string) ?? '',
@@ -292,14 +299,15 @@
 			languages: normalizeOptionSelections(data?.languages, languageOptions),
 			ride_preferences: normalizeOptionSelections(data?.ride_preferences, ridePreferenceOptions),
 			profile_photo_url: (data?.profile_photo_url as string) ?? '',
-			status: data?.status ?? 'Unverified'
+			status: isVerified ? 'Verified' : data?.status ?? 'Unverified'
 		};
 	}
 
 	async function loadProfile() {
 		loading = true;
+		profileError = '';
 		try {
-			const { data, error } = await supabase
+			let { data, error } = await supabase
 				.from('profiles')
 				.select('*')
 				.eq('id', currentUser!.id)
@@ -309,13 +317,46 @@
 				throw error;
 			}
 
+			if (!data && currentUser) {
+				const fallbackFirstName =
+					currentUser.user_metadata?.full_name?.toString()?.split(' ')[0] ||
+					currentUser.user_metadata?.name?.toString()?.split(' ')[0] ||
+					currentUser.email?.split('@')[0] ||
+					'User';
+
+				const { error: createError } = await supabase.from('profiles').upsert(
+					{
+						id: currentUser.id,
+						first_name: fallbackFirstName
+					},
+					{ onConflict: 'id' }
+				);
+
+				if (createError) {
+					throw createError;
+				}
+
+				const retry = await supabase
+					.from('profiles')
+					.select('*')
+					.eq('id', currentUser.id)
+					.maybeSingle();
+
+				if (retry.error) {
+					throw retry.error;
+				}
+
+				data = retry.data;
+			}
+
 			if (data) {
 				profile = normalizeProfile(data);
 				formData = { ...profile };
 				previewUrl = profile.profile_photo_url || '';
 			}
-		} catch {
-			console.log('No profile found, will create one');
+		} catch (error) {
+			console.error('Error loading profile:', error);
+			profileError = error instanceof Error ? error.message : 'Unable to load profile.';
 		} finally {
 			loading = false;
 			await loadVerificationDocuments();
@@ -735,6 +776,11 @@
 	<div class="min-h-screen profile-page-bg py-10 px-4 sm:px-6 lg:px-8">
 		<div class="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.18),transparent_58%)]"></div>
 		<div class="max-w-4xl mx-auto relative z-10">
+			{#if profileError}
+				<div class="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+					{profileError}
+				</div>
+			{/if}
 			<!-- Header -->
 			<div class="rounded-2xl bg-linear-to-r from-emerald-600 via-emerald-500 to-teal-500 p-7 shadow-xl mb-6 text-white border border-emerald-300/30">
 				<div class="flex items-center justify-between">
@@ -757,7 +803,7 @@
 					<div>
 						<h2 class="text-xl font-semibold text-slate-900">Account Status</h2>
 						<p class="text-sm text-slate-600 mt-1">Email: {currentUser.email}</p>
-						<p class="text-sm text-slate-600">Status: {profile.status || 'Unverified'}</p>
+						<p class="text-sm text-slate-600">Status: {profile.is_verified ? 'Verified' : (profile.status || 'Unverified')}</p>
 					</div>
 					<div class="text-right">
 						<span class="inline-flex items-center px-3.5 py-1.5 rounded-full text-sm font-semibold shadow-sm
@@ -894,18 +940,34 @@
 
 						<!-- Profile Photo -->
 						<div class="flex items-center space-x-4 rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4">
-							<div class="w-24 h-24 rounded-full bg-slate-200 flex items-center justify-center overflow-hidden ring-4 ring-white shadow-md">
-								{#if profile.profile_photo_url}
-									<img src={profile.profile_photo_url} alt="Profile" class="w-full h-full object-cover" />
-								{:else}
-									<svg class="w-8 h-8 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
-										<path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z"/>
-									</svg>
+							<div class="relative w-24 h-24 overflow-visible">
+								<div class="w-24 h-24 rounded-full bg-slate-200 flex items-center justify-center overflow-hidden ring-4 ring-white shadow-md">
+									{#if profile.profile_photo_url}
+										<img src={profile.profile_photo_url} alt="Profile" class="w-full h-full object-cover" />
+									{:else}
+										<svg class="w-8 h-8 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+											<path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z"/>
+										</svg>
+									{/if}
+								</div>
+								{#if profile.is_verified}
+									<span
+										class="absolute -right-1 -bottom-1 inline-flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-emerald-600 text-white shadow-lg"
+										title="Verified member"
+										aria-label="Verified member"
+									>
+										<svg class="h-4.5 w-4.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+											<path fill-rule="evenodd" d="M16.704 5.29a1 1 0 010 1.42l-7.02 7.02a1 1 0 01-1.415 0L4.29 9.752a1 1 0 111.415-1.415l3.271 3.272 6.313-6.313a1 1 0 011.415-.006z" clip-rule="evenodd" />
+										</svg>
+									</span>
 								{/if}
 							</div>
 							<div>
 								<h3 class="text-xl font-semibold text-slate-900">{(profile.first_name || profile.last_name) ? `${profile.first_name} ${profile.last_name}`.trim() : 'No name set'}</h3>
 								<p class="text-slate-600 capitalize">{profile.gender ? profile.gender : 'Gender not set'}</p>
+								{#if profile.is_verified}
+									<p class="text-xs font-semibold text-emerald-700 mt-1">Verified member</p>
+								{/if}
 							</div>
 						</div>
 

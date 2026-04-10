@@ -31,6 +31,7 @@
 	let reportingUser = false;
 	let reportMessage = '';
 	let reportError = '';
+	let profileLoadError = '';
 	let profile: PublicProfile = {
 		first_name: '',
 		last_name: '',
@@ -61,6 +62,32 @@
 	const languageOptions = [
 		'English', 'French', 'Spanish', 'German', 'Italian', 'Portuguese', 'Arabic', 'Chinese', 'Japanese', 'Korean'
 	];
+
+	function mapPublicProfileFromRow(data: Record<string, unknown>): PublicProfile {
+		const legacyStatus = String(data.status ?? '').toLowerCase();
+		const isVerified = Boolean(data.is_verified) || legacyStatus === 'verified';
+
+		return {
+			first_name: String(data.first_name ?? ''),
+			last_name: String(data.last_name ?? ''),
+			is_verified: isVerified,
+			car_make: String(data.car_make ?? ''),
+			car_year: data.car_year ? String(data.car_year) : '',
+			phone_number: String(data.phone_number ?? ''),
+			date_of_birth: String(data.date_of_birth ?? ''),
+			city_of_birth: String(data.city_of_birth ?? ''),
+			address: String(data.address ?? ''),
+			zip_code: String(data.zip_code ?? ''),
+			gender: String(data.gender ?? ''),
+			bio: String(data.bio ?? ''),
+			languages: normalizeOptionSelections(data.languages as string[] | string | null | undefined, languageOptions),
+			ride_preferences: normalizeOptionSelections(
+				data.ride_preferences as string[] | string | null | undefined,
+				ridePreferenceOptions
+			),
+			profile_photo_url: String(data.profile_photo_url ?? '')
+		};
+	}
 
 	function cleanArrayItem(value: string): string {
 		return value
@@ -239,6 +266,7 @@
 	}
 
 	onMount(async () => {
+		profileLoadError = '';
 		const { data: authData } = await supabase.auth.getUser();
 		if (!authData.user) {
 			goto(resolve('/auth/login'));
@@ -250,32 +278,34 @@
 		viewedProfileId = profileId;
 		viewingOwnProfile = profileId === authData.user.id;
 
-		const { data, error } = await supabase
+		let { data, error } = await supabase
 			.from('profiles')
-			.select('first_name,last_name,is_verified,car_make,car_year,phone_number,date_of_birth,city_of_birth,address,zip_code,gender,bio,languages,ride_preferences,profile_photo_url')
+			.select('*')
 			.eq('id', profileId)
 			.maybeSingle();
 
+		if (!data && viewingOwnProfile && authData.user) {
+			const fallbackFirstName =
+				authData.user.user_metadata?.full_name?.toString()?.split(' ')[0] ||
+				authData.user.user_metadata?.name?.toString()?.split(' ')[0] ||
+				authData.user.email?.split('@')[0] ||
+				'User';
+
+			await supabase.from('profiles').upsert({
+				id: authData.user.id,
+				first_name: fallbackFirstName
+			});
+
+			const retry = await supabase.from('profiles').select('*').eq('id', profileId).maybeSingle();
+			data = retry.data;
+			error = retry.error;
+		}
+
 		if (error) {
 			console.error('Error loading public profile:', error);
+			profileLoadError = error.message || 'Unable to load public profile.';
 		} else if (data) {
-			profile = {
-				first_name: data.first_name ?? '',
-				last_name: data.last_name ?? '',
-				is_verified: data.is_verified ?? false,
-				car_make: data.car_make ?? '',
-				car_year: data.car_year ? String(data.car_year) : '',
-				phone_number: data.phone_number ?? '',
-				date_of_birth: data.date_of_birth ?? '',
-				city_of_birth: data.city_of_birth ?? '',
-				address: data.address ?? '',
-				zip_code: data.zip_code ?? '',
-				gender: data.gender ?? '',
-				bio: data.bio ?? '',
-				languages: normalizeOptionSelections(data.languages, languageOptions),
-				ride_preferences: normalizeOptionSelections(data.ride_preferences, ridePreferenceOptions),
-				profile_photo_url: data.profile_photo_url ?? ''
-			};
+			profile = mapPublicProfileFromRow(data as Record<string, unknown>);
 		}
 
 		loading = false;
@@ -293,6 +323,11 @@
 	<div class="min-h-screen public-profile-bg py-10 px-4 sm:px-6 lg:px-8">
 		<div class="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.18),transparent_58%)]"></div>
 		<div class="max-w-4xl mx-auto relative z-10">
+			{#if profileLoadError}
+				<div class="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+					{profileLoadError}
+				</div>
+			{/if}
 			<div class="rounded-2xl bg-linear-to-r from-emerald-600 via-emerald-500 to-teal-500 p-7 shadow-xl mb-6 text-white border border-emerald-300/30">
 				<div class="flex items-center justify-between">
 					<div>
@@ -318,21 +353,23 @@
 
 			<div class="profile-card p-7">
 				<div class="flex items-center space-x-4 mb-6 rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4">
-					<div class="relative w-24 h-24 rounded-full bg-slate-200 flex items-center justify-center overflow-hidden ring-4 ring-white shadow-md">
-						{#if profile.profile_photo_url}
-							<img src={profile.profile_photo_url} alt="Profile" class="w-full h-full object-cover" />
-						{:else}
-							<svg class="w-8 h-8 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
-								<path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z"/>
-							</svg>
-						{/if}
+					<div class="relative w-24 h-24 overflow-visible">
+						<div class="w-24 h-24 rounded-full bg-slate-200 flex items-center justify-center overflow-hidden ring-4 ring-white shadow-md">
+							{#if profile.profile_photo_url}
+								<img src={profile.profile_photo_url} alt="Profile" class="w-full h-full object-cover" />
+							{:else}
+								<svg class="w-8 h-8 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+									<path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z"/>
+								</svg>
+							{/if}
+						</div>
 						{#if profile.is_verified}
 							<span
-								class="absolute right-0 bottom-0 inline-flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-emerald-600 text-white shadow"
+								class="absolute -right-1 -bottom-1 inline-flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-emerald-600 text-white shadow-lg"
 								title="Verified member"
 								aria-label="Verified member"
 							>
-								<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+								<svg class="h-4.5 w-4.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
 									<path fill-rule="evenodd" d="M16.704 5.29a1 1 0 010 1.42l-7.02 7.02a1 1 0 01-1.415 0L4.29 9.752a1 1 0 111.415-1.415l3.271 3.272 6.313-6.313a1 1 0 011.415-.006z" clip-rule="evenodd" />
 								</svg>
 							</span>
