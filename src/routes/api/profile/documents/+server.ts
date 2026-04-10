@@ -32,6 +32,23 @@ function normalizeDocumentType(row: DocumentRow): string {
   return row.document_type ?? row.doc_type ?? row.type ?? 'other';
 }
 
+function createApiClient(token: string) {
+  const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
+  if (serviceRoleKey) {
+    return createClient(supabaseUrl, serviceRoleKey);
+  }
+
+  // Fallback for deployments where service role env is missing.
+  // Uses the authenticated user's token and RLS policies.
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    global: {
+      headers: {
+        authorization: `Bearer ${token}`
+      }
+    }
+  });
+}
+
 async function tryInsertDocumentRecord(
   adminClient: unknown,
   input: {
@@ -189,18 +206,7 @@ export const GET: RequestHandler = async ({ request }) => {
       return json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!serviceRoleKey) {
-      return json(
-        {
-          error:
-            'SUPABASE_SERVICE_ROLE_KEY is missing. Add it to .env.local then restart the dev server.'
-        },
-        { status: 500 }
-      );
-    }
-
-    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+    const adminClient = createApiClient(token);
 
     let docs: DocumentRow[] = [];
 
@@ -306,17 +312,6 @@ export const POST: RequestHandler = async ({ request }) => {
       return json({ error: 'Server configuration error' }, { status: 500 });
     }
 
-    const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!serviceRoleKey) {
-      return json(
-        {
-          error:
-            'SUPABASE_SERVICE_ROLE_KEY is missing. Add it to .env.local then restart the dev server.'
-        },
-        { status: 500 }
-      );
-    }
-
     const token = getBearerToken(request);
     if (!token) {
       return json({ error: 'Unauthorized' }, { status: 401 });
@@ -328,7 +323,7 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     const contentType = request.headers.get('content-type') || '';
-    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+    const adminClient = createApiClient(token);
 
     if (contentType.includes('multipart/form-data')) {
       const formData = await request.formData();
@@ -436,18 +431,7 @@ export const DELETE: RequestHandler = async ({ request, url }) => {
       return json({ error: 'documentId is required' }, { status: 400 });
     }
 
-    const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!serviceRoleKey) {
-      return json(
-        {
-          error:
-            'SUPABASE_SERVICE_ROLE_KEY is missing. Add it to .env.local then restart the dev server.'
-        },
-        { status: 500 }
-      );
-    }
-
-    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+    const adminClient = createApiClient(token);
 
     const { data: doc, error: fetchError } = await adminClient
       .from('verification_documents')

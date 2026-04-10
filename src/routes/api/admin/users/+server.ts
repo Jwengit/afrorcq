@@ -84,7 +84,7 @@ export const GET: RequestHandler = async ({ request }) => {
 			return json(
 				{
 					error:
-						'SUPABASE_SERVICE_ROLE_KEY is missing. Add it to .env.local then restart the dev server.'
+						'SUPABASE_SERVICE_ROLE_KEY is missing. Set it in your environment (.env.local for local dev, or Vercel Project Settings > Environment Variables for deployment) and redeploy/restart.'
 				},
 				{ status: 500 }
 			);
@@ -204,7 +204,7 @@ export const PATCH: RequestHandler = async ({ request }) => {
 			return json(
 				{
 					error:
-						'SUPABASE_SERVICE_ROLE_KEY is missing. Add it to .env.local then restart the dev server.'
+						'SUPABASE_SERVICE_ROLE_KEY is missing. Set it in your environment (.env.local for local dev, or Vercel Project Settings > Environment Variables for deployment) and redeploy/restart.'
 				},
 				{ status: 500 }
 			);
