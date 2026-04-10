@@ -972,11 +972,26 @@
 		}
 
 		// Fetch rider profile details
-		const { data: riderProfile } = await supabase
+		let { data: riderProfile, error: riderProfileError } = await supabase
 			.from('profiles')
 			.select('id, first_name, last_name, email, phone_number, average_rating, created_at')
 			.eq('id', booking.user_id)
 			.maybeSingle();
+
+		if (riderProfileError?.message?.toLowerCase().includes('average_rating')) {
+			const { data: fallbackRiderProfile, error: fallbackRiderProfileError } = await supabase
+				.from('profiles')
+				.select('id, first_name, last_name, email, phone_number, created_at')
+				.eq('id', booking.user_id)
+				.maybeSingle();
+
+			if (!fallbackRiderProfileError && fallbackRiderProfile) {
+				riderProfile = {
+					...fallbackRiderProfile,
+					average_rating: null
+				};
+			}
+		}
 
 		if (riderProfile) {
 			selectedBookingRider = {

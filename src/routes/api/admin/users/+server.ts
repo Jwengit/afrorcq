@@ -18,6 +18,19 @@ type ProfileRow = {
 	created_at: string | null;
 };
 
+const PROFILE_SELECT_WITH_RATING =
+	'id, first_name, last_name, email, phone_number, is_admin, is_verified, user_status, average_rating, created_at';
+const PROFILE_SELECT_WITHOUT_RATING =
+	'id, first_name, last_name, email, phone_number, is_admin, is_verified, user_status, created_at';
+
+function isMissingAverageRatingColumnError(error: { message?: string } | null): boolean {
+	if (!error?.message) {
+		return false;
+	}
+
+	return error.message.toLowerCase().includes('average_rating');
+}
+
 async function isRequesterAdmin(token: string): Promise<{ ok: boolean; userId?: string; email?: string }> {
 	if (!supabaseUrl || !supabaseAnonKey) {
 		return { ok: false };
@@ -120,14 +133,31 @@ export const GET: RequestHandler = async ({ request }) => {
 		if (ids.length > 0) {
 			const { data: profileRows, error: profilesError } = await adminClient
 				.from('profiles')
-				.select('id, first_name, last_name, email, phone_number, is_admin, is_verified, user_status, average_rating, created_at')
+				.select(PROFILE_SELECT_WITH_RATING)
 				.in('id', ids);
 
-			if (profilesError) {
+			if (profilesError && !isMissingAverageRatingColumnError(profilesError)) {
 				return json({ error: profilesError.message }, { status: 500 });
 			}
 
-			profilesById = new Map((profileRows ?? []).map((row) => [row.id, row as ProfileRow]));
+			let resolvedProfileRows = profileRows;
+			if (profilesError && isMissingAverageRatingColumnError(profilesError)) {
+				const { data: fallbackRows, error: fallbackError } = await adminClient
+					.from('profiles')
+					.select(PROFILE_SELECT_WITHOUT_RATING)
+					.in('id', ids);
+
+				if (fallbackError) {
+					return json({ error: fallbackError.message }, { status: 500 });
+				}
+
+				resolvedProfileRows = (fallbackRows ?? []).map((row) => ({
+					...row,
+					average_rating: null
+				}));
+			}
+
+			profilesById = new Map((resolvedProfileRows ?? []).map((row) => [row.id, row as ProfileRow]));
 		}
 
 		const users = allAuthUsers.map((authUser) => {
