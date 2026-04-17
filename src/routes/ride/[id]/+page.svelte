@@ -28,7 +28,6 @@ let currentUser: User | null = null;
 let ride: Ride | null = null;
 let loading = true;
 let bookingSeats = 1;
-let submitting = false;
 let processingPayment = false;
 let paypalLoaded = false;
 let paymentError = '';
@@ -69,43 +68,6 @@ onMount(async () => {
 
 	loading = false;
 });
-
-	async function submitBooking() {
-		if (!currentUser || !ride) return;
-
-		errorMessage = '';
-		successMessage = '';
-
-		if (bookingSeats < 1 || bookingSeats > ride.seats) {
-			errorMessage = `Please select between 1 and ${ride.seats} seats.`;
-			return;
-		}
-
-		submitting = true;
-		try {
-			const { error } = await supabase.from('bookings').insert({
-				ride_id: ride.id,
-				passenger_id: currentUser.id,
-				seats_booked: bookingSeats,
-				status: 'Pending'
-			});
-
-			if (error) {
-				errorMessage =
-					error.message === 'Not enough seats available for this ride.'
-						? 'There are no longer enough seats available for this ride.'
-						: error.message || 'Failed to complete booking.';
-				return;
-			}
-
-			ride = { ...ride, seats: Math.max(0, ride.seats - bookingSeats) };
-			successMessage = 'Booking request sent. Waiting for driver confirmation.';
-		} catch {
-			errorMessage = 'An unexpected error occurred.';
-		} finally {
-			submitting = false;
-		}
-	}
 
 	async function loadPayPalScript() {
 		if (!browser || paypalLoaded || !paypalClientId) return;
@@ -387,9 +349,9 @@ onMount(async () => {
 								<p class="text-sm text-gray-600 mt-2">Processing payment...</p>
 							{/if}
 						{:else}
-							<form on:submit|preventDefault={submitBooking}>
-								<button type="submit" disabled={submitting} class="w-full rounded-md bg-green-600 text-white font-medium py-3 hover:bg-green-700 transition-colors disabled:opacity-60">{submitting ? 'Booking...' : 'Book this ride'}</button>
-							</form>
+							<p class="rounded-md border border-yellow-300 bg-yellow-50 px-3 py-2 text-sm text-yellow-800">
+								Payment is currently unavailable for this ride. Please try again later.
+							</p>
 						{/if}
 					</div>
 				{/if}

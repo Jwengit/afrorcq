@@ -14,10 +14,15 @@ Create a `.env.local` file with your Supabase credentials:
 VITE_PUBLIC_SUPABASE_URL=your_supabase_url
 VITE_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+VITE_PUBLIC_PAYPAL_CLIENT_ID=your_paypal_client_id_for_frontend_sdk
+PAYPAL_CLIENT_ID=your_paypal_client_id
+PAYPAL_CLIENT_SECRET=your_paypal_client_secret
+PAYPAL_MODE=sandbox
 ```
 
 Note: `SUPABASE_SERVICE_ROLE_KEY` is required for admin APIs (`/api/admin/users` and `/api/admin/overview`).
 Do not expose this key in client code.
+`PAYPAL_CLIENT_SECRET` must never be exposed in client code.
 
 ### Supabase Configuration
 

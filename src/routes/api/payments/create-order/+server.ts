@@ -41,14 +41,14 @@ async function getPayPalAccessToken(): Promise<string | null> {
 	return data.access_token ?? null;
 }
 
-async function isAuthenticatedUser(request: Request): Promise<boolean> {
+async function getAuthenticatedUserId(request: Request): Promise<string | null> {
 	if (!supabaseUrl || !supabaseAnonKey) {
-		return false;
+		return null;
 	}
 
 	const token = getBearerToken(request);
 	if (!token) {
-		return false;
+		return null;
 	}
 
 	const client = createClient(supabaseUrl, supabaseAnonKey);
@@ -57,7 +57,11 @@ async function isAuthenticatedUser(request: Request): Promise<boolean> {
 		error
 	} = await client.auth.getUser(token);
 
-	return Boolean(user && !error);
+	if (error || !user) {
+		return null;
+	}
+
+	return user.id;
 }
 
 export const POST: RequestHandler = async ({ request }) => {
@@ -71,7 +75,8 @@ export const POST: RequestHandler = async ({ request }) => {
 			return json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
-		if (!(await isAuthenticatedUser(request))) {
+		const userId = await getAuthenticatedUserId(request);
+		if (!userId) {
 			return json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
@@ -99,6 +104,17 @@ export const POST: RequestHandler = async ({ request }) => {
 			return json({ error: 'Invalid amount' }, { status: 400 });
 		}
 
+		const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
+		if (!serviceRoleKey) {
+			return json(
+				{
+					error:
+						'SUPABASE_SERVICE_ROLE_KEY is missing. Set it in your environment (.env.local for local dev, or Vercel Project Settings > Environment Variables for deployment) and redeploy/restart.'
+				},
+				{ status: 500 }
+			);
+		}
+
 		const accessToken = await getPayPalAccessToken();
 		if (!accessToken) {
 			return json({ error: 'Could not connect to PayPal' }, { status: 500 });
@@ -114,6 +130,8 @@ export const POST: RequestHandler = async ({ request }) => {
 				intent: 'CAPTURE',
 				purchase_units: [
 					{
+						reference_id: ride.id,
+						custom_id: `${ride.id}:${userId}:${seats}`,
 						amount: {
 							currency_code: 'USD',
 							value: amount.toFixed(2)
@@ -131,6 +149,27 @@ export const POST: RequestHandler = async ({ request }) => {
 		const orderData = await orderResponse.json();
 		if (!orderResponse.ok) {
 			return json({ error: orderData?.message || 'Unable to create PayPal order' }, { status: 500 });
+		}
+
+		if (!orderData?.id) {
+			return json({ error: 'PayPal order id missing' }, { status: 500 });
+		}
+
+		const adminClient = createClient(supabaseUrl, serviceRoleKey);
+		const transactionInsert = await adminClient.from('transactions').insert({
+			ride_id: ride.id,
+			user_id: userId,
+			seats_booked: seats,
+			amount,
+			status: 'pending',
+			refund_status: 'none',
+			currency: 'USD',
+			provider: 'paypal',
+			paypal_order_id: orderData.id
+		});
+
+		if (transactionInsert.error) {
+			return json({ error: transactionInsert.error.message }, { status: 500 });
 		}
 
 		return json({ orderId: orderData.id });
