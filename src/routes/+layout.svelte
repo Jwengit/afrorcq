@@ -1,6 +1,7 @@
 <script lang="ts">
 	import './layout.css';
 	import Header from '$lib/components/Header.svelte';
+	import InstallPrompt from '$lib/components/InstallPrompt.svelte';
 	import favicon from '$lib/assets/favicon.svg';
 
 	let { children } = $props();
@@ -18,3 +19,5 @@
 <main class="flex-1">
 	{@render children()}
 </main>
+
+<InstallPrompt />
