@@ -7,54 +7,68 @@
 	import { supabase } from '$lib/supabaseClient';
 	import type { User } from '@supabase/supabase-js';
 
-	type Ride = {
-		id: string;
-		driver_id: string;
-		departure: string;
-		arrival: string;
-		pickup: string;
-		dropoff: string;
-		ride_date: string;
-		seats: number;
-		price: number;
-		girls_only: boolean;
-	};
+type PayPalWindow = Window & {
+	paypal?: any;
+};
 
-	let currentUser: User | null = null;
-	let ride: Ride | null = null;
-	let loading = true;
-	let bookingSeats = 1;
-	let submitting = false;
-	let errorMessage = '';
-	let successMessage = '';
-	let reportDescription = '';
-	let reportingRide = false;
-	let reportMessage = '';
-	let reportError = '';
+type Ride = {
+	id: string;
+	driver_id: string;
+	departure: string;
+	arrival: string;
+	pickup: string;
+	dropoff: string;
+	ride_date: string;
+	seats: number;
+	price: number;
+	girls_only: boolean;
+};
 
-	onMount(async () => {
-		const { data: { user } } = await supabase.auth.getUser();
-		currentUser = user;
+let currentUser: User | null = null;
+let ride: Ride | null = null;
+let loading = true;
+let bookingSeats = 1;
+let submitting = false;
+let processingPayment = false;
+let paypalLoaded = false;
+let paymentError = '';
+let errorMessage = '';
+let successMessage = '';
+let reportDescription = '';
+let reportingRide = false;
+let reportMessage = '';
+let reportError = '';
+const paypalClientId = import.meta.env.VITE_PUBLIC_PAYPAL_CLIENT_ID || '';
 
-		if (!user && browser) {
-			goto(resolve('/auth/login'));
-			loading = false;
-			return;
-		}
+onMount(async () => {
+	const {
+		data: { user }
+	} = await supabase.auth.getUser();
+	currentUser = user;
 
-		const rideId = $page.params.id;
-		const { data, error } = await supabase.from('rides').select('*').eq('id', rideId).maybeSingle();
-
-		if (error || !data) {
-			errorMessage = 'Ride not found.';
-			loading = false;
-			return;
-		}
-
-		ride = data as Ride;
-
+	if (!user && browser) {
+		goto(resolve('/auth/login'));
 		loading = false;
-	});
+		return;
+	}
+
+	const rideId = $page.params.id;
+	const { data, error } = await supabase.from('rides').select('*').eq('id', rideId).maybeSingle();
+
+	if (error || !data) {
+		errorMessage = 'Ride not found.';
+		loading = false;
+		return;
+	}
+
+	ride = data as Ride;
+
+	if (browser && paypalClientId) {
+		await loadPayPalScript();
+	}
+
+	loading = false;
+});
 
 	async function submitBooking() {
 		if (!currentUser || !ride) return;
@@ -93,8 +107,125 @@
 		}
 	}
 
-	function goBackToSearchResults() {
-		goto(resolve('/search'));
+	async function loadPayPalScript() {
+		if (!browser || paypalLoaded || !paypalClientId) return;
+
+		return new Promise<void>((resolvePromise, reject) => {
+			const existingScript = document.querySelector(`script[src*="paypal.com/sdk/js"]`);
+			if (existingScript) {
+				paypalLoaded = Boolean((window as PayPalWindow).paypal);
+				if (paypalLoaded) {
+					renderPayPalButtons();
+				}
+				return resolvePromise();
+			}
+
+			const script = document.createElement('script');
+			script.src = `https://www.paypal.com/sdk/js?client-id=${paypalClientId}&currency=USD&enable-funding=venmo`;
+			script.async = true;
+			script.onload = () => {
+				paypalLoaded = true;
+				renderPayPalButtons();
+				resolvePromise();
+			};
+			script.onerror = () => {
+				paymentError = 'Unable to load PayPal buttons.';
+				reject(new Error(paymentError));
+			};
+			document.body.appendChild(script);
+		});
+	}
+
+	function renderPayPalButtons() {
+		if (!browser || !(window as PayPalWindow).paypal) return;
+		const container = document.getElementById('paypal-button-container');
+		if (!container) return;
+
+		container.innerHTML = '';
+
+		(window as PayPalWindow).paypal.Buttons({
+			style: {
+				layout: 'vertical',
+				color: 'blue',
+				shape: 'rect',
+				label: 'paypal'
+			},
+			createOrder: async () => {
+				return await createPayPalOrder();
+			},
+			onApprove: async (data: { orderID: string }) => {
+				await capturePayPalOrder(data.orderID);
+			},
+			onError: (err: unknown) => {
+				paymentError = err instanceof Error ? err.message : 'Payment error';
+			}
+		}).render(container);
+	}
+
+	async function createPayPalOrder(): Promise<string> {
+		const token = await getSessionAccessToken();
+		if (!token) {
+			throw new Error('Session expired. Please sign in again.');
+		}
+
+		if (!ride) {
+			throw new Error('Ride information unavailable.');
+		}
+
+		const response = await fetch('/api/payments/create-order', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${token}`
+			},
+			body: JSON.stringify({ rideId: ride.id, seats: bookingSeats })
+		});
+
+		const payload = await response.json();
+		if (!response.ok) {
+			throw new Error(payload?.error || 'Unable to create payment order.');
+		}
+
+		return payload.orderId;
+	}
+
+	async function capturePayPalOrder(orderId: string) {
+		if (!ride) {
+			paymentError = 'Ride information unavailable.';
+			return;
+		}
+
+		processingPayment = true;
+		errorMessage = '';
+		successMessage = '';
+		paymentError = '';
+
+		const token = await getSessionAccessToken();
+		if (!token) {
+			paymentError = 'Session expired. Please sign in again.';
+			processingPayment = false;
+			return;
+		}
+
+		const response = await fetch('/api/payments/capture', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${token}`
+			},
+			body: JSON.stringify({ orderId, rideId: ride.id, seats: bookingSeats })
+		});
+
+		const payload = await response.json();
+		if (!response.ok) {
+			paymentError = payload?.error || 'Unable to capture payment.';
+			processingPayment = false;
+			return;
+		}
+
+		ride = { ...ride, seats: Math.max(0, ride.seats - bookingSeats) };
+		successMessage = 'Payment captured. Booking created and awaiting driver confirmation.';
+		processingPayment = false;
 	}
 
 	async function getSessionAccessToken(): Promise<string | null> {
@@ -103,6 +234,10 @@
 		} = await supabase.auth.getSession();
 
 		return session?.access_token ?? null;
+	}
+
+	function goBackToSearchResults() {
+		goto(resolve('/search'));
 	}
 
 	async function submitRideReport() {
@@ -231,7 +366,7 @@
 				{#if successMessage}<div class="mt-6 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700">{successMessage}</div>{/if}
 
 				{#if currentUser && currentUser.id !== ride.driver_id && ride.seats > 0}
-					<form class="mt-8 space-y-4 border-t border-gray-200 pt-6" on:submit|preventDefault={submitBooking}>
+					<div class="mt-8 space-y-4 border-t border-gray-200 pt-6">
 						<div>
 							<label for="seats" class="block text-sm font-medium text-gray-700 mb-2">Number of seats</label>
 							<select id="seats" bind:value={bookingSeats} class="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500">
@@ -240,8 +375,23 @@
 								{/each}
 							</select>
 						</div>
-						<button type="submit" disabled={submitting} class="w-full rounded-md bg-green-600 text-white font-medium py-3 hover:bg-green-700 transition-colors disabled:opacity-60">{submitting ? 'Booking...' : 'Book this ride'}</button>
-					</form>
+						{#if paypalClientId}
+							<div class="text-sm text-gray-600">
+								Total: <strong>${(ride.price * bookingSeats).toFixed(2)}</strong> USD
+							</div>
+							<div id="paypal-button-container" class="mt-4"></div>
+							{#if paymentError}
+								<p class="text-sm text-red-600 mt-2">{paymentError}</p>
+							{/if}
+							{#if processingPayment}
+								<p class="text-sm text-gray-600 mt-2">Processing payment...</p>
+							{/if}
+						{:else}
+							<form on:submit|preventDefault={submitBooking}>
+								<button type="submit" disabled={submitting} class="w-full rounded-md bg-green-600 text-white font-medium py-3 hover:bg-green-700 transition-colors disabled:opacity-60">{submitting ? 'Booking...' : 'Book this ride'}</button>
+							</form>
+						{/if}
+					</div>
 				{/if}
 			</div>
 		</div>
