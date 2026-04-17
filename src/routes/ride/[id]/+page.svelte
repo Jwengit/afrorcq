@@ -83,7 +83,7 @@ onMount(async () => {
 			}
 
 			const script = document.createElement('script');
-			script.src = `https://www.paypal.com/sdk/js?client-id=${paypalClientId}&currency=USD&enable-funding=venmo`;
+			script.src = `https://www.paypal.com/sdk/js?client-id=${paypalClientId}&currency=USD&enable-funding=venmo,card`;
 			script.async = true;
 			script.onload = () => {
 				paypalLoaded = true;
@@ -108,9 +108,8 @@ onMount(async () => {
 		(window as PayPalWindow).paypal.Buttons({
 			style: {
 				layout: 'vertical',
-				color: 'blue',
-				shape: 'rect',
-				label: 'paypal'
+				color: 'gold',
+				shape: 'rect'
 			},
 			createOrder: async () => {
 				return await createPayPalOrder();
