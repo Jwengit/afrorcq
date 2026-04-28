@@ -7,6 +7,7 @@ const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
 
 type ProfileRow = {
 	id: string;
+	public_id?: number | null;
 	first_name: string | null;
 	last_name: string | null;
 	email: string | null;
@@ -19,8 +20,10 @@ type ProfileRow = {
 };
 
 const PROFILE_SELECT_WITH_RATING =
-	'id, first_name, last_name, email, phone_number, is_admin, is_verified, user_status, average_rating, created_at';
+	'id, public_id, first_name, last_name, email, phone_number, is_admin, is_verified, user_status, average_rating, created_at';
 const PROFILE_SELECT_WITHOUT_RATING =
+	'id, public_id, first_name, last_name, email, phone_number, is_admin, is_verified, user_status, created_at';
+const PROFILE_SELECT_BASE =
 	'id, first_name, last_name, email, phone_number, is_admin, is_verified, user_status, created_at';
 
 function isMissingAverageRatingColumnError(error: { message?: string } | null): boolean {
@@ -29,6 +32,14 @@ function isMissingAverageRatingColumnError(error: { message?: string } | null): 
 	}
 
 	return error.message.toLowerCase().includes('average_rating');
+}
+
+function isMissingPublicIdColumnError(error: { message?: string } | null): boolean {
+	if (!error?.message) {
+		return false;
+	}
+
+	return error.message.toLowerCase().includes('public_id');
 }
 
 async function isRequesterAdmin(token: string): Promise<{ ok: boolean; userId?: string; email?: string }> {
@@ -136,25 +147,49 @@ export const GET: RequestHandler = async ({ request }) => {
 				.select(PROFILE_SELECT_WITH_RATING)
 				.in('id', ids);
 
-			if (profilesError && !isMissingAverageRatingColumnError(profilesError)) {
+			if (
+				profilesError &&
+				!isMissingAverageRatingColumnError(profilesError) &&
+				!isMissingPublicIdColumnError(profilesError)
+			) {
 				return json({ error: profilesError.message }, { status: 500 });
 			}
 
 			let resolvedProfileRows = profileRows;
-			if (profilesError && isMissingAverageRatingColumnError(profilesError)) {
+			if (
+				profilesError &&
+				(isMissingAverageRatingColumnError(profilesError) || isMissingPublicIdColumnError(profilesError))
+			) {
 				const { data: fallbackRows, error: fallbackError } = await adminClient
 					.from('profiles')
 					.select(PROFILE_SELECT_WITHOUT_RATING)
 					.in('id', ids);
 
-				if (fallbackError) {
+				if (fallbackError && !isMissingPublicIdColumnError(fallbackError)) {
 					return json({ error: fallbackError.message }, { status: 500 });
 				}
 
-				resolvedProfileRows = (fallbackRows ?? []).map((row) => ({
-					...row,
-					average_rating: null
-				}));
+				if (fallbackError && isMissingPublicIdColumnError(fallbackError)) {
+					const { data: baseRows, error: baseError } = await adminClient
+						.from('profiles')
+						.select(PROFILE_SELECT_BASE)
+						.in('id', ids);
+
+					if (baseError) {
+						return json({ error: baseError.message }, { status: 500 });
+					}
+
+					resolvedProfileRows = (baseRows ?? []).map((row) => ({
+						...row,
+						average_rating: null,
+						public_id: null
+					}));
+				} else {
+					resolvedProfileRows = (fallbackRows ?? []).map((row) => ({
+						...row,
+						average_rating: null
+					}));
+				}
 			}
 
 			profilesById = new Map((resolvedProfileRows ?? []).map((row) => [row.id, row as ProfileRow]));
@@ -173,6 +208,7 @@ export const GET: RequestHandler = async ({ request }) => {
 
 			return {
 				id: authUser.id,
+				public_id: profile?.public_id ?? null,
 				first_name: profile?.first_name ?? parsedFirstName,
 				last_name: profile?.last_name ?? parsedLastName,
 				email: profile?.email ?? authUser.email,

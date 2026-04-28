@@ -13,6 +13,7 @@
 
 	type AdminUser = {
 		id: string;
+		public_id: number | null;
 		first_name: string | null;
 		last_name: string | null;
 		email: string | null;
@@ -581,7 +582,7 @@
 			return true;
 		}
 
-		const searchable = `${u.first_name ?? ''} ${u.last_name ?? ''} ${u.email ?? ''} ${u.id}`.toLowerCase();
+		const searchable = `${u.public_id ?? ''} ${u.first_name ?? ''} ${u.last_name ?? ''} ${u.email ?? ''} ${u.id}`.toLowerCase();
 		return searchable.includes(normalizedSearch);
 	});
 
@@ -1930,11 +1931,12 @@
 														<p class="font-medium text-gray-900">
 															{`${adminUser.first_name ?? ''} ${adminUser.last_name ?? ''}`.trim() || 'Sans nom'}
 														</p>
+														<p class="text-xs text-gray-700">ID #{adminUser.public_id ?? '-'}</p>
 														<p class="text-xs text-gray-500">{adminUser.email ?? 'Email non renseigne'}</p>
 														{#if adminUser.phone_number}
 															<p class="text-xs text-gray-500">{adminUser.phone_number}</p>
 														{/if}
-														<p class="text-xs text-gray-400 break-all">{adminUser.id}</p>
+														<p class="text-xs text-gray-400 break-all">UUID: {adminUser.id}</p>
 														{#if adminUser.has_profile === false}
 															<p class="text-xs text-amber-600">Profil manquant</p>
 														{/if}

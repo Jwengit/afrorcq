@@ -13,6 +13,7 @@ type PayPalWindow = Window & {
 
 type Ride = {
 	id: string;
+	public_id: number | null;
 	driver_id: string;
 	departure: string;
 	arrival: string;
@@ -37,7 +38,21 @@ let reportDescription = '';
 let reportingRide = false;
 let reportMessage = '';
 let reportError = '';
+let driverPublicProfileId: number | null = null;
 const paypalClientId = import.meta.env.VITE_PUBLIC_PAYPAL_CLIENT_ID || '';
+
+function parsePositiveInt(value: string): number | null {
+	if (!/^\d+$/.test(value)) {
+		return null;
+	}
+
+	const parsed = Number.parseInt(value, 10);
+	if (!Number.isFinite(parsed) || parsed <= 0) {
+		return null;
+	}
+
+	return parsed;
+}
 
 onMount(async () => {
 	const {
@@ -51,8 +66,17 @@ onMount(async () => {
 		return;
 	}
 
-	const rideId = $page.params.id;
-	const { data, error } = await supabase.from('rides').select('*').eq('id', rideId).maybeSingle();
+	const routeRideId = $page.params.id ?? '';
+	const ridePublicId = parsePositiveInt(routeRideId);
+	let rideQuery = supabase.from('rides').select('*');
+
+	if (ridePublicId) {
+		rideQuery = rideQuery.eq('public_id', ridePublicId);
+	} else {
+		rideQuery = rideQuery.eq('id', routeRideId);
+	}
+
+	const { data, error } = await rideQuery.maybeSingle();
 
 	if (error || !data) {
 		errorMessage = 'Ride not found.';
@@ -61,6 +85,13 @@ onMount(async () => {
 	}
 
 	ride = data as Ride;
+
+	const { data: driverProfile } = await supabase
+		.from('profiles')
+		.select('public_id')
+		.eq('id', ride.driver_id)
+		.maybeSingle();
+	driverPublicProfileId = driverProfile?.public_id ?? null;
 
 	if (browser && paypalClientId) {
 		await loadPayPalScript();
@@ -281,7 +312,9 @@ onMount(async () => {
 				<div class="mt-4">
 					<button
 						type="button"
-						on:click={() => ride && goto(resolve(`/profile/public?id=${encodeURIComponent(ride.driver_id)}`))}
+						on:click={() =>
+							driverPublicProfileId && goto(resolve(`/profile/public?pid=${driverPublicProfileId}`))}
+						disabled={!driverPublicProfileId}
 						class="inline-flex items-center rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
 					>
 						View driver public profile

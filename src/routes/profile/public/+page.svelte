@@ -216,6 +216,19 @@
 		return session?.access_token ?? null;
 	}
 
+	function parsePositiveInt(value: string | null): number | null {
+		if (!value || !/^\d+$/.test(value)) {
+			return null;
+		}
+
+		const parsed = Number.parseInt(value, 10);
+		if (!Number.isFinite(parsed) || parsed <= 0) {
+			return null;
+		}
+
+		return parsed;
+	}
+
 	async function submitUserReport() {
 		if (viewingOwnProfile || !viewedProfileId) return;
 
@@ -273,8 +286,37 @@
 			return;
 		}
 
+		const requestedPublicProfileId = parsePositiveInt($page.url.searchParams.get('pid'));
 		const requestedProfileId = $page.url.searchParams.get('id');
 		const profileId = requestedProfileId || authData.user.id;
+
+		if (requestedPublicProfileId) {
+			const { data: profileByPublicId, error: profileByPublicIdError } = await supabase
+				.from('profiles')
+				.select('*')
+				.eq('public_id', requestedPublicProfileId)
+				.maybeSingle();
+
+			if (profileByPublicIdError) {
+				console.error('Error loading public profile by public id:', profileByPublicIdError);
+				profileLoadError = profileByPublicIdError.message || 'Unable to load public profile.';
+				loading = false;
+				return;
+			}
+
+			if (!profileByPublicId) {
+				profileLoadError = 'Public profile not found.';
+				loading = false;
+				return;
+			}
+
+			viewedProfileId = String(profileByPublicId.id ?? '');
+			viewingOwnProfile = viewedProfileId === authData.user.id;
+			profile = mapPublicProfileFromRow(profileByPublicId as Record<string, unknown>);
+			loading = false;
+			return;
+		}
+
 		viewedProfileId = profileId;
 		viewingOwnProfile = profileId === authData.user.id;
 

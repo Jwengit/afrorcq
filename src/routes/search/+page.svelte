@@ -6,6 +6,7 @@
 
 	type Ride = {
 		id: string;
+		public_id: number | null;
 		departure: string;
 		arrival: string;
 		pickup: string;
@@ -20,6 +21,7 @@
 
 	type DriverProfile = {
 		id: string;
+		public_id: number | null;
 		first_name: string | null;
 		last_name: string | null;
 		profile_photo_url: string | null;
@@ -53,8 +55,20 @@
 		}
 	}
 
-	function driverPublicProfileHref(driverId: string): string {
-		return `${resolve('/profile/public')}?id=${encodeURIComponent(driverId)}`;
+	function driverPublicProfileHref(driverProfile: DriverProfile | null | undefined): string {
+		if (driverProfile?.public_id) {
+			return `${resolve('/profile/public')}?pid=${driverProfile.public_id}`;
+		}
+
+		return resolve('/profile/public');
+	}
+
+	function rideDetailsHref(ride: Ride): string {
+		if (ride.public_id) {
+			return resolve(`/ride/${ride.public_id}`);
+		}
+
+		return '#';
 	}
 
 	function driverDisplayName(ride: Ride): string {
@@ -79,7 +93,7 @@
 
 		const { data, error } = await supabase
 			.from('rides')
-			.select('id, departure, arrival, pickup, dropoff, ride_date, seats, price, girls_only, driver_id')
+			.select('id, public_id, departure, arrival, pickup, dropoff, ride_date, seats, price, girls_only, driver_id')
 			.order('ride_date', { ascending: true });
 
 		if (error) {
@@ -93,13 +107,13 @@
 			if (driverIds.length > 0) {
 				let { data: driverProfiles, error: driverProfilesError } = await supabase
 					.from('profiles')
-					.select('id, first_name, last_name, profile_photo_url, is_verified')
+					.select('id, public_id, first_name, last_name, profile_photo_url, is_verified')
 					.in('id', driverIds);
 
 				if (driverProfilesError?.message?.toLowerCase().includes('is_verified')) {
 					const fallback = await supabase
 						.from('profiles')
-						.select('id, first_name, last_name, profile_photo_url')
+						.select('id, public_id, first_name, last_name, profile_photo_url')
 						.in('id', driverIds);
 
 					driverProfiles = (fallback.data ?? []).map((profile) => ({
@@ -117,6 +131,7 @@
 							profile.id,
 							{
 								id: profile.id,
+									public_id: profile.public_id ?? null,
 								first_name: profile.first_name ?? null,
 								last_name: profile.last_name ?? null,
 								profile_photo_url: profile.profile_photo_url ?? null,
@@ -263,7 +278,7 @@
 							<div>
 								<div class="flex items-center gap-3 mb-2">
 									<a
-										href={driverPublicProfileHref(ride.driver_id)}
+										href={driverPublicProfileHref(ride.driver_profile)}
 										on:click={persistSearchState}
 										class="relative inline-flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-200 ring-2 ring-white"
 										aria-label="View driver profile"
@@ -282,7 +297,7 @@
 									</a>
 									<div class="flex items-center gap-2 min-w-0">
 										<a
-											href={driverPublicProfileHref(ride.driver_id)}
+											href={driverPublicProfileHref(ride.driver_profile)}
 											on:click={persistSearchState}
 											class="text-sm font-semibold text-slate-800 hover:text-green-700 truncate"
 										>
@@ -318,14 +333,14 @@
 						</div>
 						<div class="mt-4 flex flex-col sm:flex-row gap-2">
 							<a
-								href={resolve(`/ride/${ride.id}`)}
+								href={rideDetailsHref(ride)}
 								on:click={persistSearchState}
 								class="inline-flex items-center justify-center rounded-md bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700"
 							>
 								View ride details
 							</a>
 							<a
-								href={driverPublicProfileHref(ride.driver_id)}
+								href={driverPublicProfileHref(ride.driver_profile)}
 								on:click={persistSearchState}
 								class="inline-flex items-center justify-center rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
 							>

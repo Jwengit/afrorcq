@@ -129,19 +129,15 @@ export const DELETE: RequestHandler = async ({ request }) => {
 			return json({ error: 'Unauthorized: Missing token' }, { status: 401 });
 		}
 
-		const token = authHeader.slice(7);
+		const token = authHeader.slice(7).trim();
 
-		// Create client with the user's token
-		const supabaseClient = createClient(supabaseUrl, supabaseKey, {
-			global: { 
-				headers: { 
-					authorization: `Bearer ${token}`
-				}
-			}
-		});
+		const supabaseClient = createClient(supabaseUrl, supabaseKey);
 
-		// Get authenticated user
-		const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+		// Validate bearer token explicitly for server-side requests.
+		const {
+			data: { user },
+			error: userError
+		} = await supabaseClient.auth.getUser(token);
 		
 		if (userError) {
 			console.error('Auth getUser error:', userError);

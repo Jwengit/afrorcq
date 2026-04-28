@@ -13,6 +13,7 @@
 
 	type Ride = {
 		id: string;
+		public_id: number | null;
 		departure: string;
 		arrival: string;
 		ride_date: string;
@@ -24,18 +25,22 @@
 	type Booking = {
 		id: string;
 		ride_id: string;
+		ride_public_id: number | null;
 		seat_booked: number;
 		updated_at: string;
 		status: 'Confirmed' | 'Pending' | 'Cancelled' | 'Rejected';
 		ride: {
+			public_id: number | null;
 			departure: string;
 			arrival: string;
 			ride_date: string;
 			price: number;
 			driver_id: string;
+			driver_public_id: number | null;
 		};
 		driver: {
 			id: string;
+			public_id: number | null;
 			first_name: string;
 			last_name: string;
 		} | null;
@@ -48,11 +53,13 @@
 		updated_at: string;
 		status: 'Confirmed' | 'Pending' | 'Cancelled' | 'Rejected';
 		passenger: {
+			public_id: number | null;
 			first_name: string;
 			last_name: string;
 		};
 		ride: {
 			id: string;
+			public_id: number | null;
 			departure: string;
 			arrival: string;
 			ride_date: string;
@@ -81,7 +88,7 @@
 	let reportActionMessage = '';
 	let reportActionError = '';
 	let reportingTargetId: string | null = null;
-	let quickReportRideId = '';
+	let quickReportRidePublicId = '';
 	let quickReportDescription = '';
 	let quickReportingRide = false;
 
@@ -150,7 +157,7 @@
 		ridesLoading = true;
 		const { data, error } = await supabase
 			.from('rides')
-			.select('id, departure, arrival, ride_date, seats, price, girls_only')
+			.select('id, public_id, departure, arrival, ride_date, seats, price, girls_only')
 			.eq('driver_id', userId)
 			.order('ride_date', { ascending: true });
 
@@ -166,7 +173,7 @@
 		bookingsLoading = true;
 		const { data, error } = await supabase
 			.from('bookings')
-			.select('id, ride_id, seats_booked, status, updated_at, ride:rides!bookings_ride_id_fkey(departure, arrival, ride_date, price, driver_id)')
+			.select('id, ride_id, seats_booked, status, updated_at, ride:rides!bookings_ride_id_fkey(public_id, departure, arrival, ride_date, price, driver_id)')
 			.eq('passenger_id', userId)
 			.order('created_at', { ascending: false });
 
@@ -186,6 +193,7 @@
 					updated_at: string;
 				ride:
 					| {
+							public_id: number | null;
 							departure: string;
 							arrival: string;
 							ride_date: string;
@@ -193,6 +201,7 @@
 							driver_id: string;
 					  }
 					| Array<{
+						public_id: number | null;
 						departure: string;
 						arrival: string;
 						ride_date: string;
@@ -212,12 +221,12 @@
 							.filter(Boolean)
 					)
 				);
-				const driverProfiles: Record<string, { id: string; first_name: string; last_name: string }> = {};
+				const driverProfiles: Record<string, { id: string; public_id: number | null; first_name: string; last_name: string }> = {};
 
 				if (driverIds.length > 0) {
 					const { data: driverRows, error: driverError } = await supabase
 						.from('profiles')
-						.select('id, first_name, last_name')
+						.select('id, public_id, first_name, last_name')
 						.in('id', driverIds);
 
 					if (driverError) {
@@ -226,6 +235,7 @@
 						for (const driver of driverRows) {
 							driverProfiles[driver.id] = {
 								id: driver.id,
+								public_id: driver.public_id ?? null,
 								first_name: driver.first_name ?? '',
 								last_name: driver.last_name ?? ''
 							};
@@ -239,15 +249,18 @@
 					return {
 						id: b.id,
 						ride_id: b.ride_id,
+						ride_public_id: rideInfo?.public_id ?? null,
 						seat_booked: b.seats_booked,
 						updated_at: b.updated_at,
 						status: b.status,
 						ride: {
+							public_id: rideInfo?.public_id ?? null,
 							departure: rideInfo?.departure || 'Ride unavailable',
 							arrival: rideInfo?.arrival || '',
 							ride_date: rideInfo?.ride_date || '',
 							price: rideInfo?.price || 0,
-							driver_id: rideInfo?.driver_id || ''
+							driver_id: rideInfo?.driver_id || '',
+							driver_public_id: driver?.public_id ?? null
 						},
 						driver
 					};
@@ -271,7 +284,7 @@
 		const { data, error } = await supabase
 			.from('bookings')
 			.select(
-				'id, passenger_id, seats_booked, status, updated_at, ride:rides!bookings_ride_id_fkey!inner(id, driver_id, departure, arrival, ride_date, price)'
+				'id, passenger_id, seats_booked, status, updated_at, ride:rides!bookings_ride_id_fkey!inner(id, public_id, driver_id, departure, arrival, ride_date, price)'
 			)
 			.eq('ride.driver_id', userId)
 			.order('created_at', { ascending: false });
@@ -293,6 +306,7 @@
 				ride:
 					| {
 							id: string;
+							public_id: number | null;
 							driver_id: string;
 							departure: string;
 							arrival: string;
@@ -301,6 +315,7 @@
 					  }
 					| Array<{
 							id: string;
+							public_id: number | null;
 							driver_id: string;
 							departure: string;
 							arrival: string;
@@ -311,12 +326,12 @@
 			}>;
 
 			const passengerIds = Array.from(new Set(rows.map((row) => row.passenger_id)));
-			const passengerProfiles: Record<string, { first_name: string; last_name: string }> = {};
+			const passengerProfiles: Record<string, { public_id: number | null; first_name: string; last_name: string }> = {};
 
 			if (passengerIds.length > 0) {
 				const { data: profileRows, error: profileError } = await supabase
 					.from('profiles')
-					.select('id, first_name, last_name')
+					.select('id, public_id, first_name, last_name')
 					.in('id', passengerIds);
 
 				if (profileError) {
@@ -324,6 +339,7 @@
 				} else if (profileRows) {
 					for (const profile of profileRows) {
 						passengerProfiles[profile.id] = {
+							public_id: profile.public_id ?? null,
 							first_name: profile.first_name ?? '',
 							last_name: profile.last_name ?? ''
 						};
@@ -341,11 +357,13 @@
 					updated_at: row.updated_at,
 					status: row.status,
 					passenger: {
+						public_id: passengerProfile?.public_id ?? null,
 						first_name: passengerProfile?.first_name || '',
 						last_name: passengerProfile?.last_name || ''
 					},
 					ride: {
 						id: rideInfo?.id || '',
+						public_id: rideInfo?.public_id ?? null,
 						departure: rideInfo?.departure || 'Ride unavailable',
 						arrival: rideInfo?.arrival || '',
 						ride_date: rideInfo?.ride_date || '',
@@ -686,11 +704,16 @@
 		reportActionMessage = '';
 		reportActionError = '';
 
-		const rideId = quickReportRideId.trim();
+		const ridePublicId = quickReportRidePublicId.trim();
 		const description = quickReportDescription.trim();
 
-		if (!rideId) {
+		if (!ridePublicId) {
 			reportActionError = 'Ride ID requis.';
+			return;
+		}
+
+		if (!/^\d+$/.test(ridePublicId)) {
+			reportActionError = 'Ride ID must be numeric.';
 			return;
 		}
 
@@ -708,6 +731,17 @@
 
 		quickReportingRide = true;
 		try {
+			const { data: rideRow, error: rideLookupError } = await supabase
+				.from('rides')
+				.select('id')
+				.eq('public_id', Number.parseInt(ridePublicId, 10))
+				.maybeSingle();
+
+			if (rideLookupError || !rideRow) {
+				reportActionError = 'Ride not found for this public ID.';
+				return;
+			}
+
 			const response = await fetch('/api/reports', {
 				method: 'POST',
 				headers: {
@@ -716,7 +750,7 @@
 				},
 				body: JSON.stringify({
 					targetType: 'ride',
-					targetRideId: rideId,
+					targetRideId: rideRow.id,
 					description
 				})
 			});
@@ -728,7 +762,7 @@
 			}
 
 			reportActionMessage = 'Signalement envoye. Notre equipe admin va le traiter.';
-			quickReportRideId = '';
+			quickReportRidePublicId = '';
 			quickReportDescription = '';
 		} catch {
 			reportActionError = 'Erreur inattendue lors de l envoi du signalement.';
@@ -737,8 +771,13 @@
 		}
 	}
 
-	function useRideIdForReport(rideId: string) {
-		quickReportRideId = rideId;
+	function useRideIdForReport(ridePublicId: number | null) {
+		if (!ridePublicId) {
+			reportActionError = 'Ride public ID unavailable.';
+			return;
+		}
+
+		quickReportRidePublicId = String(ridePublicId);
 		reportActionError = '';
 		reportActionMessage = '';
 
@@ -879,7 +918,7 @@
 								{:else}
 									<p class="text-xs text-gray-400">{new Date(ride.ride_date).toLocaleString()}</p>
 									<h3 class="text-base font-semibold text-gray-900 mt-1">{ride.departure} → {ride.arrival}</h3>
-									<p class="mt-1 text-xs text-gray-500">Ride ID: {ride.id}</p>
+									<p class="mt-1 text-xs text-gray-500">Ride ID: {ride.public_id ?? '-'}</p>
 									<p class="mt-2 text-sm text-gray-600">
 										{ride.seats} seat{ride.seats !== 1 ? 's' : ''} · ${ride.price}
 										{#if ride.girls_only}
@@ -896,7 +935,7 @@
 										</button>
 											<button
 												type="button"
-												on:click={() => useRideIdForReport(ride.id)}
+												on:click={() => useRideIdForReport(ride.public_id)}
 												class="px-3 py-2 rounded-md border border-red-300 text-red-700 text-sm font-medium hover:bg-red-50"
 											>
 												Utiliser pour signaler
@@ -960,11 +999,11 @@
 											: request.ride.departure}
 									</h3>
 									<p class="text-sm text-gray-500 mt-1">{formatRideDate(request.ride.ride_date)}</p>
-									<p class="text-xs text-gray-500 mt-1">Ride ID: {request.ride.id}</p>
+									<p class="text-xs text-gray-500 mt-1">Ride ID: {request.ride.public_id ?? '-'}</p>
 									<div class="mt-1 flex flex-wrap items-center gap-2 text-sm text-gray-600">
 										<span>Passenger:</span>
 										<a
-											href={resolve(`/profile/public?id=${request.passenger_id}`)}
+											href={request.passenger.public_id ? resolve(`/profile/public?pid=${request.passenger.public_id}`) : '#'}
 											class="inline-flex items-center font-medium text-green-700 hover:text-green-800"
 										>
 											View public profile
@@ -1018,7 +1057,7 @@
 									{/if}
 									<button
 										type="button"
-										on:click={() => useRideIdForReport(request.ride.id)}
+										on:click={() => useRideIdForReport(request.ride.public_id)}
 										class="px-3 py-2 rounded-md border border-red-300 text-red-700 text-sm font-medium hover:bg-red-50"
 									>
 										Utiliser pour signaler trajet
@@ -1066,7 +1105,7 @@
 											: booking.ride.departure}
 									</h3>
 									<p class="text-sm text-gray-500 mt-1">{formatRideDate(booking.ride.ride_date)}</p>
-									<p class="text-xs text-gray-500 mt-1">Ride ID: {booking.ride_id}</p>
+									<p class="text-xs text-gray-500 mt-1">Ride ID: {booking.ride_public_id ?? '-'}</p>
 									<p class="text-sm text-gray-600 mt-1">
 										{booking.seat_booked} seat{booking.seat_booked !== 1 ? 's' : ''}
 										· {booking.ride.price > 0 ? `$${booking.ride.price}` : 'Price unavailable'}
@@ -1132,10 +1171,10 @@
 										{reportingTargetId === `ride:${booking.ride_id}` ? 'Envoi...' : 'Signaler trajet'}
 									</button>
 								{/if}
-								{#if booking.ride_id}
+								{#if booking.ride_public_id}
 									<button
 										type="button"
-										on:click={() => useRideIdForReport(booking.ride_id)}
+										on:click={() => useRideIdForReport(booking.ride_public_id)}
 										class="px-3 py-2 rounded-md border border-red-300 text-red-700 text-sm font-medium hover:bg-red-50"
 									>
 										Utiliser pour signaler trajet
@@ -1211,7 +1250,7 @@
 										<div class="mt-2 flex flex-wrap items-center gap-2">
 											<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-200 text-gray-600 text-xs">{request.status}</span>
 											<a
-												href={resolve(`/profile/public?id=${request.passenger_id}`)}
+												href={request.passenger.public_id ? resolve(`/profile/public?pid=${request.passenger.public_id}`) : '#'}
 												class="text-sm font-medium text-green-700 hover:text-green-800"
 											>
 												View passenger profile
@@ -1273,7 +1312,7 @@
 											<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-200 text-gray-600 text-xs">{booking.status}</span>
 											{#if booking.ride.driver_id}
 												<a
-													href={resolve(`/profile/public?id=${booking.ride.driver_id}`)}
+													href={booking.ride.driver_public_id ? resolve(`/profile/public?pid=${booking.ride.driver_public_id}`) : '#'}
 													class="text-sm font-medium text-green-700 hover:text-green-800"
 												>
 													View driver profile
@@ -1331,7 +1370,7 @@
 			<div class="grid grid-cols-1 md:grid-cols-3 gap-3">
 				<input
 					type="text"
-					bind:value={quickReportRideId}
+					bind:value={quickReportRidePublicId}
 					placeholder="Ride ID"
 					class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
 				/>
