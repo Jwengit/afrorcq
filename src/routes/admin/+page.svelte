@@ -526,6 +526,55 @@
 		actionUserId = null;
 	}
 
+	async function deleteUserAccount(targetUser: AdminUser) {
+		const userLabel = targetUser.email || targetUser.id;
+		const shouldDelete = confirm(
+			`Delete account ${userLabel}? This action is permanent and cannot be undone.`
+		);
+
+		if (!shouldDelete) {
+			return;
+		}
+
+		actionUserId = targetUser.id;
+		usersActionMessage = '';
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			usersActionMessage = 'Session expired. Please sign in again.';
+			actionUserId = null;
+			return;
+		}
+
+		const response = await fetch('/api/admin/users', {
+			method: 'DELETE',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${session.access_token}`
+			},
+			body: JSON.stringify({
+				userId: targetUser.id
+			})
+		});
+
+		const payload = await response.json();
+		if (!response.ok) {
+			usersActionMessage = payload?.error || 'Unable to delete this account right now.';
+			actionUserId = null;
+			return;
+		}
+
+		users = users.filter((u) => u.id !== targetUser.id);
+		if (selectedProfile?.id === targetUser.id) {
+			closeProfileModal();
+		}
+		usersActionMessage = 'User account deleted successfully.';
+		actionUserId = null;
+	}
+
 	$: normalizedSearch = userSearch.trim().toLowerCase();
 	$: filteredUsers = users.filter((u) => {
 		if (!normalizedSearch) {
@@ -1930,6 +1979,14 @@
 																class="px-2 py-1.5 rounded text-xs font-medium border border-emerald-200 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
 															>
 																{adminUser.is_verified ? 'Passer non verifie' : 'Verifier'}
+															</button>
+															<button
+																type="button"
+																disabled={actionUserId === adminUser.id}
+																on:click={() => deleteUserAccount(adminUser)}
+																class="px-2 py-1.5 rounded text-xs font-medium border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
+															>
+																{actionUserId === adminUser.id ? 'Suppression...' : 'Supprimer'}
 															</button>
 														</div>
 													</td>

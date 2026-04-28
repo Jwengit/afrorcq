@@ -256,3 +256,54 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		return json({ error: message }, { status: 500 });
 	}
 };
+
+export const DELETE: RequestHandler = async ({ request }) => {
+	try {
+		if (!supabaseUrl || !supabaseAnonKey) {
+			return json({ error: 'Server configuration error' }, { status: 500 });
+		}
+
+		const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
+		if (!serviceRoleKey) {
+			return json(
+				{
+					error:
+						'SUPABASE_SERVICE_ROLE_KEY is missing. Set it in your environment (.env.local for local dev, or Vercel Project Settings > Environment Variables for deployment) and redeploy/restart.'
+				},
+				{ status: 500 }
+			);
+		}
+
+		const token = getBearerToken(request);
+		if (!token) {
+			return json({ error: 'Unauthorized' }, { status: 401 });
+		}
+
+		const adminCheck = await isRequesterAdmin(token);
+		if (!adminCheck.ok) {
+			return json({ error: 'Forbidden' }, { status: 403 });
+		}
+
+		const body = await request.json();
+		const userId = typeof body.userId === 'string' ? body.userId : '';
+
+		if (!userId) {
+			return json({ error: 'Invalid payload' }, { status: 400 });
+		}
+
+		if (adminCheck.userId && adminCheck.userId === userId) {
+			return json({ error: 'You cannot delete your own account from the admin panel.' }, { status: 400 });
+		}
+
+		const adminClient = createClient(supabaseUrl, serviceRoleKey);
+		const { error } = await adminClient.auth.admin.deleteUser(userId);
+		if (error) {
+			return json({ error: error.message }, { status: 500 });
+		}
+
+		return json({ success: true });
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Internal server error';
+		return json({ error: message }, { status: 500 });
+	}
+};
