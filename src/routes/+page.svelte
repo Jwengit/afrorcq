@@ -1,12 +1,26 @@
 <script lang="ts">
 	import { user } from '$lib/authStore';
 	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
 
 	let currentUser: any = null;
 	let searchDeparture = '';
 	let searchArrival = '';
 	let searchDate = '';
 	let searchSeats = 1;
+	let footerBrandDescription = 'A carpooling platform that connects people.';
+	let footerAboutUsLabel = 'About Us';
+	let footerAboutUsUrl = '/about';
+	let footerHowItWorksLabel = 'How it works';
+	let footerHowItWorksUrl = '/how-it-works';
+	let footerFaqLabel = 'FAQ';
+	let footerFaqUrl = '/faq';
+	let footerHelpCenterLabel = 'Help Center';
+	let footerHelpCenterUrl = '/help';
+	let footerPrivacyPolicyLabel = 'Privacy Policy';
+	let footerPrivacyPolicyUrl = '/privacy';
+	let footerTermsOfServiceLabel = 'Terms of Service';
+	let footerTermsOfServiceUrl = '/terms';
 	user.subscribe((u) => (currentUser = u));
 
 	function handlePublishClick() {
@@ -34,6 +48,33 @@
 
 		goto(`/search${params.toString() ? `?${params.toString()}` : ''}`);
 	}
+
+	onMount(async () => {
+		try {
+			const response = await fetch('/api/platform-settings');
+			if (!response.ok) return;
+
+			const payload = await response.json();
+			const s = payload?.settings;
+			if (!s) return;
+
+			footerBrandDescription = String(s.footer_brand_description ?? footerBrandDescription);
+			footerAboutUsLabel = String(s.footer_about_us_label ?? footerAboutUsLabel);
+			footerAboutUsUrl = String(s.footer_about_us_url ?? footerAboutUsUrl);
+			footerHowItWorksLabel = String(s.footer_how_it_works_label ?? footerHowItWorksLabel);
+			footerHowItWorksUrl = String(s.footer_how_it_works_url ?? footerHowItWorksUrl);
+			footerFaqLabel = String(s.footer_faq_label ?? footerFaqLabel);
+			footerFaqUrl = String(s.footer_faq_url ?? footerFaqUrl);
+			footerHelpCenterLabel = String(s.footer_help_center_label ?? footerHelpCenterLabel);
+			footerHelpCenterUrl = String(s.footer_help_center_url ?? footerHelpCenterUrl);
+			footerPrivacyPolicyLabel = String(s.footer_privacy_policy_label ?? footerPrivacyPolicyLabel);
+			footerPrivacyPolicyUrl = String(s.footer_privacy_policy_url ?? footerPrivacyPolicyUrl);
+			footerTermsOfServiceLabel = String(s.footer_terms_of_service_label ?? footerTermsOfServiceLabel);
+			footerTermsOfServiceUrl = String(s.footer_terms_of_service_url ?? footerTermsOfServiceUrl);
+		} catch {
+			// Keep default footer content if settings endpoint fails.
+		}
+	});
 </script>
 
 <div class="min-h-screen flex flex-col font-sans text-gray-900">
@@ -255,7 +296,7 @@
 						<span class="text-xl font-bold">Hizli</span>
 					</div>
 					<p class="text-gray-50 text-sm">
-						A carpooling platform that connects people.
+						{footerBrandDescription}
 					</p>
 				</div>
 
@@ -263,8 +304,8 @@
 				<div>
 					<h4 class="text-lg font-bold mb-4">About</h4>
 					<ul class="space-y-2 text-gray-50">
-						<li><a href="/about" class="hover:text-white transition">About Us</a></li>
-						<li><a href="/how-it-works" class="hover:text-white transition">How it works</a></li>
+						<li><a href={footerAboutUsUrl} class="hover:text-white transition">{footerAboutUsLabel}</a></li>
+						<li><a href={footerHowItWorksUrl} class="hover:text-white transition">{footerHowItWorksLabel}</a></li>
 					</ul>
 				</div>
 
@@ -272,8 +313,8 @@
 				<div>
 					<h4 class="text-lg font-bold mb-4">Support</h4>
 					<ul class="space-y-2 text-gray-50">
-						<li><a href="/faq" class="hover:text-white transition">FAQ</a></li>
-						<li><a href="/help" class="hover:text-white transition">Help Center</a></li>
+						<li><a href={footerFaqUrl} class="hover:text-white transition">{footerFaqLabel}</a></li>
+						<li><a href={footerHelpCenterUrl} class="hover:text-white transition">{footerHelpCenterLabel}</a></li>
 					</ul>
 				</div>
 
@@ -281,8 +322,8 @@
 				<div>
 					<h4 class="text-lg font-bold mb-4">Legal</h4>
 					<ul class="space-y-2 text-gray-50">
-						<li><a href="/privacy" class="hover:text-white transition">Privacy Policy</a></li>
-						<li><a href="/terms" class="hover:text-white transition">Terms of Service</a></li>
+						<li><a href={footerPrivacyPolicyUrl} class="hover:text-white transition">{footerPrivacyPolicyLabel}</a></li>
+						<li><a href={footerTermsOfServiceUrl} class="hover:text-white transition">{footerTermsOfServiceLabel}</a></li>
 					</ul>
 				</div>
 

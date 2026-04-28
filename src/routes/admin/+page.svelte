@@ -296,6 +296,37 @@
 	let commissionPercent = 10;
 	let maxSeatsLimit = 6;
 	let maxPriceLimit = 200;
+	let footerBrandDescription = 'A carpooling platform that connects people.';
+	let footerAboutUsLabel = 'About Us';
+	let footerAboutUsUrl = '/about';
+	let footerHowItWorksLabel = 'How it works';
+	let footerHowItWorksUrl = '/how-it-works';
+	let footerFaqLabel = 'FAQ';
+	let footerFaqUrl = '/faq';
+	let footerHelpCenterLabel = 'Help Center';
+	let footerHelpCenterUrl = '/help';
+	let footerPrivacyPolicyLabel = 'Privacy Policy';
+	let footerPrivacyPolicyUrl = '/privacy';
+	let footerTermsOfServiceLabel = 'Terms of Service';
+	let footerTermsOfServiceUrl = '/terms';
+	let aboutPageTitle = 'About Us';
+	let aboutPageContent =
+		'Hizli Carpooling is a community-first carpooling platform focused on safety, simplicity, and fair prices.';
+	let howItWorksPageTitle = 'How it works';
+	let howItWorksPageContent =
+		'1. Search your route.\n2. Pick a ride that matches your needs.\n3. Book and travel together.';
+	let faqPageTitle = 'FAQ';
+	let faqPageContent =
+		'Q: How do I book a ride?\nA: Search your route, open ride details, and book your seat.\n\nQ: Is payment secure?\nA: Yes, payments are processed through secure providers.';
+	let helpPageTitle = 'Help Center';
+	let helpPageContent =
+		'Need help? Contact our support team and include your ride ID and account email for faster resolution.';
+	let privacyPageTitle = 'Privacy Policy';
+	let privacyPageContent =
+		'We collect only the data needed to operate Hizli Carpooling and keep the platform safe. We do not sell personal data.';
+	let termsPageTitle = 'Terms of Service';
+	let termsPageContent =
+		'By using Hizli Carpooling, you agree to respect other members, provide accurate information, and follow platform rules.';
 
 	// Dashboard overview stats
 	let stats = {
@@ -1593,6 +1624,49 @@
 			commissionPercent = Number(s.commission_percent ?? 10);
 			maxSeatsLimit = Number(s.max_seats ?? 6);
 			maxPriceLimit = Number(s.max_price ?? 200);
+			footerBrandDescription = String(s.footer_brand_description ?? 'A carpooling platform that connects people.');
+			footerAboutUsLabel = String(s.footer_about_us_label ?? 'About Us');
+			footerAboutUsUrl = String(s.footer_about_us_url ?? '/about');
+			footerHowItWorksLabel = String(s.footer_how_it_works_label ?? 'How it works');
+			footerHowItWorksUrl = String(s.footer_how_it_works_url ?? '/how-it-works');
+			footerFaqLabel = String(s.footer_faq_label ?? 'FAQ');
+			footerFaqUrl = String(s.footer_faq_url ?? '/faq');
+			footerHelpCenterLabel = String(s.footer_help_center_label ?? 'Help Center');
+			footerHelpCenterUrl = String(s.footer_help_center_url ?? '/help');
+			footerPrivacyPolicyLabel = String(s.footer_privacy_policy_label ?? 'Privacy Policy');
+			footerPrivacyPolicyUrl = String(s.footer_privacy_policy_url ?? '/privacy');
+			footerTermsOfServiceLabel = String(s.footer_terms_of_service_label ?? 'Terms of Service');
+			footerTermsOfServiceUrl = String(s.footer_terms_of_service_url ?? '/terms');
+			aboutPageTitle = String(s.about_page_title ?? 'About Us');
+			aboutPageContent = String(
+				s.about_page_content ??
+					'Hizli Carpooling is a community-first carpooling platform focused on safety, simplicity, and fair prices.'
+			);
+			howItWorksPageTitle = String(s.how_it_works_page_title ?? 'How it works');
+			howItWorksPageContent = String(
+				s.how_it_works_page_content ??
+					'1. Search your route.\n2. Pick a ride that matches your needs.\n3. Book and travel together.'
+			);
+			faqPageTitle = String(s.faq_page_title ?? 'FAQ');
+			faqPageContent = String(
+				s.faq_page_content ??
+					'Q: How do I book a ride?\nA: Search your route, open ride details, and book your seat.\n\nQ: Is payment secure?\nA: Yes, payments are processed through secure providers.'
+			);
+			helpPageTitle = String(s.help_page_title ?? 'Help Center');
+			helpPageContent = String(
+				s.help_page_content ??
+					'Need help? Contact our support team and include your ride ID and account email for faster resolution.'
+			);
+			privacyPageTitle = String(s.privacy_page_title ?? 'Privacy Policy');
+			privacyPageContent = String(
+				s.privacy_page_content ??
+					'We collect only the data needed to operate Hizli Carpooling and keep the platform safe. We do not sell personal data.'
+			);
+			termsPageTitle = String(s.terms_page_title ?? 'Terms of Service');
+			termsPageContent = String(
+				s.terms_page_content ??
+					'By using Hizli Carpooling, you agree to respect other members, provide accurate information, and follow platform rules.'
+			);
 		}
 
 		settingsLoading = false;
@@ -1622,7 +1696,32 @@
 			body: JSON.stringify({
 				commission_percent: commissionPercent,
 				max_seats: maxSeatsLimit,
-				max_price: maxPriceLimit
+				max_price: maxPriceLimit,
+				footer_brand_description: footerBrandDescription,
+				footer_about_us_label: footerAboutUsLabel,
+				footer_about_us_url: footerAboutUsUrl,
+				footer_how_it_works_label: footerHowItWorksLabel,
+				footer_how_it_works_url: footerHowItWorksUrl,
+				footer_faq_label: footerFaqLabel,
+				footer_faq_url: footerFaqUrl,
+				footer_help_center_label: footerHelpCenterLabel,
+				footer_help_center_url: footerHelpCenterUrl,
+				footer_privacy_policy_label: footerPrivacyPolicyLabel,
+				footer_privacy_policy_url: footerPrivacyPolicyUrl,
+				footer_terms_of_service_label: footerTermsOfServiceLabel,
+				footer_terms_of_service_url: footerTermsOfServiceUrl,
+				about_page_title: aboutPageTitle,
+				about_page_content: aboutPageContent,
+				how_it_works_page_title: howItWorksPageTitle,
+				how_it_works_page_content: howItWorksPageContent,
+				faq_page_title: faqPageTitle,
+				faq_page_content: faqPageContent,
+				help_page_title: helpPageTitle,
+				help_page_content: helpPageContent,
+				privacy_page_title: privacyPageTitle,
+				privacy_page_content: privacyPageContent,
+				terms_page_title: termsPageTitle,
+				terms_page_content: termsPageContent
 			})
 		});
 
@@ -2617,21 +2716,37 @@
 							{/if}
 						</div>
 					{:else if activeTab === 'settings'}
-						<div class="space-y-6">
-							<div class="bg-white rounded-xl border border-gray-200 p-5">
-								<h3 class="text-base font-semibold text-gray-900 mb-4">Platform settings</h3>
+						<div class="space-y-5">
+							<div class="rounded-2xl border border-gray-200 bg-gradient-to-r from-emerald-50 to-white p-5 sm:p-6">
+								<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+									<div>
+										<h3 class="text-lg font-semibold text-gray-900">Settings</h3>
+										<p class="mt-1 text-sm text-gray-600">Configure pricing limits and public content shown on the landing/footer pages.</p>
+									</div>
+									<button
+										on:click={savePlatformSettings}
+										disabled={settingsSaving || settingsLoading}
+										class="inline-flex items-center justify-center px-4 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+									>
+										{settingsSaving ? 'Saving...' : 'Save changes'}
+									</button>
+								</div>
 								{#if settingsError}
-									<p class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">{settingsError}</p>
+									<p class="mt-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{settingsError}</p>
 								{/if}
 								{#if settingsMessage}
-									<p class="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 mb-3">{settingsMessage}</p>
+									<p class="mt-4 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">{settingsMessage}</p>
 								{/if}
-								{#if settingsLoading}
-									<p class="text-sm text-gray-500">Loading settings...</p>
-								{:else}
-									<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+							</div>
+
+							{#if settingsLoading}
+								<div class="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-500">Loading settings...</div>
+							{:else}
+								<div class="grid grid-cols-1 xl:grid-cols-3 gap-5">
+									<div class="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
+										<h4 class="text-sm font-semibold text-gray-900">Ride limits</h4>
 										<div>
-											<p class="block text-xs font-medium text-gray-600 mb-1">Commission (%)</p>
+											<p class="text-xs font-medium text-gray-600 mb-1">Commission (%)</p>
 											<input
 												id="commission-percent"
 												type="number"
@@ -2639,89 +2754,115 @@
 												max="100"
 												step="0.1"
 												bind:value={commissionPercent}
-												class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+												class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
 											/>
 										</div>
 										<div>
-											<p class="block text-xs font-medium text-gray-600 mb-1">Places max par trajet</p>
+											<p class="text-xs font-medium text-gray-600 mb-1">Maximum seats per ride</p>
 											<input
 												id="max-seats-limit"
 												type="number"
 												min="1"
 												bind:value={maxSeatsLimit}
-												class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+												class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
 											/>
 										</div>
 										<div>
-											<p class="block text-xs font-medium text-gray-600 mb-1">Prix max (USD)</p>
+											<p class="text-xs font-medium text-gray-600 mb-1">Maximum ride price (USD)</p>
 											<input
 												id="max-price-limit"
 												type="number"
 												min="1"
 												step="0.01"
 												bind:value={maxPriceLimit}
-												class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+												class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
 											/>
 										</div>
 									</div>
-									<div class="mt-4 flex justify-end">
-										<button
-											on:click={savePlatformSettings}
-											disabled={settingsSaving}
-											class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50"
-										>
-											{settingsSaving ? 'Enregistrement...' : 'Enregistrer'}
-										</button>
-									</div>
-								{/if}
-							</div>
 
-							<div class="bg-white rounded-xl border border-gray-200 p-5">
-								<h3 class="text-base font-semibold text-gray-900 mb-4">Admin management</h3>
-								<p class="text-sm text-gray-500 mb-4">Promote or demote administrator accounts.</p>
-								{#if usersLoading}
-									<p class="text-sm text-gray-500">Loading users...</p>
-								{:else if users.length === 0}
-									<p class="text-sm text-gray-500">No users available.</p>
-								{:else}
-									<div class="overflow-x-auto border border-gray-100 rounded-xl">
-										<table class="w-full text-sm">
-											<thead class="bg-gray-50 text-left text-gray-600">
-												<tr>
-													<th class="px-4 py-3 font-medium">Utilisateur</th>
-													<th class="px-4 py-3 font-medium">Role</th>
-													<th class="px-4 py-3 font-medium">Action</th>
-												</tr>
-											</thead>
-											<tbody class="divide-y divide-gray-100">
-												{#each users as adminUser}
-													<tr class="hover:bg-gray-50">
-														<td class="px-4 py-3">
-															<p class="font-medium text-gray-900">{`${adminUser.first_name ?? ''} ${adminUser.last_name ?? ''}`.trim() || 'Sans nom'}</p>
-															<p class="text-xs text-gray-500">{adminUser.email ?? 'Email not provided'}</p>
-														</td>
-														<td class="px-4 py-3">
-															<span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${adminUser.is_admin ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
-																{adminUser.is_admin ? 'Admin' : 'Utilisateur'}
-															</span>
-														</td>
-														<td class="px-4 py-3">
-															<button
-																type="button"
-																disabled={actionUserId === adminUser.id}
-																on:click={() => updateUserFlag(adminUser, 'is_admin', !adminUser.is_admin)}
-																class="px-3 py-1.5 rounded text-xs font-medium border {adminUser.is_admin ? 'border-red-200 text-red-700 hover:bg-red-50' : 'border-green-200 text-green-700 hover:bg-green-50'} disabled:opacity-50"
-															>
-																{adminUser.is_admin ? 'Retirer admin' : 'Promouvoir admin'}
-															</button>
-														</td>
-													</tr>
-												{/each}
-											</tbody>
-										</table>
+									<div class="rounded-xl border border-gray-200 bg-white p-5 space-y-4 xl:col-span-2">
+										<div class="flex items-start justify-between gap-4">
+											<div>
+												<h4 class="text-sm font-semibold text-gray-900">Footer content</h4>
+												<p class="mt-1 text-xs text-gray-500">Only the labels are editable here. Links stay on standard pages: /about, /how-it-works, /faq, /help, /privacy, /terms.</p>
+											</div>
+										</div>
+										<div>
+											<p class="text-xs font-medium text-gray-600 mb-1">Brand description</p>
+											<textarea
+												rows="2"
+												bind:value={footerBrandDescription}
+												class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+											></textarea>
+										</div>
+										<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+											<div>
+												<p class="text-xs font-medium text-gray-600 mb-1">About label</p>
+												<input bind:value={footerAboutUsLabel} class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+											</div>
+											<div>
+												<p class="text-xs font-medium text-gray-600 mb-1">How it works label</p>
+												<input bind:value={footerHowItWorksLabel} class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+											</div>
+											<div>
+												<p class="text-xs font-medium text-gray-600 mb-1">FAQ label</p>
+												<input bind:value={footerFaqLabel} class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+											</div>
+											<div>
+												<p class="text-xs font-medium text-gray-600 mb-1">Help center label</p>
+												<input bind:value={footerHelpCenterLabel} class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+											</div>
+											<div>
+												<p class="text-xs font-medium text-gray-600 mb-1">Privacy label</p>
+												<input bind:value={footerPrivacyPolicyLabel} class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+											</div>
+											<div>
+												<p class="text-xs font-medium text-gray-600 mb-1">Terms label</p>
+												<input bind:value={footerTermsOfServiceLabel} class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+											</div>
+										</div>
 									</div>
-								{/if}
-							</div>
+
+									<div class="rounded-xl border border-gray-200 bg-white p-5 xl:col-span-3">
+										<div class="mb-4">
+											<h4 class="text-sm font-semibold text-gray-900">Linked page content</h4>
+											<p class="mt-1 text-xs text-gray-500">Content shown to users when they open the footer pages.</p>
+										</div>
+										<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+											<div class="rounded-lg border border-gray-200 p-3">
+												<p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">About</p>
+												<input bind:value={aboutPageTitle} placeholder="Title" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+												<textarea rows="4" bind:value={aboutPageContent} placeholder="Page content" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"></textarea>
+											</div>
+											<div class="rounded-lg border border-gray-200 p-3">
+												<p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">How it works</p>
+												<input bind:value={howItWorksPageTitle} placeholder="Title" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+												<textarea rows="4" bind:value={howItWorksPageContent} placeholder="Page content" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"></textarea>
+											</div>
+											<div class="rounded-lg border border-gray-200 p-3">
+												<p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">FAQ</p>
+												<input bind:value={faqPageTitle} placeholder="Title" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+												<textarea rows="4" bind:value={faqPageContent} placeholder="Page content" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"></textarea>
+											</div>
+											<div class="rounded-lg border border-gray-200 p-3">
+												<p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Help</p>
+												<input bind:value={helpPageTitle} placeholder="Title" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+												<textarea rows="4" bind:value={helpPageContent} placeholder="Page content" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"></textarea>
+											</div>
+											<div class="rounded-lg border border-gray-200 p-3">
+												<p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Privacy</p>
+												<input bind:value={privacyPageTitle} placeholder="Title" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+												<textarea rows="4" bind:value={privacyPageContent} placeholder="Page content" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"></textarea>
+											</div>
+											<div class="rounded-lg border border-gray-200 p-3">
+												<p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Terms</p>
+												<input bind:value={termsPageTitle} placeholder="Title" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+												<textarea rows="4" bind:value={termsPageContent} placeholder="Page content" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"></textarea>
+											</div>
+										</div>
+									</div>
+								</div>
+							{/if}
 						</div>
 					{:else if activeTab === 'support'}
 						<div class="space-y-6">

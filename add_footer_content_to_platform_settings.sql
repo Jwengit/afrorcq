@@ -1,0 +1,58 @@
+-- Add editable landing/footer content fields managed from admin settings.
+-- Safe to run multiple times.
+
+ALTER TABLE public.platform_settings
+  ADD COLUMN IF NOT EXISTS footer_brand_description TEXT,
+  ADD COLUMN IF NOT EXISTS footer_about_us_label TEXT,
+  ADD COLUMN IF NOT EXISTS footer_about_us_url TEXT,
+  ADD COLUMN IF NOT EXISTS footer_how_it_works_label TEXT,
+  ADD COLUMN IF NOT EXISTS footer_how_it_works_url TEXT,
+  ADD COLUMN IF NOT EXISTS footer_faq_label TEXT,
+  ADD COLUMN IF NOT EXISTS footer_faq_url TEXT,
+  ADD COLUMN IF NOT EXISTS footer_help_center_label TEXT,
+  ADD COLUMN IF NOT EXISTS footer_help_center_url TEXT,
+  ADD COLUMN IF NOT EXISTS footer_privacy_policy_label TEXT,
+  ADD COLUMN IF NOT EXISTS footer_privacy_policy_url TEXT,
+  ADD COLUMN IF NOT EXISTS footer_terms_of_service_label TEXT,
+  ADD COLUMN IF NOT EXISTS footer_terms_of_service_url TEXT,
+  ADD COLUMN IF NOT EXISTS about_page_title TEXT,
+  ADD COLUMN IF NOT EXISTS about_page_content TEXT,
+  ADD COLUMN IF NOT EXISTS how_it_works_page_title TEXT,
+  ADD COLUMN IF NOT EXISTS how_it_works_page_content TEXT,
+  ADD COLUMN IF NOT EXISTS faq_page_title TEXT,
+  ADD COLUMN IF NOT EXISTS faq_page_content TEXT,
+  ADD COLUMN IF NOT EXISTS help_page_title TEXT,
+  ADD COLUMN IF NOT EXISTS help_page_content TEXT,
+  ADD COLUMN IF NOT EXISTS privacy_page_title TEXT,
+  ADD COLUMN IF NOT EXISTS privacy_page_content TEXT,
+  ADD COLUMN IF NOT EXISTS terms_page_title TEXT,
+  ADD COLUMN IF NOT EXISTS terms_page_content TEXT;
+
+UPDATE public.platform_settings
+SET
+  footer_brand_description = COALESCE(NULLIF(TRIM(footer_brand_description), ''), 'A carpooling platform that connects people.'),
+  footer_about_us_label = COALESCE(NULLIF(TRIM(footer_about_us_label), ''), 'About Us'),
+  footer_about_us_url = COALESCE(NULLIF(TRIM(footer_about_us_url), ''), '/about'),
+  footer_how_it_works_label = COALESCE(NULLIF(TRIM(footer_how_it_works_label), ''), 'How it works'),
+  footer_how_it_works_url = COALESCE(NULLIF(TRIM(footer_how_it_works_url), ''), '/how-it-works'),
+  footer_faq_label = COALESCE(NULLIF(TRIM(footer_faq_label), ''), 'FAQ'),
+  footer_faq_url = COALESCE(NULLIF(TRIM(footer_faq_url), ''), '/faq'),
+  footer_help_center_label = COALESCE(NULLIF(TRIM(footer_help_center_label), ''), 'Help Center'),
+  footer_help_center_url = COALESCE(NULLIF(TRIM(footer_help_center_url), ''), '/help'),
+  footer_privacy_policy_label = COALESCE(NULLIF(TRIM(footer_privacy_policy_label), ''), 'Privacy Policy'),
+  footer_privacy_policy_url = COALESCE(NULLIF(TRIM(footer_privacy_policy_url), ''), '/privacy'),
+  footer_terms_of_service_label = COALESCE(NULLIF(TRIM(footer_terms_of_service_label), ''), 'Terms of Service'),
+  footer_terms_of_service_url = COALESCE(NULLIF(TRIM(footer_terms_of_service_url), ''), '/terms'),
+  about_page_title = COALESCE(NULLIF(TRIM(about_page_title), ''), 'About Us'),
+  about_page_content = COALESCE(NULLIF(TRIM(about_page_content), ''), 'Hizli Carpooling is a community-first carpooling platform focused on safety, simplicity, and fair prices.'),
+  how_it_works_page_title = COALESCE(NULLIF(TRIM(how_it_works_page_title), ''), 'How it works'),
+  how_it_works_page_content = COALESCE(NULLIF(TRIM(how_it_works_page_content), ''), '1. Search your route.' || E'\n' || '2. Pick a ride that matches your needs.' || E'\n' || '3. Book and travel together.'),
+  faq_page_title = COALESCE(NULLIF(TRIM(faq_page_title), ''), 'FAQ'),
+  faq_page_content = COALESCE(NULLIF(TRIM(faq_page_content), ''), 'Q: How do I book a ride?' || E'\n' || 'A: Search your route, open ride details, and book your seat.' || E'\n\n' || 'Q: Is payment secure?' || E'\n' || 'A: Yes, payments are processed through secure providers.'),
+  help_page_title = COALESCE(NULLIF(TRIM(help_page_title), ''), 'Help Center'),
+  help_page_content = COALESCE(NULLIF(TRIM(help_page_content), ''), 'Need help? Contact our support team and include your ride ID and account email for faster resolution.'),
+  privacy_page_title = COALESCE(NULLIF(TRIM(privacy_page_title), ''), 'Privacy Policy'),
+  privacy_page_content = COALESCE(NULLIF(TRIM(privacy_page_content), ''), 'We collect only the data needed to operate Hizli Carpooling and keep the platform safe. We do not sell personal data.'),
+  terms_page_title = COALESCE(NULLIF(TRIM(terms_page_title), ''), 'Terms of Service'),
+  terms_page_content = COALESCE(NULLIF(TRIM(terms_page_content), ''), 'By using Hizli Carpooling, you agree to respect other members, provide accurate information, and follow platform rules.')
+WHERE id = 1;
