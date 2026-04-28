@@ -1,7 +1,7 @@
 {
-  "name": "AfroRCQ",
-  "short_name": "AfroRCQ",
-  "description": "Covoiturage communautaire AfroRCQ",
+  "name": "Hizli Carpooling",
+  "short_name": "Hizli",
+  "description": "Covoiturage communautaire Hizli Carpooling",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
