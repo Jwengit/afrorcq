@@ -18,6 +18,9 @@ CREATE TABLE profiles (
   bio TEXT,
   languages TEXT[],
   ride_preferences TEXT[],
+  payment_method TEXT CHECK (payment_method IN ('paypal', 'venmo')),
+  paypal_email TEXT,
+  venmo_handle TEXT,
   is_verified BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL

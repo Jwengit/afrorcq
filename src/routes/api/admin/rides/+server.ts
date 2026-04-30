@@ -81,6 +81,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
 		const cityTo = url.searchParams.get('cityTo');
 		const status = url.searchParams.get('status');
 		const fromDate = url.searchParams.get('fromDate');
+		const toDate = url.searchParams.get('toDate');
 
 		if (cityFrom) {
 			query = query.ilike('departure', `%${cityFrom}%`);
@@ -90,6 +91,9 @@ export const GET: RequestHandler = async ({ request, url }) => {
 		}
 		if (fromDate) {
 			query = query.gte('ride_date', fromDate);
+		}
+		if (toDate) {
+			query = query.lte('ride_date', `${toDate}T23:59:59.999Z`);
 		}
 
 		const { data: rides, error: ridesError } = await query.order('ride_date', { ascending: false });

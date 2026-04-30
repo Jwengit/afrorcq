@@ -11,6 +11,15 @@
 	let accessError = '';
 	let activeTab = 'overview';
 
+	// Period filter
+	let selectedPeriod = 'all';
+	let customStartDate = '';
+	let customEndDate = '';
+	let showCustomDatePicker = false;
+	let customRangeError = '';
+	let exportLoading = false;
+	let exportError = '';
+
 	type AdminUser = {
 		id: string;
 		public_id: number | null;
@@ -20,6 +29,8 @@
 		phone_number: string | null;
 		is_admin: boolean | null;
 		is_verified: boolean | null;
+		email_confirmed?: boolean | null;
+		account_verified?: boolean | null;
 		user_status: string | null;
 		average_rating: number | null;
 		created_at: string | null;
@@ -108,6 +119,7 @@
 	let rideFilterCityTo = '';
 	let rideFilterStatus = '';
 	let rideFilterFromDate = '';
+	let rideFilterToDate = '';
 	let selectedRideForBookings: AdminRide | null = null;
 	let showRideBookingsModal = false;
 	let rideBookings: any[] = [];
@@ -448,7 +460,13 @@
 			return;
 		}
 
-		const response = await fetch('/api/admin/overview', {
+		let url = '/api/admin/overview?period=' + encodeURIComponent(selectedPeriod);
+		if (selectedPeriod === 'custom' && customStartDate && customEndDate) {
+			url += '&startDate=' + encodeURIComponent(customStartDate);
+			url += '&endDate=' + encodeURIComponent(customEndDate);
+		}
+
+		const response = await fetch(url, {
 			method: 'GET',
 			headers: {
 				Authorization: `Bearer ${session.access_token}`
@@ -463,6 +481,148 @@
 
 		if (payload?.stats) {
 			stats = payload.stats;
+		}
+	}
+
+	function getPresetRange(period: string): { start: string; end: string } | null {
+		const now = new Date();
+		const toDateOnly = (d: Date) => d.toISOString().slice(0, 10);
+
+		if (period === 'all') {
+			return null;
+		}
+
+		if (period === 'today') {
+			return { start: toDateOnly(now), end: toDateOnly(now) };
+		}
+
+		if (period === 'week') {
+			const day = now.getDay();
+			const diffToMonday = (day + 6) % 7;
+			const monday = new Date(now);
+			monday.setDate(now.getDate() - diffToMonday);
+			return { start: toDateOnly(monday), end: toDateOnly(now) };
+		}
+
+		if (period === 'month') {
+			const start = new Date(now.getFullYear(), now.getMonth(), 1);
+			return { start: toDateOnly(start), end: toDateOnly(now) };
+		}
+
+		if (period === 'year') {
+			const start = new Date(now.getFullYear(), 0, 1);
+			return { start: toDateOnly(start), end: toDateOnly(now) };
+		}
+
+		return null;
+	}
+
+	async function handlePeriodChange(period: string) {
+		selectedPeriod = period;
+		showCustomDatePicker = period === 'custom';
+		customRangeError = '';
+
+		if (period === 'custom') {
+			return;
+		}
+
+		const preset = getPresetRange(period);
+		if (preset) {
+			rideFilterFromDate = preset.start;
+			rideFilterToDate = preset.end;
+		} else {
+			rideFilterFromDate = '';
+			rideFilterToDate = '';
+		}
+
+		await loadStats();
+
+		if (activeTab === 'rides') {
+			await loadRides();
+		}
+	}
+
+	async function applyCustomRange() {
+		customRangeError = '';
+
+		if (!customStartDate || !customEndDate) {
+			customRangeError = 'Please select both start and end dates.';
+			return;
+		}
+
+		if (customStartDate > customEndDate) {
+			customRangeError = 'Start date must be before or equal to end date.';
+			return;
+		}
+
+		rideFilterFromDate = customStartDate;
+		rideFilterToDate = customEndDate;
+
+		await loadStats();
+
+		if (activeTab === 'rides') {
+			await loadRides();
+		}
+	}
+
+	async function exportData(format: 'json' | 'csv', type: 'rides' | 'bookings' | 'users' | 'all') {
+		exportLoading = true;
+		exportError = '';
+
+		try {
+			const {
+				data: { session }
+			} = await supabase.auth.getSession();
+
+			if (!session?.access_token) {
+				exportError = 'Session expired. Please sign in again.';
+				exportLoading = false;
+				return;
+			}
+
+			let url = `/api/admin/export?format=${format}&type=${type}&period=${encodeURIComponent(selectedPeriod)}`;
+			if (selectedPeriod === 'custom' && customStartDate && customEndDate) {
+				url += '&startDate=' + encodeURIComponent(customStartDate);
+				url += '&endDate=' + encodeURIComponent(customEndDate);
+			}
+
+			const response = await fetch(url, {
+				method: 'GET',
+				headers: {
+					Authorization: `Bearer ${session.access_token}`
+				}
+			});
+
+			if (!response.ok) {
+				exportError = 'Failed to export data. Please try again.';
+				exportLoading = false;
+				return;
+			}
+
+			// Handle file download
+			const blob = await response.blob();
+			const contentDisposition = response.headers.get('content-disposition');
+			let filename = `platform-data.${format}`;
+			
+			if (contentDisposition) {
+				const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
+				if (filenameMatch) {
+					filename = filenameMatch[1];
+				}
+			}
+
+			const url_obj = window.URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url_obj;
+			a.download = filename;
+			document.body.appendChild(a);
+			a.click();
+			window.URL.revokeObjectURL(url_obj);
+			document.body.removeChild(a);
+		} catch (error) {
+			exportError = error instanceof Error ? error.message : 'An error occurred during export.';
+		} finally {
+			exportLoading = false;
 		}
 	}
 
@@ -543,9 +703,23 @@
 			return;
 		}
 
-		users = users.map((u) =>
-			u.id === targetUser.id ? { ...u, [field]: value, has_profile: true } : u
-		);
+		users = users.map((u) => {
+			if (u.id !== targetUser.id) {
+				return u;
+			}
+
+			const updated = { ...u, [field]: value, has_profile: true } as AdminUser;
+			const emailConfirmed = Boolean(updated.email_confirmed);
+			updated.account_verified = Boolean(updated.is_verified) && emailConfirmed;
+			return updated;
+		});
+
+		if (selectedProfile?.id === targetUser.id) {
+			const refreshed = users.find((u) => u.id === targetUser.id);
+			if (refreshed) {
+				selectedProfile = refreshed;
+			}
+		}
 		usersActionMessage =
 			field === 'is_admin'
 				? value
@@ -555,6 +729,71 @@
 					? 'The account is now verified.'
 					: 'The account is now unverified.';
 
+		actionUserId = null;
+	}
+
+	async function updateSelectedProfileVerification(value: boolean) {
+		const profile = selectedProfile;
+		if (!profile) return;
+		await updateUserFlag(profile, 'is_verified', value);
+	}
+
+	async function markSelectedProfileEmailConfirmed() {
+		if (!selectedProfile) return;
+		const selectedProfileId = selectedProfile.id;
+
+		actionUserId = selectedProfileId;
+		usersActionMessage = '';
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			usersActionMessage = 'Session expired. Please sign in again.';
+			actionUserId = null;
+			return;
+		}
+
+		const response = await fetch('/api/admin/users', {
+			method: 'PATCH',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${session.access_token}`
+			},
+			body: JSON.stringify({
+				userId: selectedProfileId,
+				field: 'email_confirmed',
+				value: true
+			})
+		});
+
+		const payload = await response.json();
+		if (!response.ok) {
+			usersActionMessage = payload?.error || 'Unable to confirm email right now.';
+			actionUserId = null;
+			return;
+		}
+
+		users = users.map((u) => {
+			if (u.id !== selectedProfileId) {
+				return u;
+			}
+
+			const updated: AdminUser = {
+				...u,
+				email_confirmed: true,
+				account_verified: Boolean(u.is_verified)
+			};
+			return updated;
+		});
+
+		const refreshed = users.find((u) => u.id === selectedProfileId);
+		if (refreshed) {
+			selectedProfile = refreshed;
+		}
+
+		usersActionMessage = 'Email marked as confirmed.';
 		actionUserId = null;
 	}
 
@@ -621,6 +860,9 @@
 		activeTab = tab;
 		if (tab === 'reviews') {
 			void loadReviews();
+		}
+		if (tab === 'rides') {
+			void loadRides();
 		}
 	}
 
@@ -892,6 +1134,7 @@
 		if (rideFilterCityTo) params.append('cityTo', rideFilterCityTo);
 		if (rideFilterStatus) params.append('status', rideFilterStatus);
 		if (rideFilterFromDate) params.append('fromDate', rideFilterFromDate);
+		if (rideFilterToDate) params.append('toDate', rideFilterToDate);
 
 		const response = await fetch(`/api/admin/rides?${params.toString()}`, {
 			method: 'GET',
@@ -1780,6 +2023,93 @@
 				</div>
 			{/if}
 
+			<!-- Period Filter -->
+			<div class="mb-8 bg-white rounded-xl border border-gray-100 p-6 shadow-sm">
+				<div class="flex flex-col gap-4">
+					<div>
+						<h3 class="text-sm font-semibold text-gray-900 mb-3">Filter by period</h3>
+						<div class="flex flex-wrap gap-2">
+							<button
+								on:click={() => handlePeriodChange('all')}
+								class="px-4 py-2 rounded-lg border transition-colors cursor-pointer {selectedPeriod === 'all' ? 'bg-blue-50 border-blue-300 text-blue-700' : 'border-gray-200 text-gray-700 hover:border-gray-300'}"
+							>
+								All time
+							</button>
+							<button
+								on:click={() => handlePeriodChange('today')}
+								class="px-4 py-2 rounded-lg border transition-colors cursor-pointer {selectedPeriod === 'today' ? 'bg-blue-50 border-blue-300 text-blue-700' : 'border-gray-200 text-gray-700 hover:border-gray-300'}"
+							>
+								Today
+							</button>
+							<button
+								on:click={() => handlePeriodChange('week')}
+								class="px-4 py-2 rounded-lg border transition-colors cursor-pointer {selectedPeriod === 'week' ? 'bg-blue-50 border-blue-300 text-blue-700' : 'border-gray-200 text-gray-700 hover:border-gray-300'}"
+							>
+								This week
+							</button>
+							<button
+								on:click={() => handlePeriodChange('month')}
+								class="px-4 py-2 rounded-lg border transition-colors cursor-pointer {selectedPeriod === 'month' ? 'bg-blue-50 border-blue-300 text-blue-700' : 'border-gray-200 text-gray-700 hover:border-gray-300'}"
+							>
+								This month
+							</button>
+							<button
+								on:click={() => handlePeriodChange('year')}
+								class="px-4 py-2 rounded-lg border transition-colors cursor-pointer {selectedPeriod === 'year' ? 'bg-blue-50 border-blue-300 text-blue-700' : 'border-gray-200 text-gray-700 hover:border-gray-300'}"
+							>
+								This year
+							</button>
+							<button
+								on:click={() => handlePeriodChange('custom')}
+								class="px-4 py-2 rounded-lg border transition-colors cursor-pointer {selectedPeriod === 'custom' ? 'bg-blue-50 border-blue-300 text-blue-700' : 'border-gray-200 text-gray-700 hover:border-gray-300'}"
+							>
+								Custom range
+							</button>
+						</div>
+					</div>
+
+					{#if showCustomDatePicker && selectedPeriod === 'custom'}
+						<div class="flex flex-col gap-3 pt-2">
+							<div class="flex gap-4">
+							<div class="flex-1">
+								<label for="custom-start-date" class="text-xs text-gray-600 mb-1 block">Start date</label>
+								<input
+									id="custom-start-date"
+									type="date"
+									bind:value={customStartDate}
+									on:change={() => (customRangeError = '')}
+									class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+								/>
+							</div>
+							<div class="flex-1">
+								<label for="custom-end-date" class="text-xs text-gray-600 mb-1 block">End date</label>
+								<input
+									id="custom-end-date"
+									type="date"
+									bind:value={customEndDate}
+									on:change={() => (customRangeError = '')}
+									class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+								/>
+							</div>
+							</div>
+							<div class="flex items-center gap-2">
+								<button
+									type="button"
+									on:click={applyCustomRange}
+									class="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors cursor-pointer"
+								>
+									Apply custom range
+								</button>
+								<p class="text-xs text-gray-500">Click to refresh stats and rides with the selected period.</p>
+							</div>
+							{#if customRangeError}
+								<p class="text-xs text-red-600">{customRangeError}</p>
+							{/if}
+						</div>
+					{/if}
+				</div>
+			</div>
+
 			<!-- Stats cards -->
 			<div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
 				<!-- Users -->
@@ -1943,7 +2273,7 @@
 
 							<!-- Alerts -->
 							<div>
-								<h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Alertes</h3>
+								<h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Alerts</h3>
 								<div class="grid md:grid-cols-2 gap-4">
 									<div class="rounded-xl border p-5 {stats.alerts.reports > 0 ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-gray-50'}">
 										<div class="flex items-center justify-between mb-2">
@@ -2016,7 +2346,7 @@
 										<thead class="bg-gray-50 text-left text-gray-600">
 											<tr>
 												<th class="px-4 py-3 font-medium">User</th>
-												<th class="px-4 py-3 font-medium">Verification</th>
+													<th class="px-4 py-3 font-medium">Verification</th>
 												<th class="px-4 py-3 font-medium">Status</th>
 												<th class="px-4 py-3 font-medium">Rating</th>
 												<th class="px-4 py-3 font-medium">Created</th>
@@ -2028,26 +2358,36 @@
 												<tr class="hover:bg-gray-50">
 													<td class="px-4 py-3 align-top">
 														<p class="font-medium text-gray-900">
-															{`${adminUser.first_name ?? ''} ${adminUser.last_name ?? ''}`.trim() || 'Sans nom'}
+															{`${adminUser.first_name ?? ''} ${adminUser.last_name ?? ''}`.trim() || 'No name'}
 														</p>
 														<p class="text-xs text-gray-700">ID #{adminUser.public_id ?? '-'}</p>
-														<p class="text-xs text-gray-500">{adminUser.email ?? 'Email non renseigne'}</p>
+														<p class="text-xs text-gray-500">{adminUser.email ?? 'Email not provided'}</p>
 														{#if adminUser.phone_number}
 															<p class="text-xs text-gray-500">{adminUser.phone_number}</p>
 														{/if}
 														<p class="text-xs text-gray-400 break-all">UUID: {adminUser.id}</p>
 														{#if adminUser.has_profile === false}
-															<p class="text-xs text-amber-600">Profil manquant</p>
+															<p class="text-xs text-amber-600">Missing profile</p>
 														{/if}
 													</td>
 													<td class="px-4 py-3 align-top">
-														<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium {adminUser.is_verified ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">
-															{adminUser.is_verified ? 'Verifie' : 'Non verifie'}
-														</span>
+														<div class="flex flex-col gap-1">
+															<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium {adminUser.account_verified ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">
+																{adminUser.account_verified ? 'Verified' : 'Not verified'}
+															</span>
+															<div class="flex flex-wrap gap-1">
+																<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium {adminUser.email_confirmed ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}">
+																	Email {adminUser.email_confirmed ? 'ok' : 'missing'}
+																</span>
+																<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium {adminUser.is_verified ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'}">
+																	Profile {adminUser.is_verified ? 'ok' : 'missing'}
+																</span>
+															</div>
+														</div>
 													</td>
 													<td class="px-4 py-3 align-top">
 														<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium {adminUser.user_status === 'active' ? 'bg-green-100 text-green-700' : adminUser.user_status === 'suspended' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}">
-															{adminUser.user_status === 'active' ? 'Actif' : adminUser.user_status === 'suspended' ? 'Suspendu' : 'Banni'}
+															{adminUser.user_status === 'active' ? 'Active' : adminUser.user_status === 'suspended' ? 'Suspended' : 'Banned'}
 														</span>
 													</td>
 													<td class="px-4 py-3 align-top text-gray-600">
@@ -2065,31 +2405,24 @@
 														{/if}
 													</td>
 													<td class="px-4 py-3 align-top">
-														<div class="flex flex-wrap gap-1">
+														<div class="flex flex-wrap gap-2">
 															<button
 																type="button"
 																on:click={() => openProfileModal(adminUser)}
-																class="px-2 py-1.5 rounded text-xs font-medium border border-blue-200 text-blue-700 hover:bg-blue-50"
+																class="px-2.5 py-1.5 rounded text-xs font-medium border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100"
 															>
-																Profil
-															</button>
-															<button
-																type="button"
-																disabled={actionUserId === adminUser.id}
-																on:click={() => updateUserFlag(adminUser, 'is_verified', !adminUser.is_verified)}
-																class="px-2 py-1.5 rounded text-xs font-medium border border-emerald-200 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
-															>
-																{adminUser.is_verified ? 'Passer non verifie' : 'Verifier'}
+																Profile
 															</button>
 															<button
 																type="button"
 																disabled={actionUserId === adminUser.id}
 																on:click={() => deleteUserAccount(adminUser)}
-																class="px-2 py-1.5 rounded text-xs font-medium border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
+																class="px-2.5 py-1.5 rounded text-xs font-medium border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
 															>
-																{actionUserId === adminUser.id ? 'Suppression...' : 'Supprimer'}
+																{actionUserId === adminUser.id ? 'Deleting...' : 'Delete'}
 															</button>
 														</div>
+														<p class="mt-2 text-[11px] text-gray-400">Verification actions are available in Profile.</p>
 													</td>
 												</tr>
 											{/each}
@@ -2103,7 +2436,7 @@
 							<!-- Filters Section -->
 							<div class="bg-white rounded-xl p-4 border border-gray-200">
 								<h3 class="text-sm font-semibold text-gray-900 mb-4">Filters</h3>
-								<div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+								<div class="grid grid-cols-1 md:grid-cols-6 gap-3">
 									<input
 										type="text"
 										placeholder="Departure city"
@@ -2122,6 +2455,12 @@
 										type="date"
 										class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
 										bind:value={rideFilterFromDate}
+										on:change={loadRides}
+									/>
+									<input
+										type="date"
+										class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+										bind:value={rideFilterToDate}
 										on:change={loadRides}
 									/>
 									<select
@@ -2705,7 +3044,7 @@
 															on:click={() => refundTransaction(tx)}
 															class="px-3 py-1 rounded text-xs font-medium border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
 														>
-															{transactionActionId === tx.id ? 'Traitement...' : 'Rembourser'}
+															{transactionActionId === tx.id ? 'Processing...' : 'Refund'}
 														</button>
 													</td>
 												</tr>
@@ -3258,6 +3597,80 @@
 			</div>
 		</div>
 	{/if}
+
+	<!-- Export Data Section -->
+	<div class="mt-8 bg-white rounded-xl border border-gray-100 p-6 shadow-sm">
+		<div class="flex items-center justify-between mb-4">
+			<div>
+				<h3 class="text-base font-semibold text-gray-900">Export platform data</h3>
+				<p class="text-sm text-gray-500 mt-1">Download your platform data for backup or analysis.</p>
+			</div>
+		</div>
+
+		{#if exportError}
+			<div class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+				{exportError}
+			</div>
+		{/if}
+
+		<div class="space-y-4">
+			<div>
+				<p class="text-sm font-medium text-gray-700 mb-3">Selected period: <span class="font-semibold capitalize">{selectedPeriod}</span></p>
+				<div class="flex flex-wrap gap-2">
+					<button
+						on:click={() => exportData('json', 'all')}
+						disabled={exportLoading}
+						class="px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50 cursor-pointer"
+					>
+						{#if exportLoading}
+							Exporting...
+						{:else}
+							Export all (JSON)
+						{/if}
+					</button>
+					<button
+						on:click={() => exportData('csv', 'all')}
+						disabled={exportLoading}
+						class="px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50 cursor-pointer"
+					>
+						{#if exportLoading}
+							Exporting...
+						{:else}
+							Export all (CSV)
+						{/if}
+					</button>
+					<button
+						on:click={() => exportData('json', 'rides')}
+						disabled={exportLoading}
+						class="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 cursor-pointer"
+					>
+						Rides (JSON)
+					</button>
+					<button
+						on:click={() => exportData('csv', 'rides')}
+						disabled={exportLoading}
+						class="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 cursor-pointer"
+					>
+						Rides (CSV)
+					</button>
+					<button
+						on:click={() => exportData('json', 'bookings')}
+						disabled={exportLoading}
+						class="px-4 py-2 rounded-lg bg-purple-600 text-white text-sm font-medium hover:bg-purple-700 transition-colors disabled:opacity-50 cursor-pointer"
+					>
+						Bookings (JSON)
+					</button>
+					<button
+						on:click={() => exportData('csv', 'bookings')}
+						disabled={exportLoading}
+						class="px-4 py-2 rounded-lg bg-purple-600 text-white text-sm font-medium hover:bg-purple-700 transition-colors disabled:opacity-50 cursor-pointer"
+					>
+						Bookings (CSV)
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
 	<!-- Profile Modal -->
 	{#if showProfileModal && selectedProfile}
 		<div class="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
@@ -3310,34 +3723,94 @@
 					<!-- Status Actions -->
 					<div>
 						<h3 class="text-sm font-semibold text-gray-900 mb-3">Account management</h3>
+						<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+							<div class="rounded-lg border border-gray-200 px-3 py-2">
+								<p class="text-xs text-gray-500">Email confirmation</p>
+								<p class="text-sm font-medium {selectedProfile.email_confirmed ? 'text-blue-700' : 'text-gray-700'}">
+									{selectedProfile.email_confirmed ? 'Confirmed' : 'Not confirmed'}
+								</p>
+							</div>
+							<div class="rounded-lg border border-gray-200 px-3 py-2">
+								<p class="text-xs text-gray-500">Profile verification</p>
+								<p class="text-sm font-medium {selectedProfile.is_verified ? 'text-indigo-700' : 'text-gray-700'}">
+									{selectedProfile.is_verified ? 'Verified' : 'Not verified'}
+								</p>
+							</div>
+						</div>
+						<div class="rounded-lg border border-gray-200 px-3 py-2 mb-3">
+							<p class="text-xs text-gray-500">Account badge</p>
+							<p class="text-sm font-semibold {selectedProfile.account_verified ? 'text-emerald-700' : 'text-amber-700'}">
+								{selectedProfile.account_verified ? 'Verified' : 'Not verified'}
+							</p>
+							<p class="text-xs text-gray-500 mt-1">This badge is verified only when both email confirmation and profile verification are complete.</p>
+						</div>
 						{#if statusActionMessage}
 							<p class="text-sm bg-green-50 border border-green-200 text-green-700 rounded-lg px-3 py-2 mb-3">{statusActionMessage}</p>
 						{/if}
-						<div class="space-y-2">
-							<button
-								type="button"
-								disabled={statusActionInProgress}
-								on:click={() => changeUserStatus('active')}
-								class="w-full px-4 py-2 rounded-lg border text-sm font-medium {selectedProfile.user_status === 'active' ? 'border-green-300 bg-green-50 text-green-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'} disabled:opacity-50"
-							>
-								{selectedProfile.user_status === 'active' ? '✓' : ''} Activate account
-							</button>
-							<button
-								type="button"
-								disabled={statusActionInProgress}
-								on:click={() => changeUserStatus('suspended')}
-								class="w-full px-4 py-2 rounded-lg border text-sm font-medium {selectedProfile.user_status === 'suspended' ? 'border-yellow-300 bg-yellow-50 text-yellow-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'} disabled:opacity-50"
-							>
-								{selectedProfile.user_status === 'suspended' ? '✓' : ''} Suspend account
-							</button>
-							<button
-								type="button"
-								disabled={statusActionInProgress}
-								on:click={() => changeUserStatus('banned')}
-								class="w-full px-4 py-2 rounded-lg border text-sm font-medium {selectedProfile.user_status === 'banned' ? 'border-red-300 bg-red-50 text-red-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'} disabled:opacity-50"
-							>
-								{selectedProfile.user_status === 'banned' ? '✓' : ''} Ban account
-							</button>
+						{#if usersActionMessage}
+							<p class="text-sm bg-blue-50 border border-blue-200 text-blue-700 rounded-lg px-3 py-2 mb-3">{usersActionMessage}</p>
+						{/if}
+						<div class="space-y-3">
+							<div class="rounded-lg border border-gray-200 p-3">
+								<p class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Verification actions</p>
+								<div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+									<button
+										type="button"
+										disabled={actionUserId === selectedProfile.id || selectedProfile.is_verified === true}
+										on:click={() => updateSelectedProfileVerification(true)}
+										class="w-full px-3 py-2 rounded-lg border border-indigo-300 text-indigo-700 bg-indigo-50 text-sm font-medium hover:bg-indigo-100 disabled:opacity-50"
+									>
+										Verify profile
+									</button>
+									<button
+										type="button"
+										disabled={actionUserId === selectedProfile.id || selectedProfile.is_verified !== true}
+										on:click={() => updateSelectedProfileVerification(false)}
+										class="w-full px-3 py-2 rounded-lg border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
+									>
+										Set unverified
+									</button>
+									<button
+										type="button"
+										disabled={actionUserId === selectedProfile.id || selectedProfile.email_confirmed === true}
+										on:click={markSelectedProfileEmailConfirmed}
+										class="w-full px-3 py-2 rounded-lg border border-blue-300 text-blue-700 bg-blue-50 text-sm font-medium hover:bg-blue-100 disabled:opacity-50"
+									>
+										Confirm email
+									</button>
+								</div>
+							</div>
+
+							<div class="rounded-lg border border-gray-200 p-3">
+								<p class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Account status</p>
+								<div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+									<button
+										type="button"
+										disabled={statusActionInProgress}
+										on:click={() => changeUserStatus('active')}
+										class="w-full px-3 py-2 rounded-lg border text-sm font-medium {selectedProfile.user_status === 'active' ? 'border-green-300 bg-green-50 text-green-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'} disabled:opacity-50"
+									>
+										{selectedProfile.user_status === 'active' ? '✓ ' : ''}Active
+									</button>
+									<button
+										type="button"
+										disabled={statusActionInProgress}
+										on:click={() => changeUserStatus('suspended')}
+										class="w-full px-3 py-2 rounded-lg border text-sm font-medium {selectedProfile.user_status === 'suspended' ? 'border-yellow-300 bg-yellow-50 text-yellow-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'} disabled:opacity-50"
+									>
+										{selectedProfile.user_status === 'suspended' ? '✓ ' : ''}Suspended
+									</button>
+									<button
+										type="button"
+										disabled={statusActionInProgress}
+										on:click={() => changeUserStatus('banned')}
+										class="w-full px-3 py-2 rounded-lg border text-sm font-medium {selectedProfile.user_status === 'banned' ? 'border-red-300 bg-red-50 text-red-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'} disabled:opacity-50"
+									>
+										{selectedProfile.user_status === 'banned' ? '✓ ' : ''}Banned
+									</button>
+								</div>
+							</div>
+
 							<button
 								type="button"
 								disabled={statusActionInProgress}

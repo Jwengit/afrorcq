@@ -112,7 +112,14 @@ export const GET: RequestHandler = async ({ request }) => {
 		}
 
 		const adminClient = createClient(supabaseUrl, serviceRoleKey);
-		const allAuthUsers: Array<{ id: string; email: string | null; created_at: string | null; user_metadata?: Record<string, unknown> }> = [];
+		const allAuthUsers: Array<{
+			id: string;
+			email: string | null;
+			created_at: string | null;
+			email_confirmed_at: string | null;
+			confirmed_at: string | null;
+			user_metadata?: Record<string, unknown>;
+		}> = [];
 
 		let page = 1;
 		const perPage = 100;
@@ -128,6 +135,8 @@ export const GET: RequestHandler = async ({ request }) => {
 					id: u.id,
 					email: u.email ?? null,
 					created_at: u.created_at ?? null,
+					email_confirmed_at: u.email_confirmed_at ?? null,
+					confirmed_at: u.confirmed_at ?? null,
 					user_metadata: (u.user_metadata as Record<string, unknown> | undefined) ?? {}
 				}))
 			);
@@ -197,6 +206,8 @@ export const GET: RequestHandler = async ({ request }) => {
 
 		const users = allAuthUsers.map((authUser) => {
 			const profile = profilesById.get(authUser.id);
+			const emailConfirmed = Boolean(authUser.email_confirmed_at || authUser.confirmed_at);
+			const profileVerified = Boolean(profile?.is_verified);
 			const fullName =
 				typeof authUser.user_metadata?.full_name === 'string'
 					? authUser.user_metadata.full_name
@@ -214,7 +225,9 @@ export const GET: RequestHandler = async ({ request }) => {
 				email: profile?.email ?? authUser.email,
 				phone_number: profile?.phone_number ?? null,
 				is_admin: profile?.is_admin ?? false,
-				is_verified: profile?.is_verified ?? false,
+				is_verified: profileVerified,
+				email_confirmed: emailConfirmed,
+				account_verified: profileVerified && emailConfirmed,
 				user_status: profile?.user_status ?? 'active',
 				average_rating: profile?.average_rating ?? null,
 				created_at: profile?.created_at ?? authUser.created_at,
@@ -258,7 +271,12 @@ export const PATCH: RequestHandler = async ({ request }) => {
 
 		const body = await request.json();
 		const userId = typeof body.userId === 'string' ? body.userId : '';
-		const field = body.field === 'is_admin' || body.field === 'is_verified' ? body.field : null;
+		const field =
+			body.field === 'is_admin' ||
+			body.field === 'is_verified' ||
+			body.field === 'email_confirmed'
+				? body.field
+				: null;
 		const value = typeof body.value === 'boolean' ? body.value : null;
 		const email = typeof body.email === 'string' ? body.email : null;
 		const firstName = typeof body.firstName === 'string' && body.firstName.trim() ? body.firstName.trim() : 'User';
@@ -269,6 +287,28 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		}
 
 		const adminClient = createClient(supabaseUrl, serviceRoleKey);
+
+		if (field === 'email_confirmed') {
+			if (value !== true) {
+				return json(
+					{
+						error:
+							'Unconfirming email is not supported from admin tools. Use "Mark email confirmed" only.'
+					},
+					{ status: 400 }
+				);
+			}
+
+			const { error: authUpdateError } = await adminClient.auth.admin.updateUserById(userId, {
+				email_confirm: true
+			});
+
+			if (authUpdateError) {
+				return json({ error: authUpdateError.message }, { status: 500 });
+			}
+
+			return json({ success: true });
+		}
 		const payload: Record<string, unknown> = {
 			id: userId,
 			first_name: firstName,

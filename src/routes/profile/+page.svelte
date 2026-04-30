@@ -25,6 +25,9 @@
 		bio: string;
 		languages: string[];
 		ride_preferences: string[];
+		payment_method: string;
+		paypal_email: string;
+		venmo_handle: string;
 		profile_photo_url: string;
 		status: string;
 	};
@@ -69,6 +72,9 @@
 		bio: '',
 		languages: [] as string[],
 		ride_preferences: [] as string[],
+		payment_method: 'paypal',
+		paypal_email: '',
+		venmo_handle: '',
 		profile_photo_url: '',
 		status: 'Unverified'
 	};
@@ -298,6 +304,9 @@
 			gender: data?.gender ?? '',
 			languages: normalizeOptionSelections(data?.languages, languageOptions),
 			ride_preferences: normalizeOptionSelections(data?.ride_preferences, ridePreferenceOptions),
+			payment_method: (data?.payment_method as string) ?? 'paypal',
+			paypal_email: (data?.paypal_email as string) ?? '',
+			venmo_handle: (data?.venmo_handle as string) ?? '',
 			profile_photo_url: (data?.profile_photo_url as string) ?? '',
 			status: isVerified ? 'Verified' : data?.status ?? 'Unverified'
 		};
@@ -597,6 +606,8 @@
 			const trimmedInsuranceCompany = formData.insurance_company.trim();
 			const trimmedPlateNumber = formData.plate_number.trim();
 			const trimmedProofOfResidentType = formData.proof_of_resident_type.trim();
+			const trimmedPaypalEmail = formData.paypal_email.trim();
+			const trimmedVenmoHandle = formData.venmo_handle.trim();
 			const parsedCarYear = Number.parseInt(formData.car_year, 10);
 			const carYear = Number.isNaN(parsedCarYear) ? null : parsedCarYear;
 			if (!trimmedFirstName || !formData.gender) {
@@ -642,6 +653,9 @@
 					bio: formData.bio || null,
 					languages: sanitizedLanguages,
 					ride_preferences: sanitizedRidePreferences,
+					payment_method: formData.payment_method,
+					paypal_email: trimmedPaypalEmail || null,
+					venmo_handle: trimmedVenmoHandle || null,
 					profile_photo_url: photoUrl || null,
 					updated_at: new Date().toISOString()
 				}, { onConflict: 'id' });
@@ -667,6 +681,9 @@
 					bio: formData.bio,
 					languages: sanitizedLanguages,
 					ride_preferences: sanitizedRidePreferences,
+					payment_method: formData.payment_method,
+					paypal_email: trimmedPaypalEmail,
+					venmo_handle: trimmedVenmoHandle,
 					profile_photo_url: photoUrl,
 					status: profile.status
 				});
@@ -969,6 +986,29 @@
 								</div>
 							</div>
 						</div>
+
+						<div class="border-t border-slate-200 pt-6">
+							<h4 class="text-lg font-semibold text-slate-900 mb-4">Payment method</h4>
+							<div class="rounded-xl border border-slate-200 p-4">
+								<dl class="space-y-3 text-sm">
+									<div>
+										<dt class="text-slate-500 font-medium">Method</dt>
+										<dd class="text-slate-700 capitalize">{profile.payment_method}</dd>
+									</div>
+									{#if profile.payment_method === 'paypal'}
+										<div>
+											<dt class="text-slate-500 font-medium">PayPal email</dt>
+											<dd class="text-slate-700 break-all">{profile.paypal_email || 'Not provided'}</dd>
+										</div>
+									{:else if profile.payment_method === 'venmo'}
+										<div>
+											<dt class="text-slate-500 font-medium">Venmo handle</dt>
+											<dd class="text-slate-700">{profile.venmo_handle || 'Not provided'}</dd>
+										</div>
+									{/if}
+								</dl>
+							</div>
+						</div>
 					</div>
 				{:else}
 					<!-- Edit Mode -->
@@ -1244,6 +1284,49 @@
 										placeholder="Enter proof type (e.g. utility bill, residence permit)"
 									/>
 								</div>
+							</div>
+						</div>
+
+						<div class="border-t border-gray-200 pt-6">
+							<h3 class="text-lg font-semibold text-gray-900 mb-4">Payment method</h3>
+							<div class="rounded-xl border border-gray-200 p-5 space-y-4">
+								<div>
+									<label for="payment_method" class="block text-sm font-medium text-gray-700 mb-2">Payment method *</label>
+									<select
+										id="payment_method"
+										bind:value={formData.payment_method}
+										required
+										class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+									>
+										<option value="paypal">PayPal</option>
+										<option value="venmo">Venmo</option>
+									</select>
+								</div>
+								{#if formData.payment_method === 'paypal'}
+									<div>
+										<label for="paypal_email" class="block text-sm font-medium text-gray-700 mb-2">PayPal email *</label>
+										<input
+											type="email"
+											id="paypal_email"
+											bind:value={formData.paypal_email}
+											required
+											class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+											placeholder="Enter your PayPal email"
+										/>
+									</div>
+								{:else}
+									<div>
+										<label for="venmo_handle" class="block text-sm font-medium text-gray-700 mb-2">Venmo handle *</label>
+										<input
+											type="text"
+											id="venmo_handle"
+											bind:value={formData.venmo_handle}
+											required
+											class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+											placeholder="Enter your Venmo handle"
+										/>
+									</div>
+								{/if}
 							</div>
 						</div>
 

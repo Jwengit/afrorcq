@@ -54,7 +54,52 @@ async function isRequesterAdmin(token: string): Promise<boolean> {
 	return Boolean(profile?.is_admin);
 }
 
-export const GET: RequestHandler = async ({ request }) => {
+function getDateRange(period: string, startDate?: string, endDate?: string): { start: string; end: string } {
+	const now = new Date();
+	const year = now.getFullYear();
+	const month = now.getMonth();
+	const date = now.getDate();
+
+	let start: Date;
+	let end: Date = new Date(now);
+	end.setHours(23, 59, 59, 999);
+
+	switch (period) {
+		case 'today':
+			start = new Date(year, month, date);
+			break;
+		case 'week':
+				// ISO-style week start (Monday) for clearer admin reporting.
+				start = new Date(year, month, date - ((now.getDay() + 6) % 7));
+			break;
+		case 'month':
+			start = new Date(year, month, 1);
+			break;
+		case 'year':
+			start = new Date(year, 0, 1);
+			break;
+		case 'custom':
+			if (!startDate || !endDate) {
+				start = new Date(0);
+			} else {
+				start = new Date(startDate);
+				end = new Date(endDate);
+				end.setHours(23, 59, 59, 999);
+			}
+			break;
+		default:
+			start = new Date(0);
+			end = new Date();
+			end.setHours(23, 59, 59, 999);
+	}
+
+	return {
+		start: start.toISOString(),
+		end: end.toISOString()
+	};
+}
+
+export const GET: RequestHandler = async ({ request, url }) => {
 	try {
 		if (!supabaseUrl || !supabaseAnonKey) {
 			return json({ error: 'Server configuration error' }, { status: 500 });
@@ -83,6 +128,12 @@ export const GET: RequestHandler = async ({ request }) => {
 
 		const adminClient = createClient(supabaseUrl, serviceRoleKey);
 		const nowIso = new Date().toISOString();
+
+		// Get date range from query parameters
+		const period = url.searchParams.get('period') || 'all';
+		const startDateParam = url.searchParams.get('startDate');
+		const endDateParam = url.searchParams.get('endDate');
+		const dateRange = getDateRange(period, startDateParam || undefined, endDateParam || undefined);
 
 		const allAuthUsers: AuthUserLite[] = [];
 		let page = 1;
@@ -141,19 +192,24 @@ export const GET: RequestHandler = async ({ request }) => {
 				adminClient
 					.from('rides')
 					.select('id', { count: 'exact', head: true })
-					.gt('ride_date', nowIso),
+					.gt('ride_date', dateRange.start)
+					.lte('ride_date', dateRange.end),
 				adminClient
 					.from('rides')
 					.select('id', { count: 'exact', head: true })
-					.lte('ride_date', nowIso),
+					.lt('ride_date', dateRange.start),
 				adminClient
 					.from('bookings')
 					.select('id', { count: 'exact', head: true })
-					.in('status', ['Pending', 'Confirmed']),
+					.in('status', ['Pending', 'Confirmed'])
+					.gte('created_at', dateRange.start)
+					.lte('created_at', dateRange.end),
 				adminClient
 					.from('bookings')
 					.select('seats_booked, ride:rides(price)')
 					.eq('status', 'Confirmed')
+					.gte('created_at', dateRange.start)
+					.lte('created_at', dateRange.end)
 			]);
 
 		if (activeRidesRes.error || completedRidesRes.error || reservationsInProgressRes.error || confirmedBookingsWithRideRes.error) {
@@ -214,7 +270,9 @@ export const GET: RequestHandler = async ({ request }) => {
 					reports: reportsCount,
 					accountsToVerify
 				}
-			}
+			},
+			period,
+			dateRange
 		});
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Internal server error';
