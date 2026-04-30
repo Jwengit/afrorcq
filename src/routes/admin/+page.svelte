@@ -27,6 +27,7 @@
 		last_name: string | null;
 		email: string | null;
 		phone_number: string | null;
+		gender: string | null;
 		is_admin: boolean | null;
 		is_verified: boolean | null;
 		email_confirmed?: boolean | null;
@@ -736,6 +737,66 @@
 		const profile = selectedProfile;
 		if (!profile) return;
 		await updateUserFlag(profile, 'is_verified', value);
+	}
+
+	async function updateSelectedProfileGender(gender: string) {
+		if (!selectedProfile) return;
+		const selectedProfileId = selectedProfile.id;
+
+		actionUserId = selectedProfileId;
+		usersActionMessage = '';
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			usersActionMessage = 'Session expired. Please sign in again.';
+			actionUserId = null;
+			return;
+		}
+
+		const response = await fetch('/api/admin/users', {
+			method: 'PATCH',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${session.access_token}`
+			},
+			body: JSON.stringify({
+				userId: selectedProfileId,
+				field: 'gender',
+				value: gender
+			})
+		});
+
+		const payload = await response.json();
+		if (!response.ok) {
+			usersActionMessage = payload?.error || 'Unable to update gender right now.';
+			actionUserId = null;
+			return;
+		}
+
+		users = users.map((u) => {
+			if (u.id !== selectedProfileId) {
+				return u;
+			}
+
+			const updated: AdminUser = {
+				...u,
+				gender: gender
+			};
+			return updated;
+		});
+
+		if (selectedProfile?.id === selectedProfileId) {
+			const refreshed = users.find((u) => u.id === selectedProfileId);
+			if (refreshed) {
+				selectedProfile = refreshed;
+			}
+		}
+
+		usersActionMessage = `Gender updated to ${gender}.`;
+		actionUserId = null;
 	}
 
 	async function markSelectedProfileEmailConfirmed() {
@@ -3704,6 +3765,20 @@
 							<div>
 								<p class="text-gray-500">Phone</p>
 								<p class="font-medium text-gray-900">{selectedProfile.phone_number || '-'}</p>
+							</div>
+							<div>
+								<p class="text-gray-500">Gender</p>
+								<div class="flex items-center gap-2 mt-1">
+									<select
+										bind:value={selectedProfile.gender}
+										on:change={(e) => updateSelectedProfileGender(e.currentTarget.value)}
+										disabled={actionUserId === selectedProfile.id}
+										class="px-2 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-blue-500 disabled:opacity-50"
+									>
+										<option value="male">Male</option>
+										<option value="female">Female</option>
+									</select>
+								</div>
 							</div>
 							<div>
 								<p class="text-gray-500">Average rating</p>

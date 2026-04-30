@@ -12,6 +12,7 @@ type ProfileRow = {
 	last_name: string | null;
 	email: string | null;
 	phone_number: string | null;
+	gender: string | null;
 	is_admin: boolean | null;
 	is_verified: boolean | null;
 	user_status?: string | null;
@@ -20,11 +21,11 @@ type ProfileRow = {
 };
 
 const PROFILE_SELECT_WITH_RATING =
-	'id, public_id, first_name, last_name, email, phone_number, is_admin, is_verified, user_status, average_rating, created_at';
+	'id, public_id, first_name, last_name, email, phone_number, gender, is_admin, is_verified, user_status, average_rating, created_at';
 const PROFILE_SELECT_WITHOUT_RATING =
-	'id, public_id, first_name, last_name, email, phone_number, is_admin, is_verified, user_status, created_at';
+	'id, public_id, first_name, last_name, email, phone_number, gender, is_admin, is_verified, user_status, created_at';
 const PROFILE_SELECT_BASE =
-	'id, first_name, last_name, email, phone_number, is_admin, is_verified, user_status, created_at';
+	'id, first_name, last_name, email, phone_number, gender, is_admin, is_verified, user_status, created_at';
 
 function isMissingAverageRatingColumnError(error: { message?: string } | null): boolean {
 	if (!error?.message) {
@@ -224,6 +225,7 @@ export const GET: RequestHandler = async ({ request }) => {
 				last_name: profile?.last_name ?? parsedLastName,
 				email: profile?.email ?? authUser.email,
 				phone_number: profile?.phone_number ?? null,
+				gender: profile?.gender ?? null,
 				is_admin: profile?.is_admin ?? false,
 				is_verified: profileVerified,
 				email_confirmed: emailConfirmed,
@@ -274,10 +276,11 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		const field =
 			body.field === 'is_admin' ||
 			body.field === 'is_verified' ||
-			body.field === 'email_confirmed'
+			body.field === 'email_confirmed' ||
+			body.field === 'gender'
 				? body.field
 				: null;
-		const value = typeof body.value === 'boolean' ? body.value : null;
+		const value = typeof body.value === 'boolean' ? body.value : typeof body.value === 'string' ? body.value : null;
 		const email = typeof body.email === 'string' ? body.email : null;
 		const firstName = typeof body.firstName === 'string' && body.firstName.trim() ? body.firstName.trim() : 'User';
 		const lastName = typeof body.lastName === 'string' && body.lastName.trim() ? body.lastName.trim() : null;
@@ -309,13 +312,19 @@ export const PATCH: RequestHandler = async ({ request }) => {
 
 			return json({ success: true });
 		}
+
 		const payload: Record<string, unknown> = {
 			id: userId,
-			first_name: firstName,
-			last_name: lastName,
-			updated_at: new Date().toISOString(),
-			[field]: value
+			updated_at: new Date().toISOString()
 		};
+
+		// Only add name fields if updating a boolean field (is_admin, is_verified)
+		if (field === 'is_admin' || field === 'is_verified') {
+			payload.first_name = firstName;
+			payload.last_name = lastName;
+		}
+
+		payload[field] = value;
 
 		if (email) {
 			payload.email = email;
