@@ -277,16 +277,45 @@
 	let supportSendingReply = false;
 	let supportUpdatingStatus = false;
 
-	// Transactions management (simple MVP)
+	// Transactions management
 	type AdminTransaction = {
 		id: string;
 		booking_id: string | null;
+		ride_id?: string | null;
 		user_id: string | null;
+		seats_booked?: number | null;
 		amount: number;
-		status: 'succeeded' | 'failed';
-		refund_status: 'none' | 'refunded';
 		currency: string;
+		status: 'pending' | 'succeeded' | 'failed' | 'canceled' | string;
+		refund_status: 'none' | 'pending' | 'refunded' | 'failed' | string;
+		commission_percent: number;
+		commission_amount: number;
+		driver_payout_amount: number;
+		admin_status: 'awaiting_payout' | 'validated' | 'payout_done' | 'dispute' | string;
+		payout_at: string | null;
+		external_reference: string | null;
+		admin_notes: string | null;
+		provider: string | null;
+		paypal_order_id: string | null;
 		created_at: string;
+		updated_at?: string | null;
+		passenger_profile?: {
+			first_name: string | null;
+			last_name: string | null;
+			email: string | null;
+			payment_method: string | null;
+		} | null;
+		driver_profile?: {
+			first_name: string | null;
+			last_name: string | null;
+			email: string | null;
+			payment_method: string | null;
+		} | null;
+		ride_info?: {
+			departure: string | null;
+			arrival: string | null;
+			ride_date: string | null;
+		} | null;
 		profiles?: {
 			first_name: string | null;
 			last_name: string | null;
@@ -297,9 +326,46 @@
 	let transactionsLoading = false;
 	let transactionsError = '';
 	let transactionsActionMessage = '';
+	let transactionsActionIsError = false;
 	let transactions: AdminTransaction[] = [];
 	let transactionFilterStatus = '';
+	let transactionFilterRefundStatus = '';
+	let transactionFilterAdminStatus = '';
+	let transactionSearch = '';
+	let transactionFilterFromDate = '';
+	let transactionFilterToDate = '';
 	let transactionActionId: string | null = null;
+
+	// Transaction detail modal
+	let showTransactionModal = false;
+	let selectedTransaction: AdminTransaction | null = null;
+	let txModalAdminStatus = '';
+	let txModalBookingId = '';
+	let txModalNotes = '';
+	let txModalRef = '';
+	let txModalPayoutAt = '';
+	let txModalPaymentAt = '';
+	let txModalPaymentStatus = '';
+	let txModalRefundStatus = '';
+	let txModalAmount = '0';
+	let txModalSeats = '1';
+	let txModalCommissionPercent = '20';
+	let txModalPassengerFirst = '';
+	let txModalPassengerLast = '';
+	let txModalPassengerEmail = '';
+	let txModalPassengerPayment = '';
+	let txModalDriverFirst = '';
+	let txModalDriverLast = '';
+	let txModalDriverEmail = '';
+	let txModalDriverPayment = '';
+	let txModalDeparture = '';
+	let txModalArrival = '';
+	let txModalRideDate = '';
+	let txModalProvider = 'paypal';
+	let txModalProviderOrderId = '';
+	let txModalSaving = false;
+	let txModalMessage = '';
+	let txModalIsError = false;
 
 	// Platform settings management
 	let settingsLoading = false;
@@ -1817,6 +1883,7 @@
 		transactionsLoading = true;
 		transactionsError = '';
 		transactionsActionMessage = '';
+		transactionsActionIsError = false;
 
 		const {
 			data: { session }
@@ -1831,6 +1898,18 @@
 		const params = new URLSearchParams();
 		if (transactionFilterStatus) {
 			params.append('status', transactionFilterStatus);
+		}
+		if (transactionFilterRefundStatus) {
+			params.append('refund_status', transactionFilterRefundStatus);
+		}
+		if (transactionFilterAdminStatus) {
+			params.append('admin_status', transactionFilterAdminStatus);
+		}
+		if (transactionFilterFromDate) {
+			params.append('from_date', transactionFilterFromDate);
+		}
+		if (transactionFilterToDate) {
+			params.append('to_date', transactionFilterToDate);
 		}
 
 		const response = await fetch(`/api/admin/transactions?${params.toString()}`, {
@@ -1848,7 +1927,27 @@
 			return;
 		}
 
-		transactions = (payload?.transactions ?? []) as AdminTransaction[];
+		const rows = (payload?.transactions ?? []) as AdminTransaction[];
+		const q = transactionSearch.trim().toLowerCase();
+		transactions = q
+			? rows.filter((tx) => {
+				const passengerName = `${tx.passenger_profile?.first_name ?? ''} ${tx.passenger_profile?.last_name ?? ''}`
+					.toLowerCase()
+					.trim();
+				const driverName = `${tx.driver_profile?.first_name ?? ''} ${tx.driver_profile?.last_name ?? ''}`
+					.toLowerCase()
+					.trim();
+				return (
+					tx.id.toLowerCase().includes(q) ||
+					(tx.booking_id ?? '').toLowerCase().includes(q) ||
+					(tx.external_reference ?? '').toLowerCase().includes(q) ||
+					(tx.passenger_profile?.email ?? '').toLowerCase().includes(q) ||
+					(tx.driver_profile?.email ?? '').toLowerCase().includes(q) ||
+					passengerName.includes(q) ||
+					driverName.includes(q)
+				);
+			})
+			: rows;
 		transactionsLoading = false;
 	}
 
@@ -1858,6 +1957,7 @@
 
 		transactionActionId = transaction.id;
 		transactionsActionMessage = '';
+		transactionsActionIsError = false;
 
 		const {
 			data: { session }
@@ -1865,6 +1965,7 @@
 
 		if (!session?.access_token) {
 			transactionsActionMessage = 'Session expired. Please sign in again.';
+			transactionsActionIsError = true;
 			transactionActionId = null;
 			return;
 		}
@@ -1884,6 +1985,7 @@
 		const payload = await response.json();
 		if (!response.ok) {
 			transactionsActionMessage = payload?.error || 'Refund unavailable right now.';
+			transactionsActionIsError = true;
 			transactionActionId = null;
 			return;
 		}
@@ -1893,6 +1995,142 @@
 		);
 		transactionsActionMessage = 'Transaction refunded.';
 		transactionActionId = null;
+	}
+
+	function isoToInputDateTime(value: string | null | undefined): string {
+		if (!value) return '';
+		const d = new Date(value);
+		if (Number.isNaN(d.getTime())) return '';
+		const pad = (n: number) => String(n).padStart(2, '0');
+		return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+	}
+
+	function inputDateTimeToIso(value: string): string | null {
+		if (!value) return null;
+		const d = new Date(value);
+		if (Number.isNaN(d.getTime())) return null;
+		return d.toISOString();
+	}
+
+	function openTransactionModal(transaction: AdminTransaction) {
+		selectedTransaction = transaction;
+		txModalAdminStatus = transaction.admin_status || 'awaiting_payout';
+		txModalBookingId = transaction.booking_id || '';
+		txModalNotes = transaction.admin_notes || '';
+		txModalRef = transaction.external_reference || '';
+		txModalPayoutAt = isoToInputDateTime(transaction.payout_at);
+		txModalPaymentAt = isoToInputDateTime(transaction.created_at);
+		txModalPaymentStatus = transaction.status || 'pending';
+		txModalRefundStatus = transaction.refund_status || 'none';
+		txModalAmount = String(transaction.amount ?? 0);
+		txModalSeats = String(transaction.seats_booked ?? 1);
+		txModalCommissionPercent = String(transaction.commission_percent ?? 20);
+		txModalPassengerFirst = transaction.passenger_profile?.first_name ?? '';
+		txModalPassengerLast = transaction.passenger_profile?.last_name ?? '';
+		txModalPassengerEmail = transaction.passenger_profile?.email ?? '';
+		txModalPassengerPayment = transaction.passenger_profile?.payment_method ?? '';
+		txModalDriverFirst = transaction.driver_profile?.first_name ?? '';
+		txModalDriverLast = transaction.driver_profile?.last_name ?? '';
+		txModalDriverEmail = transaction.driver_profile?.email ?? '';
+		txModalDriverPayment = transaction.driver_profile?.payment_method ?? '';
+		txModalDeparture = transaction.ride_info?.departure ?? '';
+		txModalArrival = transaction.ride_info?.arrival ?? '';
+		txModalRideDate = transaction.ride_info?.ride_date ? transaction.ride_info.ride_date.slice(0, 10) : '';
+		txModalProvider = transaction.provider || 'paypal';
+		txModalProviderOrderId = transaction.paypal_order_id || '';
+		txModalMessage = '';
+		txModalIsError = false;
+		showTransactionModal = true;
+	}
+
+	function closeTransactionModal() {
+		showTransactionModal = false;
+		selectedTransaction = null;
+		txModalMessage = '';
+		txModalIsError = false;
+	}
+
+	async function saveTransactionFullDetails() {
+		if (!selectedTransaction) return;
+
+		txModalSaving = true;
+		txModalMessage = '';
+		txModalIsError = false;
+
+		const amount = Number(txModalAmount || 0);
+		const seatsBooked = Number(txModalSeats || 1);
+		const commissionPercent = Number(txModalCommissionPercent || 20);
+		const commissionAmount = Math.round(amount * (commissionPercent / 100) * 100) / 100;
+		const driverPayoutAmount = Math.round((amount - commissionAmount) * 100) / 100;
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			txModalMessage = 'Session expired. Please sign in again.';
+			txModalIsError = true;
+			txModalSaving = false;
+			return;
+		}
+
+		const response = await fetch('/api/admin/transactions', {
+			method: 'PATCH',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${session.access_token}`
+			},
+			body: JSON.stringify({
+				transactionId: selectedTransaction.id,
+				action: 'update_details',
+				booking_id: txModalBookingId || null,
+				amount,
+				currency: 'USD',
+				seats_booked: seatsBooked,
+				status: txModalPaymentStatus,
+				refund_status: txModalRefundStatus,
+				commission_percent: commissionPercent,
+				commission_amount: commissionAmount,
+				driver_payout_amount: driverPayoutAmount,
+				admin_status: txModalAdminStatus,
+				payment_at: inputDateTimeToIso(txModalPaymentAt),
+				payout_at: inputDateTimeToIso(txModalPayoutAt),
+				external_reference: txModalRef || null,
+				admin_notes: txModalNotes || null,
+				provider: txModalProvider || 'paypal',
+				provider_order_id: txModalProviderOrderId || null,
+				passenger_profile: {
+					first_name: txModalPassengerFirst || null,
+					last_name: txModalPassengerLast || null,
+					email: txModalPassengerEmail || null,
+					payment_method: txModalPassengerPayment || null
+				},
+				driver_profile: {
+					first_name: txModalDriverFirst || null,
+					last_name: txModalDriverLast || null,
+					email: txModalDriverEmail || null,
+					payment_method: txModalDriverPayment || null
+				},
+				ride_info: {
+					departure: txModalDeparture || null,
+					arrival: txModalArrival || null,
+					ride_date: txModalRideDate || null
+				}
+			})
+		});
+
+		const payload = await response.json();
+		if (!response.ok) {
+			txModalMessage = payload?.error || 'Unable to save transaction details.';
+			txModalIsError = true;
+			txModalSaving = false;
+			return;
+		}
+
+		txModalMessage = 'Transaction details saved.';
+		txModalIsError = false;
+		txModalSaving = false;
+		await loadTransactions();
 	}
 
 	async function loadPlatformSettings() {
@@ -2532,8 +2770,8 @@
 										<option value="">All statuses</option>
 										<option value="Actif">Active</option>
 										<option value="Complet">Full</option>
-										<option value="Annulé">Cancelled</option>
-										<option value="Terminé">Completed</option>
+										<option value="Annul+�">Cancelled</option>
+										<option value="Termin+�">Completed</option>
 									</select>
 									<button
 										on:click={loadRides}
@@ -2600,7 +2838,7 @@
 														<div class="text-xs text-gray-500">{ride.profiles?.email}</div>
 													</td>
 													<td class="px-4 py-3">
-														<div class="text-sm text-gray-900">{ride.city_from} → {ride.city_to}</div>
+														<div class="text-sm text-gray-900">{ride.city_from} ��� {ride.city_to}</div>
 													</td>
 													<td class="px-4 py-3">
 														<div class="text-sm text-gray-600">
@@ -2630,11 +2868,11 @@
 																? 'bg-green-100 text-green-800'
 																: ride.status === 'Complet'
 																	? 'bg-yellow-100 text-yellow-800'
-																	: ride.status === 'Annulé'
+																	: ride.status === 'Annul+�'
 																		? 'bg-red-100 text-red-800'
 																		: 'bg-gray-100 text-gray-800'
 														}`}>
-															{ride.status === 'Actif' ? 'Active' : ride.status === 'Complet' ? 'Full' : ride.status === 'Annulé' ? 'Cancelled' : ride.status === 'Terminé' ? 'Completed' : ride.status}
+															{ride.status === 'Actif' ? 'Active' : ride.status === 'Complet' ? 'Full' : ride.status === 'Annul+�' ? 'Cancelled' : ride.status === 'Termin+�' ? 'Completed' : ride.status}
 														</span>
 													</td>
 													<td class="px-4 py-3">
@@ -2747,7 +2985,7 @@
 														<div class="text-xs text-gray-500">{booking.profiles?.email}</div>
 													</td>
 													<td class="px-4 py-3">
-														<div class="text-sm text-gray-900">{booking.rides?.city_from} → {booking.rides?.city_to}</div>
+														<div class="text-sm text-gray-900">{booking.rides?.city_from} ��� {booking.rides?.city_to}</div>
 														<div class="text-xs text-gray-500">
 															{new Date(booking.rides?.ride_date).toLocaleDateString('en-US', {
 																day: '2-digit',
@@ -3026,25 +3264,37 @@
 					{:else if activeTab === 'transactions'}
 						<div class="space-y-6">
 							<div class="bg-white rounded-xl p-4 border border-gray-200">
-								<div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-									<select
-										class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-										bind:value={transactionFilterStatus}
-										on:change={loadTransactions}
-									>
-										<option value="">Tous les statuts</option>
+								<div class="grid grid-cols-1 md:grid-cols-7 gap-3">
+									<input type="text" placeholder="Search by ID, email, name..." class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" bind:value={transactionSearch} on:change={loadTransactions} />
+									<select class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" bind:value={transactionFilterStatus} on:change={loadTransactions}>
+										<option value="">All payment statuses</option>
+										<option value="pending">Pending</option>
 										<option value="succeeded">Succeeded</option>
 										<option value="failed">Failed</option>
+										<option value="canceled">Canceled</option>
 									</select>
-									<button
-										on:click={loadTransactions}
-										class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 font-medium"
-									>
-										Charger transactions
-									</button>
+									<select class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" bind:value={transactionFilterRefundStatus} on:change={loadTransactions}>
+										<option value="">All refund statuses</option>
+										<option value="none">None</option>
+										<option value="pending">Pending</option>
+										<option value="refunded">Refunded</option>
+										<option value="failed">Failed</option>
+									</select>
+									<select class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" bind:value={transactionFilterAdminStatus} on:change={loadTransactions}>
+										<option value="">All admin statuses</option>
+										<option value="awaiting_payout">Awaiting payout</option>
+										<option value="validated">Validated</option>
+										<option value="payout_done">Payout done</option>
+										<option value="dispute">Dispute</option>
+									</select>
+									<input type="date" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" bind:value={transactionFilterFromDate} on:change={loadTransactions} />
+									<input type="date" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" bind:value={transactionFilterToDate} on:change={loadTransactions} />
+									<button on:click={loadTransactions} class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 font-medium">Load transactions</button>
 								</div>
 								{#if transactionsActionMessage}
-									<p class="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 mt-3">{transactionsActionMessage}</p>
+									<p class={`text-sm border rounded-lg px-3 py-2 mt-3 ${transactionsActionIsError ? 'text-red-700 bg-red-50 border-red-200' : 'text-green-700 bg-green-50 border-green-200'}`}>
+										{transactionsActionMessage}
+									</p>
 								{/if}
 							</div>
 
@@ -3059,54 +3309,37 @@
 									<table class="w-full text-sm">
 										<thead class="bg-gray-50 text-left text-gray-600">
 											<tr>
-												<th class="px-4 py-3 font-medium">Client</th>
-												<th class="px-4 py-3 font-medium">Statut</th>
-												<th class="px-4 py-3 font-medium">Montant</th>
-												<th class="px-4 py-3 font-medium">Remboursement</th>
-												<th class="px-4 py-3 font-medium">Date</th>
-												<th class="px-4 py-3 font-medium">Action</th>
+												<th class="px-4 py-3 font-medium">Passenger</th>
+												<th class="px-4 py-3 font-medium">Driver</th>
+												<th class="px-4 py-3 font-medium">Payment status</th>
+												<th class="px-4 py-3 font-medium">Admin status</th>
+												<th class="px-4 py-3 font-medium">Amount (USD)</th>
+												<th class="px-4 py-3 font-medium">Created at</th>
+												<th class="px-4 py-3 font-medium">Actions</th>
 											</tr>
 										</thead>
 										<tbody class="divide-y divide-gray-100">
 											{#each transactions as tx}
 												<tr class="hover:bg-gray-50">
+													<td class="px-4 py-3 align-top">
+														<p class="font-medium text-gray-900">{tx.passenger_profile?.first_name} {tx.passenger_profile?.last_name}</p>
+														<p class="text-xs text-gray-500">{tx.passenger_profile?.email || '-'}</p>
+														<p class="text-xs text-gray-500 mt-1">Booking ID: {tx.booking_id || '-'}</p>
+													</td>
+													<td class="px-4 py-3 align-top">
+														<p class="font-medium text-gray-900">{tx.driver_profile?.first_name} {tx.driver_profile?.last_name}</p>
+														<p class="text-xs text-gray-500">{tx.driver_profile?.email || '-'}</p>
+														<p class="text-xs text-gray-500 mt-1">{tx.ride_info?.departure || '-'} to {tx.ride_info?.arrival || '-'}</p>
+													</td>
+													<td class="px-4 py-3"><span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${tx.status === 'succeeded' ? 'bg-green-100 text-green-700' : tx.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{tx.status}</span></td>
+													<td class="px-4 py-3"><span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">{tx.admin_status || 'awaiting_payout'}</span></td>
+													<td class="px-4 py-3 font-medium text-gray-900">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(tx.amount || 0))}</td>
+													<td class="px-4 py-3 text-gray-600">{new Date(tx.created_at).toLocaleString('en-US')}</td>
 													<td class="px-4 py-3">
-														<p class="font-medium text-gray-900">
-															{tx.profiles?.first_name} {tx.profiles?.last_name}
-														</p>
-														<p class="text-xs text-gray-500">{tx.profiles?.email || '-'}</p>
-													</td>
-													<td class="px-4 py-3">
-														<span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-															tx.status === 'succeeded' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-														}`}>
-															{tx.status === 'succeeded' ? 'Succeeded' : 'Failed'}
-														</span>
-													</td>
-													<td class="px-4 py-3 font-medium text-gray-900">
-														{new Intl.NumberFormat('en-US', {
-															style: 'currency',
-															currency: tx.currency || 'USD'
-														}).format(Number(tx.amount || 0))}
-													</td>
-													<td class="px-4 py-3">
-														<span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-															tx.refund_status === 'refunded' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-700'
-														}`}>
-															{tx.refund_status === 'refunded' ? 'Refunded' : 'None'}
-														</span>
-													</td>
-													<td class="px-4 py-3 text-gray-600">
-														{new Date(tx.created_at).toLocaleDateString('en-US')}
-													</td>
-													<td class="px-4 py-3">
-														<button
-															disabled={tx.refund_status === 'refunded' || tx.status !== 'succeeded' || transactionActionId === tx.id}
-															on:click={() => refundTransaction(tx)}
-															class="px-3 py-1 rounded text-xs font-medium border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
-														>
-															{transactionActionId === tx.id ? 'Processing...' : 'Refund'}
-														</button>
+														<div class="flex flex-wrap gap-2">
+															<button on:click={() => openTransactionModal(tx)} class="px-3 py-1 rounded text-xs font-medium border border-green-200 text-green-700 hover:bg-green-50">Details</button>
+															<button disabled={tx.refund_status === 'refunded' || tx.status !== 'succeeded' || transactionActionId === tx.id} on:click={() => refundTransaction(tx)} class="px-3 py-1 rounded text-xs font-medium border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50">{transactionActionId === tx.id ? 'Processing...' : 'Refund'}</button>
+														</div>
 													</td>
 												</tr>
 											{/each}
@@ -3114,10 +3347,105 @@
 									</table>
 								</div>
 							{/if}
+
+							{#if showTransactionModal && selectedTransaction}
+								<div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+									<div class="bg-white rounded-2xl max-w-4xl w-full max-h-[92vh] overflow-y-auto" role="dialog" aria-modal="true" aria-label="Transaction details modal">
+										<div class="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 z-10 flex items-start justify-between gap-4">
+											<div>
+												<h3 class="text-lg font-semibold text-gray-900">Transaction details</h3>
+												<p class="text-xs text-gray-500 mt-1">Everything in this modal can be edited, except Transaction ID.</p>
+												<p class="text-xs text-gray-500 mt-1">Transaction ID: {selectedTransaction.id}</p>
+											</div>
+											<button on:click={closeTransactionModal} class="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50">Close</button>
+										</div>
+
+										<div class="p-6 space-y-5">
+											{#if txModalMessage}
+												<p class={`text-sm rounded-lg px-3 py-2 border ${txModalIsError ? 'text-red-700 bg-red-50 border-red-200' : 'text-green-700 bg-green-50 border-green-200'}`}>{txModalMessage}</p>
+											{/if}
+
+											<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+												<div><label for="tx-booking-id" class="text-xs text-gray-500 mb-0.5 block">Booking ID</label><input id="tx-booking-id" type="text" bind:value={txModalBookingId} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" /></div>
+												<div><label for="tx-currency" class="text-xs text-gray-500 mb-0.5 block">Currency</label><input id="tx-currency" type="text" value="USD" readonly class="w-full px-3 py-2 border border-gray-200 bg-gray-100 rounded-lg text-sm text-gray-600" /></div>
+											</div>
+
+											<div class="rounded-lg border border-green-200 bg-green-50 p-4 space-y-3">
+												<p class="text-xs font-semibold text-green-800 uppercase tracking-wide">Financial details (USD only)</p>
+												<div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+													<div><label for="tx-amount" class="text-xs text-gray-600 block mb-1">Total amount (USD)</label><input id="tx-amount" type="number" min="0" step="0.01" bind:value={txModalAmount} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" /></div>
+													<div><label for="tx-seats" class="text-xs text-gray-600 block mb-1">Seats booked</label><input id="tx-seats" type="number" min="1" step="1" bind:value={txModalSeats} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" /></div>
+													<div><label for="tx-commission" class="text-xs text-gray-600 block mb-1">Commission (%)</label><input id="tx-commission" type="number" min="0" max="100" step="0.01" bind:value={txModalCommissionPercent} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" /></div>
+													<div><label for="tx-provider" class="text-xs text-gray-600 block mb-1">Payment provider</label><input id="tx-provider" type="text" bind:value={txModalProvider} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" /></div>
+												</div>
+											</div>
+
+											<div class="rounded-lg border border-gray-200 p-4 space-y-3">
+												<p class="text-sm font-semibold text-gray-900">Transaction status</p>
+												<div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+													<div><label for="tx-payment-status" class="text-xs text-gray-600 block mb-1">Payment status</label><select id="tx-payment-status" bind:value={txModalPaymentStatus} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"><option value="pending">Pending</option><option value="succeeded">Succeeded</option><option value="failed">Failed</option><option value="canceled">Canceled</option></select></div>
+													<div><label for="tx-refund-status" class="text-xs text-gray-600 block mb-1">Refund status</label><select id="tx-refund-status" bind:value={txModalRefundStatus} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"><option value="none">None</option><option value="pending">Pending</option><option value="refunded">Refunded</option><option value="failed">Failed</option></select></div>
+													<div><label for="tx-admin-status" class="text-xs text-gray-600 block mb-1">Admin status</label><select id="tx-admin-status" bind:value={txModalAdminStatus} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"><option value="awaiting_payout">Awaiting payout</option><option value="validated">Validated</option><option value="payout_done">Payout done</option><option value="dispute">Dispute</option></select></div>
+												</div>
+											</div>
+
+											<div class="rounded-lg border border-gray-200 p-4 space-y-3">
+												<p class="text-sm font-semibold text-gray-900">Date and time</p>
+												<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+													<div><label for="tx-payment-at" class="text-xs text-gray-600 block mb-1">Payment date & time</label><input id="tx-payment-at" type="datetime-local" bind:value={txModalPaymentAt} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" /></div>
+													<div><label for="tx-payout-at" class="text-xs text-gray-600 block mb-1">Payout date & time</label><input id="tx-payout-at" type="datetime-local" bind:value={txModalPayoutAt} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" /></div>
+												</div>
+											</div>
+
+											<div class="rounded-lg border border-blue-100 bg-blue-50 p-4 space-y-3">
+												<p class="text-xs font-semibold text-blue-800 uppercase tracking-wide">Passenger</p>
+												<div class="grid grid-cols-2 gap-3">
+													<div><label for="tx-passenger-first" class="text-xs text-gray-600 block mb-1">First name</label><input id="tx-passenger-first" type="text" bind:value={txModalPassengerFirst} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" /></div>
+													<div><label for="tx-passenger-last" class="text-xs text-gray-600 block mb-1">Last name</label><input id="tx-passenger-last" type="text" bind:value={txModalPassengerLast} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" /></div>
+													<div><label for="tx-passenger-email" class="text-xs text-gray-600 block mb-1">Email</label><input id="tx-passenger-email" type="email" bind:value={txModalPassengerEmail} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" /></div>
+													<div><label for="tx-passenger-method" class="text-xs text-gray-600 block mb-1">Payment method</label><input id="tx-passenger-method" type="text" bind:value={txModalPassengerPayment} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" /></div>
+												</div>
+											</div>
+
+											<div class="rounded-lg border border-indigo-100 bg-indigo-50 p-4 space-y-3">
+												<p class="text-xs font-semibold text-indigo-800 uppercase tracking-wide">Driver</p>
+												<div class="grid grid-cols-2 gap-3">
+													<div><label for="tx-driver-first" class="text-xs text-gray-600 block mb-1">First name</label><input id="tx-driver-first" type="text" bind:value={txModalDriverFirst} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" /></div>
+													<div><label for="tx-driver-last" class="text-xs text-gray-600 block mb-1">Last name</label><input id="tx-driver-last" type="text" bind:value={txModalDriverLast} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" /></div>
+													<div><label for="tx-driver-email" class="text-xs text-gray-600 block mb-1">Email</label><input id="tx-driver-email" type="email" bind:value={txModalDriverEmail} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" /></div>
+													<div><label for="tx-driver-method" class="text-xs text-gray-600 block mb-1">Payout method</label><input id="tx-driver-method" type="text" bind:value={txModalDriverPayment} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" /></div>
+												</div>
+											</div>
+
+											<div class="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
+												<p class="text-xs font-semibold text-gray-700 uppercase tracking-wide">Ride</p>
+												<div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+													<div><label for="tx-departure" class="text-xs text-gray-600 block mb-1">Departure</label><input id="tx-departure" type="text" bind:value={txModalDeparture} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" /></div>
+													<div><label for="tx-arrival" class="text-xs text-gray-600 block mb-1">Arrival</label><input id="tx-arrival" type="text" bind:value={txModalArrival} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" /></div>
+													<div><label for="tx-ride-date" class="text-xs text-gray-600 block mb-1">Ride date</label><input id="tx-ride-date" type="date" bind:value={txModalRideDate} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" /></div>
+												</div>
+											</div>
+
+											<div class="space-y-3">
+												<div><label for="tx-provider-order" class="text-xs font-semibold text-gray-700 block mb-1">Provider reference ID</label><input id="tx-provider-order" type="text" bind:value={txModalProviderOrderId} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" /></div>
+												<div><label for="tx-ref" class="text-xs font-semibold text-gray-700 block mb-1">External reference ID</label><input id="tx-ref" type="text" bind:value={txModalRef} placeholder="e.g. CAPTURE_ABC123" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" /></div>
+												<div><label for="tx-notes" class="text-xs font-semibold text-gray-700 block mb-1">Internal notes</label><textarea id="tx-notes" bind:value={txModalNotes} rows="3" placeholder="e.g. Dispute opened, waiting for provider evidence" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-y"></textarea></div>
+											</div>
+
+											<div class="flex flex-wrap gap-2">
+												<button on:click={saveTransactionFullDetails} disabled={txModalSaving} class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 font-medium disabled:opacity-50">{txModalSaving ? 'Saving...' : 'Save all changes'}</button>
+												{#if selectedTransaction.status === 'succeeded' && selectedTransaction.refund_status !== 'refunded'}
+													<button disabled={transactionActionId === selectedTransaction.id} on:click={() => refundTransaction(selectedTransaction!)} class="px-4 py-2 border border-indigo-200 text-indigo-700 text-sm rounded-lg hover:bg-indigo-50 font-medium disabled:opacity-50">{transactionActionId === selectedTransaction.id ? 'Processing...' : 'Refund transaction'}</button>
+												{/if}
+											</div>
+										</div>
+									</div>
+								</div>
+							{/if}
 						</div>
 					{:else if activeTab === 'settings'}
 						<div class="space-y-5">
-							<div class="rounded-2xl border border-gray-200 bg-gradient-to-r from-emerald-50 to-white p-5 sm:p-6">
+							<div class="rounded-2xl border border-gray-200 bg-linear-to-r from-emerald-50 to-white p-5 sm:p-6">
 								<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 									<div>
 										<h3 class="text-lg font-semibold text-gray-900">Settings</h3>
@@ -3314,7 +3642,7 @@
 												>
 													<p class="text-sm font-medium text-gray-900 truncate">{ticket.subject}</p>
 													<p class="text-xs text-gray-500 truncate">
-														{ticket.profiles?.first_name} {ticket.profiles?.last_name} • {ticket.profiles?.email}
+														{ticket.profiles?.first_name} {ticket.profiles?.last_name} ��� {ticket.profiles?.email}
 													</p>
 													<div class="mt-1 flex gap-1">
 														<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-100 text-blue-700">
@@ -3372,7 +3700,7 @@
 													<div class="{msg.sender_role === 'admin' ? 'text-right' : 'text-left'}">
 														<div class="inline-block max-w-[85%] rounded-lg px-3 py-2 text-sm {msg.sender_role === 'admin' ? 'bg-green-100 text-green-900' : 'bg-white border border-gray-200 text-gray-800'}">
 															<p class="text-[11px] opacity-70 mb-1">
-																{msg.sender_role === 'admin' ? 'Admin' : 'User'} • {new Date(msg.created_at).toLocaleString('en-US')}
+																{msg.sender_role === 'admin' ? 'Admin' : 'User'} ��� {new Date(msg.created_at).toLocaleString('en-US')}
 															</p>
 															<p>{msg.message}</p>
 														</div>
@@ -3415,7 +3743,7 @@
 				<div class="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white">
 					<div>
 						<h2 class="text-lg font-bold text-gray-900">Bookings</h2>
-						<p class="text-sm text-gray-500">{selectedRideForBookings.city_from} → {selectedRideForBookings.city_to}</p>
+						<p class="text-sm text-gray-500">{selectedRideForBookings.city_from} ��� {selectedRideForBookings.city_to}</p>
 					</div>
 					<button
 						on:click={closeRideBookingsModal}
@@ -3423,7 +3751,7 @@
 						aria-label="Close"
 						title="Close modal"
 					>
-						×
+						+�
 					</button>
 				</div>
 
@@ -3486,7 +3814,7 @@
 						aria-label="Close"
 						title="Close modal"
 					>
-						×
+						+�
 					</button>
 				</div>
 
@@ -3504,7 +3832,7 @@
 										? 'bg-yellow-100 text-yellow-800'
 										: 'bg-red-100 text-red-800'
 							}`}>
-								{selectedBooking.status === 'Confirmed' ? '✓ Confirmed' : selectedBooking.status === 'Pending' ? '⏳ Pending' : '✕ Cancelled'}
+								{selectedBooking.status === 'Confirmed' ? 'ԣ� Confirmed' : selectedBooking.status === 'Pending' ? '�Ŧ Pending' : 'ԣ� Cancelled'}
 							</span>
 						</div>
 						<p class="text-xs text-gray-500 mt-2">Booked on {new Date(selectedBooking.created_at).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
@@ -3539,7 +3867,7 @@
 									</div>
 									<div>
 										<p class="text-xs text-gray-500">Note moyenne</p>
-										<p class="text-sm font-medium text-gray-900">{selectedBookingRider.average_rating ? `${selectedBookingRider.average_rating}/5 ⭐` : 'No reviews'}</p>
+										<p class="text-sm font-medium text-gray-900">{selectedBookingRider.average_rating ? `${selectedBookingRider.average_rating}/5 ԡ�` : 'No reviews'}</p>
 									</div>
 								</div>
 								<div class="pt-2">
@@ -3565,7 +3893,7 @@
 							<div class="grid grid-cols-2 gap-4">
 								<div>
 									<p class="text-xs text-gray-500">Route</p>
-									<p class="text-sm font-medium text-gray-900">{selectedBooking.rides?.city_from} → {selectedBooking.rides?.city_to}</p>
+									<p class="text-sm font-medium text-gray-900">{selectedBooking.rides?.city_from} ��� {selectedBooking.rides?.city_to}</p>
 								</div>
 								<div>
 									<p class="text-xs text-gray-500">Ride date</p>
@@ -3624,7 +3952,7 @@
 						aria-label="Close"
 						title="Close modal"
 					>
-						×
+						+�
 					</button>
 				</div>
 				<div class="p-6 space-y-4 text-sm">
@@ -3782,7 +4110,7 @@
 							</div>
 							<div>
 								<p class="text-gray-500">Average rating</p>
-								<p class="font-medium text-gray-900">{selectedProfile.average_rating ? selectedProfile.average_rating.toFixed(1) + ' ⭐' : '-'}</p>
+								<p class="font-medium text-gray-900">{selectedProfile.average_rating ? selectedProfile.average_rating.toFixed(1) + ' ԡ�' : '-'}</p>
 							</div>
 							<div>
 								<p class="text-gray-500">Created</p>
@@ -3865,7 +4193,7 @@
 										on:click={() => changeUserStatus('active')}
 										class="w-full px-3 py-2 rounded-lg border text-sm font-medium {selectedProfile.user_status === 'active' ? 'border-green-300 bg-green-50 text-green-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'} disabled:opacity-50"
 									>
-										{selectedProfile.user_status === 'active' ? '✓ ' : ''}Active
+										{selectedProfile.user_status === 'active' ? 'ԣ� ' : ''}Active
 									</button>
 									<button
 										type="button"
@@ -3873,7 +4201,7 @@
 										on:click={() => changeUserStatus('suspended')}
 										class="w-full px-3 py-2 rounded-lg border text-sm font-medium {selectedProfile.user_status === 'suspended' ? 'border-yellow-300 bg-yellow-50 text-yellow-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'} disabled:opacity-50"
 									>
-										{selectedProfile.user_status === 'suspended' ? '✓ ' : ''}Suspended
+										{selectedProfile.user_status === 'suspended' ? 'ԣ� ' : ''}Suspended
 									</button>
 									<button
 										type="button"
@@ -3881,7 +4209,7 @@
 										on:click={() => changeUserStatus('banned')}
 										class="w-full px-3 py-2 rounded-lg border text-sm font-medium {selectedProfile.user_status === 'banned' ? 'border-red-300 bg-red-50 text-red-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'} disabled:opacity-50"
 									>
-										{selectedProfile.user_status === 'banned' ? '✓ ' : ''}Banned
+										{selectedProfile.user_status === 'banned' ? 'ԣ� ' : ''}Banned
 									</button>
 								</div>
 							</div>
@@ -3918,7 +4246,7 @@
 										<div class="flex items-start justify-between gap-3">
 											<div>
 												<p class="text-sm font-semibold text-gray-900">{documentTypeLabel(doc.document_type)}</p>
-												<p class="text-xs text-gray-500">{doc.file_name} • {new Date(doc.created_at).toLocaleDateString('en-US')}</p>
+												<p class="text-xs text-gray-500">{doc.file_name} ��� {new Date(doc.created_at).toLocaleDateString('en-US')}</p>
 												{#if doc.admin_note}
 													<p class="text-xs text-red-600 mt-1">Note: {doc.admin_note}</p>
 												{/if}
@@ -3974,8 +4302,8 @@
 										<p class="text-xs font-medium text-gray-600 mb-2">Rides as driver</p>
 										{#each profileRides as ride}
 											<div class="text-xs border border-gray-200 rounded p-2 mb-2">
-												<p><strong>{ride.city_from}</strong> → <strong>{ride.city_to}</strong></p>
-												<p class="text-gray-600">{new Date(ride.ride_date).toLocaleDateString('en-US')} • {ride.available_seats} seats • ${ride.price}</p>
+												<p><strong>{ride.city_from}</strong> ��� <strong>{ride.city_to}</strong></p>
+												<p class="text-gray-600">{new Date(ride.ride_date).toLocaleDateString('en-US')} ��� {ride.available_seats} seats ��� ${ride.price}</p>
 											</div>
 										{/each}
 									</div>
@@ -3985,7 +4313,7 @@
 										<p class="text-xs font-medium text-gray-600 mb-2">Booked rides</p>
 										{#each profileBookings as booking}
 											<div class="text-xs border border-gray-200 rounded p-2 mb-2">
-												<p>{booking.ride?.[0]?.city_from || '-'} → {booking.ride?.[0]?.city_to || '-'} ({booking.seats_booked} seats)</p>
+												<p>{booking.ride?.[0]?.city_from || '-'} ��� {booking.ride?.[0]?.city_to || '-'} ({booking.seats_booked} seats)</p>
 												<p class="text-gray-600">{booking.status}</p>
 											</div>
 										{/each}
