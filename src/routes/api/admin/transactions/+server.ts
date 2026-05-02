@@ -178,6 +178,17 @@ export const GET: RequestHandler = async ({ request, url }) => {
 			return {
 				...tx,
 				profiles: undefined,
+				passenger_first_name: passenger?.first_name ?? null,
+				passenger_last_name: passenger?.last_name ?? null,
+				passenger_email: passenger?.email ?? null,
+				passenger_payment_method: passenger?.payment_method ?? null,
+				driver_first_name: driverProfile?.first_name ?? null,
+				driver_last_name: driverProfile?.last_name ?? null,
+				driver_email: driverProfile?.email ?? null,
+				driver_payment_method: driverProfile?.payment_method ?? null,
+				ride_departure: rideInfo?.departure ?? null,
+				ride_arrival: rideInfo?.arrival ?? null,
+				ride_date: rideInfo?.ride_date ?? null,
 				passenger_profile: passenger ?? null,
 				driver_profile: driverProfile,
 				ride_info: rideInfo
@@ -189,6 +200,35 @@ export const GET: RequestHandler = async ({ request, url }) => {
 				admin_status: tx.admin_status ?? 'awaiting_payout'
 			};
 		});
+
+		const format = (url.searchParams.get('format') ?? '').toLowerCase();
+		if (format === 'csv') {
+			const csvCols = [
+				'id', 'booking_id', 'ride_id', 'user_id', 'seats_booked', 'amount', 'currency',
+				'status', 'refund_status', 'admin_status', 'commission_percent', 'commission_amount',
+				'driver_payout_amount', 'provider', 'paypal_order_id', 'external_reference',
+				'admin_notes', 'payout_at', 'created_at', 'updated_at',
+				'passenger_first_name', 'passenger_last_name', 'passenger_email', 'passenger_payment_method',
+				'driver_first_name', 'driver_last_name', 'driver_email', 'driver_payment_method',
+				'ride_departure', 'ride_arrival', 'ride_date'
+			];
+			const escape = (v: unknown) => {
+				if (v === null || v === undefined) return '';
+				return `"${String(v).replace(/"/g, '""')}"`;
+			};
+			const header = csvCols.map(escape).join(',');
+			const rows = enriched.map((tx) =>
+				csvCols.map((col) => escape((tx as Record<string, unknown>)[col])).join(',')
+			);
+			const csv = [header, ...rows].join('\n');
+			const date = new Date().toISOString().slice(0, 10);
+			return new Response(csv, {
+				headers: {
+					'Content-Type': 'text/csv; charset=utf-8',
+					'Content-Disposition': `attachment; filename="transactions-${date}.csv"`
+				}
+			});
+		}
 
 		return json({ transactions: enriched });
 	} catch (error) {
@@ -461,7 +501,156 @@ export const PATCH: RequestHandler = async ({ request }) => {
 			return json({ success: true });
 		}
 
+		if (action === 'notify_driver') {
+			// Driver email notifications are not yet operational — domain not configured.
+			// This action is a stub: it records the intent in admin_notes but sends no email.
+			const { error: noteError } = await adminClient
+				.from('transactions')
+				.update({
+					admin_notes: adminClient
+						? `[${now}] Payout notification attempted — domain not configured yet.`
+						: null,
+					updated_at: now
+				})
+				.eq('id', transactionId);
+
+			if (noteError) {
+				return json({ error: noteError.message }, { status: 500 });
+			}
+
+			return json({
+				success: false,
+				pending: true,
+				message: 'Driver notification not sent — email domain is not configured yet. The attempt has been logged in admin notes.'
+			});
+		}
+
 		return json({ error: `Unknown action: ${action}` }, { status: 400 });
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Internal server error';
+		return json({ error: message }, { status: 500 });
+	}
+};
+
+export const POST: RequestHandler = async ({ request }) => {
+	try {
+		if (!supabaseUrl || !supabaseAnonKey) {
+			return json({ error: 'Server configuration error' }, { status: 500 });
+		}
+
+		const token = getBearerToken(request);
+		if (!token) {
+			return json({ error: 'Unauthorized' }, { status: 401 });
+		}
+
+		const adminAllowed = await isRequesterAdmin(token);
+		if (!adminAllowed) {
+			return json({ error: 'Forbidden' }, { status: 403 });
+		}
+
+		const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
+		if (!serviceRoleKey) {
+			return json({ error: 'SUPABASE_SERVICE_ROLE_KEY is missing.' }, { status: 500 });
+		}
+
+		const adminClient = createClient(supabaseUrl, serviceRoleKey);
+		const body = await request.json();
+		const now = new Date().toISOString();
+
+		const amount = Number(body?.amount ?? 0);
+		const seatsBooked = Number(body?.seats_booked ?? 1);
+		const commissionPercent = Number(body?.commission_percent ?? 20);
+		const commissionAmount = Math.round(amount * (commissionPercent / 100) * 100) / 100;
+		const driverPayoutAmount = Math.round((amount - commissionAmount) * 100) / 100;
+
+		const newStatus = (body?.status as string | undefined)?.toLowerCase() ?? 'pending';
+		const newRefundStatus = (body?.refund_status as string | undefined)?.toLowerCase() ?? 'none';
+		const newAdminStatus = (body?.admin_status as string | undefined)?.toLowerCase() ?? 'awaiting_payout';
+
+		if (!allowedTransactionStatuses.includes(newStatus as (typeof allowedTransactionStatuses)[number])) {
+			return json({ error: 'Invalid status value' }, { status: 400 });
+		}
+		if (!allowedRefundStatuses.includes(newRefundStatus as (typeof allowedRefundStatuses)[number])) {
+			return json({ error: 'Invalid refund_status value' }, { status: 400 });
+		}
+		if (!allowedAdminStatuses.includes(newAdminStatus as (typeof allowedAdminStatuses)[number])) {
+			return json({ error: 'Invalid admin_status value' }, { status: 400 });
+		}
+
+		const { data: inserted, error: insertError } = await adminClient
+			.from('transactions')
+			.insert({
+				booking_id: body?.booking_id ?? null,
+				ride_id: body?.ride_id ?? null,
+				user_id: body?.user_id ?? null,
+				amount,
+				currency: 'USD',
+				seats_booked: seatsBooked,
+				status: newStatus,
+				refund_status: newRefundStatus,
+				commission_percent: commissionPercent,
+				commission_amount: commissionAmount,
+				driver_payout_amount: driverPayoutAmount,
+				admin_status: newAdminStatus,
+				provider: body?.provider ?? 'paypal',
+				paypal_order_id: body?.provider_order_id ?? null,
+				external_reference: body?.external_reference ?? null,
+				admin_notes: body?.admin_notes ?? null,
+				created_at: body?.payment_at ? new Date(body.payment_at).toISOString() : now,
+				updated_at: now
+			})
+			.select('id')
+			.maybeSingle();
+
+		if (insertError) {
+			return json({ error: insertError.message }, { status: 500 });
+		}
+
+		return json({ success: true, id: inserted?.id ?? null }, { status: 201 });
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Internal server error';
+		return json({ error: message }, { status: 500 });
+	}
+};
+
+export const DELETE: RequestHandler = async ({ request, url }) => {
+	try {
+		if (!supabaseUrl || !supabaseAnonKey) {
+			return json({ error: 'Server configuration error' }, { status: 500 });
+		}
+
+		const token = getBearerToken(request);
+		if (!token) {
+			return json({ error: 'Unauthorized' }, { status: 401 });
+		}
+
+		const adminAllowed = await isRequesterAdmin(token);
+		if (!adminAllowed) {
+			return json({ error: 'Forbidden' }, { status: 403 });
+		}
+
+		const transactionId = url.searchParams.get('id');
+		if (!transactionId) {
+			return json({ error: 'Missing transaction id' }, { status: 400 });
+		}
+
+		const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
+		if (!serviceRoleKey) {
+			return json({ error: 'SUPABASE_SERVICE_ROLE_KEY is missing.' }, { status: 500 });
+		}
+
+		const adminClient = createClient(supabaseUrl, serviceRoleKey);
+
+		const { error } = await adminClient
+			.from('transactions')
+			.delete()
+			.eq('id', transactionId);
+
+		if (error) {
+			return json({ error: error.message }, { status: 500 });
+		}
+
+		return json({ success: true });
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Internal server error';
 		return json({ error: message }, { status: 500 });

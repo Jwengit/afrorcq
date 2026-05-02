@@ -166,6 +166,7 @@
 	type AdminReport = {
 		id: string;
 		user_id: string | null;
+		reporter_id: string | null;
 		ride_id: string | null;
 		type: string;
 		description: string | null;
@@ -175,6 +176,16 @@
 		created_at: string;
 		updated_at: string;
 		profiles?: {
+			first_name: string | null;
+			last_name: string | null;
+			email: string | null;
+		} | null;
+		reported_profile?: {
+			first_name: string | null;
+			last_name: string | null;
+			email: string | null;
+		} | null;
+		reporter_profile?: {
 			first_name: string | null;
 			last_name: string | null;
 			email: string | null;
@@ -189,13 +200,22 @@
 	let reportsLoading = false;
 	let reportsError = '';
 	let reportActionMessage = '';
+	let reportActionIsError = false;
 	let reports: AdminReport[] = [];
 	let filteredReports: AdminReport[] = [];
 	let reportFilterType = '';
 	let reportFilterStatus = '';
+	let reportSearch = '';
 	let reportActionId: string | null = null;
 	let showReportHistoryModal = false;
 	let selectedReportHistory: AdminReport | null = null;
+
+	// Report note modal
+	let showReportNoteModal = false;
+	let reportNoteModalReport: AdminReport | null = null;
+	let reportNoteModalAction: 'ignore' | 'warn' | 'suspend' | 'resolve' | null = null;
+	let reportNoteModalText = '';
+	let reportNoteModalSaving = false;
 
 	// Reviews moderation
 	type AdminReview = {
@@ -268,14 +288,20 @@
 	let supportLoading = false;
 	let supportError = '';
 	let supportActionMessage = '';
+	let supportActionIsError = false;
 	let supportTickets: SupportTicket[] = [];
+	let filteredSupportTickets: SupportTicket[] = [];
+	let supportSearch = '';
 	let supportFilterStatus = '';
+	let supportFilterPriority = '';
 	let selectedSupportTicket: SupportTicket | null = null;
 	let supportMessages: SupportMessage[] = [];
 	let supportMessagesLoading = false;
 	let supportReplyMessage = '';
+	let supportReplyAndResolve = false;
 	let supportSendingReply = false;
 	let supportUpdatingStatus = false;
+	let supportDeletingTicket = false;
 
 	// Transactions management
 	type AdminTransaction = {
@@ -366,6 +392,31 @@
 	let txModalSaving = false;
 	let txModalMessage = '';
 	let txModalIsError = false;
+
+	// Create transaction modal
+	let showCreateTxModal = false;
+	let createTxSaving = false;
+	let createTxMessage = '';
+	let createTxIsError = false;
+	let createTxAmount = '0';
+	let createTxSeats = '1';
+	let createTxCommissionPercent = '20';
+	let createTxBookingId = '';
+	let createTxRideId = '';
+	let createTxUserId = '';
+	let createTxPaymentStatus = 'succeeded';
+	let createTxRefundStatus = 'none';
+	let createTxAdminStatus = 'awaiting_payout';
+	let createTxProvider = 'paypal';
+	let createTxProviderOrderId = '';
+	let createTxRef = '';
+	let createTxNotes = '';
+	let createTxPaymentAt = '';
+
+	// Delete / notify states
+	let txDeleteActionId: string | null = null;
+	let txNotifyActionId: string | null = null;
+	let txExportLoading = false;
 
 	// Platform settings management
 	let settingsLoading = false;
@@ -1500,7 +1551,20 @@
 	}
 
 	function applyReportFilters() {
-		filteredReports = reports.slice();
+		const q = reportSearch.trim().toLowerCase();
+		filteredReports = q
+			? reports.filter((r) => {
+				const reportedName = `${r.reported_profile?.first_name ?? r.profiles?.first_name ?? ''} ${r.reported_profile?.last_name ?? r.profiles?.last_name ?? ''}`.toLowerCase();
+				const reporterName = `${r.reporter_profile?.first_name ?? ''} ${r.reporter_profile?.last_name ?? ''}`.toLowerCase();
+				return (
+					(r.description ?? '').toLowerCase().includes(q) ||
+					reportedName.includes(q) ||
+					reporterName.includes(q) ||
+					(r.reported_profile?.email ?? r.profiles?.email ?? '').toLowerCase().includes(q) ||
+					(r.reporter_profile?.email ?? '').toLowerCase().includes(q)
+				);
+			})
+			: reports.slice();
 	}
 
 	function reportTypeLabel(type: string) {
@@ -1512,19 +1576,41 @@
 		return type;
 	}
 
-	async function moderateReport(report: AdminReport, action: 'ignore' | 'warn' | 'suspend') {
+	function actionTakenLabel(action: string | null) {
+		if (!action) return '—';
+		if (action === 'ignored') return 'Ignored';
+		if (action === 'warned_user') return 'User warned';
+		if (action === 'suspended_user') return 'Account suspended';
+		if (action === 'resolved') return 'Resolved';
+		return action;
+	}
+
+	function openReportNoteModal(report: AdminReport, action: 'ignore' | 'warn' | 'suspend' | 'resolve') {
+		reportNoteModalReport = report;
+		reportNoteModalAction = action;
+		reportNoteModalText = action === 'ignore' ? 'Report ignored by admin' : '';
+		showReportNoteModal = true;
+	}
+
+	function closeReportNoteModal() {
+		showReportNoteModal = false;
+		reportNoteModalReport = null;
+		reportNoteModalAction = null;
+		reportNoteModalText = '';
+		reportNoteModalSaving = false;
+	}
+
+	async function submitReportNote() {
+		if (!reportNoteModalReport || !reportNoteModalAction) return;
+		await moderateReport(reportNoteModalReport, reportNoteModalAction, reportNoteModalText);
+		closeReportNoteModal();
+	}
+
+	async function moderateReport(report: AdminReport, action: 'ignore' | 'warn' | 'suspend' | 'resolve', note: string = '') {
 		reportActionId = report.id;
 		reportActionMessage = '';
-
-		if (action === 'suspend' && !confirm('Confirm suspension of the account linked to this report?')) {
-			reportActionId = null;
-			return;
-		}
-
-		const note =
-			action === 'ignore'
-				? 'Report ignored by admin'
-				: prompt('Add an admin note (optional)') ?? '';
+		reportActionIsError = false;
+		reportNoteModalSaving = true;
 
 		const {
 			data: { session }
@@ -1553,13 +1639,18 @@
 		const payload = await response.json();
 		if (!response.ok) {
 			reportActionMessage = payload?.error || 'Action unavailable right now.';
+			reportActionIsError = true;
 			reportActionId = null;
+			reportNoteModalSaving = false;
 			return;
 		}
 
 		const nextStatus = action === 'ignore' ? 'ignored' : 'resolved';
 		const nextAction =
-			action === 'ignore' ? 'ignored' : action === 'warn' ? 'warned_user' : 'suspended_user';
+			action === 'ignore' ? 'ignored' :
+			action === 'warn' ? 'warned_user' :
+			action === 'resolve' ? 'resolved' :
+			'suspended_user';
 
 		reports = reports.map((r) =>
 			r.id === report.id
@@ -1567,7 +1658,7 @@
 					...r,
 					status: nextStatus,
 					action_taken: nextAction,
-					admin_note: note,
+					admin_note: note || r.admin_note,
 					updated_at: new Date().toISOString()
 				}
 				: r
@@ -1578,13 +1669,14 @@
 			users = users.map((u) => (u.id === report.user_id ? { ...u, user_status: 'suspended' } : u));
 		}
 
+		reportActionIsError = false;
 		reportActionMessage =
-			action === 'ignore'
-				? 'Report ignored.'
-				: action === 'warn'
-					? 'User warned.'
-					: 'Account suspended and report resolved.';
+			action === 'ignore' ? 'Report ignored.' :
+			action === 'warn' ? 'User warned.' :
+			action === 'resolve' ? 'Report resolved.' :
+			'Account suspended and report resolved.';
 		reportActionId = null;
+		reportNoteModalSaving = false;
 	}
 
 	async function openReportedUser(report: AdminReport) {
@@ -1734,27 +1826,46 @@
 		}
 
 		const params = new URLSearchParams();
-		if (supportFilterStatus) {
-			params.append('status', supportFilterStatus);
-		}
+		if (supportFilterStatus) params.append('status', supportFilterStatus);
+		if (supportFilterPriority) params.append('priority', supportFilterPriority);
 
 		const response = await fetch(`/api/admin/support?${params.toString()}`, {
 			method: 'GET',
-			headers: {
-				Authorization: `Bearer ${session.access_token}`
-			}
+			headers: { Authorization: `Bearer ${session.access_token}` }
 		});
 
 		const payload = await response.json();
 		if (!response.ok) {
 			supportError = payload?.error || 'Unable to load support tickets.';
 			supportTickets = [];
+			filteredSupportTickets = [];
 			supportLoading = false;
 			return;
 		}
 
 		supportTickets = (payload?.tickets ?? []) as SupportTicket[];
+		applySupportFilters();
 		supportLoading = false;
+	}
+
+	function applySupportFilters() {
+		const q = supportSearch.trim().toLowerCase();
+		filteredSupportTickets = q
+			? supportTickets.filter((t) => {
+				const name = `${t.profiles?.first_name ?? ''} ${t.profiles?.last_name ?? ''}`.toLowerCase();
+				const email = (t.profiles?.email ?? '').toLowerCase();
+				return t.subject.toLowerCase().includes(q) || name.includes(q) || email.includes(q);
+			})
+			: supportTickets.slice();
+	}
+
+	function ticketAge(createdAt: string): string {
+		const diff = Date.now() - new Date(createdAt).getTime();
+		const mins = Math.floor(diff / 60000);
+		if (mins < 60) return `${mins}m ago`;
+		const hours = Math.floor(mins / 60);
+		if (hours < 24) return `${hours}h ago`;
+		return `${Math.floor(hours / 24)}d ago`;
 	}
 
 	async function openSupportTicket(ticket: SupportTicket) {
@@ -1807,6 +1918,7 @@
 
 		if (!session?.access_token) {
 			supportActionMessage = 'Session expired. Please sign in again.';
+			supportActionIsError = true;
 			supportSendingReply = false;
 			return;
 		}
@@ -1826,21 +1938,29 @@
 		const payload = await response.json();
 		if (!response.ok) {
 			supportActionMessage = payload?.error || 'Unable to send reply.';
+			supportActionIsError = true;
 			supportSendingReply = false;
 			return;
 		}
 
 		supportReplyMessage = '';
 		supportActionMessage = 'Reply sent.';
+		supportActionIsError = false;
 		supportSendingReply = false;
-		await openSupportTicket(selectedSupportTicket);
-		await loadSupportTickets();
+
+		if (supportReplyAndResolve) {
+			await updateSupportTicketStatus('resolved');
+		} else {
+			await openSupportTicket(selectedSupportTicket);
+			await loadSupportTickets();
+		}
 	}
 
 	async function updateSupportTicketStatus(status: SupportTicket['status']) {
 		if (!selectedSupportTicket) return;
 		supportUpdatingStatus = true;
 		supportActionMessage = '';
+		supportActionIsError = false;
 
 		const {
 			data: { session }
@@ -1848,6 +1968,7 @@
 
 		if (!session?.access_token) {
 			supportActionMessage = 'Session expired. Please sign in again.';
+			supportActionIsError = true;
 			supportUpdatingStatus = false;
 			return;
 		}
@@ -1867,6 +1988,7 @@
 		const payload = await response.json();
 		if (!response.ok) {
 			supportActionMessage = payload?.error || 'Unable to update ticket.';
+			supportActionIsError = true;
 			supportUpdatingStatus = false;
 			return;
 		}
@@ -1875,8 +1997,101 @@
 		supportTickets = supportTickets.map((t) =>
 			t.id === selectedSupportTicket?.id ? { ...t, status } : t
 		);
-		supportActionMessage = 'Ticket status updated.';
+		applySupportFilters();
+		supportActionMessage = `Ticket marked as ${status.replace('_', ' ')}.`;
+		supportActionIsError = false;
 		supportUpdatingStatus = false;
+		if (status === 'resolved' || status === 'closed') {
+			await openSupportTicket(selectedSupportTicket);
+			await loadSupportTickets();
+		}
+	}
+
+	async function updateSupportTicketPriority(priority: SupportTicket['priority']) {
+		if (!selectedSupportTicket) return;
+		supportUpdatingStatus = true;
+		supportActionMessage = '';
+		supportActionIsError = false;
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			supportActionMessage = 'Session expired.';
+			supportActionIsError = true;
+			supportUpdatingStatus = false;
+			return;
+		}
+
+		const response = await fetch('/api/admin/support', {
+			method: 'PATCH',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${session.access_token}`
+			},
+			body: JSON.stringify({
+				ticketId: selectedSupportTicket.id,
+				action: 'update_priority',
+				priority
+			})
+		});
+
+		const payload = await response.json();
+		if (!response.ok) {
+			supportActionMessage = payload?.error || 'Unable to update priority.';
+			supportActionIsError = true;
+			supportUpdatingStatus = false;
+			return;
+		}
+
+		selectedSupportTicket = { ...selectedSupportTicket, priority };
+		supportTickets = supportTickets.map((t) =>
+			t.id === selectedSupportTicket?.id ? { ...t, priority } : t
+		);
+		applySupportFilters();
+		supportActionMessage = `Priority set to ${priority}.`;
+		supportActionIsError = false;
+		supportUpdatingStatus = false;
+	}
+
+	async function deleteSupportTicket(ticket: SupportTicket) {
+		supportDeletingTicket = true;
+		supportActionMessage = '';
+		supportActionIsError = false;
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			supportActionMessage = 'Session expired.';
+			supportActionIsError = true;
+			supportDeletingTicket = false;
+			return;
+		}
+
+		const response = await fetch(`/api/admin/support?ticketId=${encodeURIComponent(ticket.id)}`, {
+			method: 'DELETE',
+			headers: { Authorization: `Bearer ${session.access_token}` }
+		});
+
+		const payload = await response.json();
+		if (!response.ok) {
+			supportActionMessage = payload?.error || 'Unable to delete ticket.';
+			supportActionIsError = true;
+			supportDeletingTicket = false;
+			return;
+		}
+
+		supportTickets = supportTickets.filter((t) => t.id !== ticket.id);
+		applySupportFilters();
+		if (selectedSupportTicket?.id === ticket.id) {
+			selectedSupportTicket = null;
+			supportMessages = [];
+		}
+		supportActionMessage = 'Ticket deleted.';
+		supportDeletingTicket = false;
 	}
 
 	async function loadTransactions() {
@@ -2048,6 +2263,222 @@
 		selectedTransaction = null;
 		txModalMessage = '';
 		txModalIsError = false;
+	}
+
+	function openCreateTransactionModal() {
+		createTxAmount = '0';
+		createTxSeats = '1';
+		createTxCommissionPercent = '20';
+		createTxBookingId = '';
+		createTxRideId = '';
+		createTxUserId = '';
+		createTxPaymentStatus = 'succeeded';
+		createTxRefundStatus = 'none';
+		createTxAdminStatus = 'awaiting_payout';
+		createTxProvider = 'paypal';
+		createTxProviderOrderId = '';
+		createTxRef = '';
+		createTxNotes = '';
+		createTxPaymentAt = '';
+		createTxMessage = '';
+		createTxIsError = false;
+		showCreateTxModal = true;
+	}
+
+	function closeCreateTransactionModal() {
+		showCreateTxModal = false;
+		createTxMessage = '';
+		createTxIsError = false;
+	}
+
+	async function saveNewTransaction() {
+		createTxSaving = true;
+		createTxMessage = '';
+		createTxIsError = false;
+
+		const amount = Number(createTxAmount || 0);
+		const seatsBooked = Number(createTxSeats || 1);
+		const commissionPercent = Number(createTxCommissionPercent || 20);
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			createTxMessage = 'Session expired. Please sign in again.';
+			createTxIsError = true;
+			createTxSaving = false;
+			return;
+		}
+
+		const response = await fetch('/api/admin/transactions', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${session.access_token}`
+			},
+			body: JSON.stringify({
+				booking_id: createTxBookingId || null,
+				ride_id: createTxRideId || null,
+				user_id: createTxUserId || null,
+				amount,
+				seats_booked: seatsBooked,
+				status: createTxPaymentStatus,
+				refund_status: createTxRefundStatus,
+				admin_status: createTxAdminStatus,
+				commission_percent: commissionPercent,
+				provider: createTxProvider || 'paypal',
+				provider_order_id: createTxProviderOrderId || null,
+				external_reference: createTxRef || null,
+				admin_notes: createTxNotes || null,
+				payment_at: inputDateTimeToIso(createTxPaymentAt)
+			})
+		});
+
+		const payload = await response.json();
+		if (!response.ok) {
+			createTxMessage = payload?.error || 'Unable to create transaction.';
+			createTxIsError = true;
+			createTxSaving = false;
+			return;
+		}
+
+		createTxMessage = `Transaction created (ID: ${payload?.id ?? '—'}).`;
+		createTxIsError = false;
+		createTxSaving = false;
+		await loadTransactions();
+	}
+
+	async function deleteTransaction(tx: AdminTransaction) {
+		if (!confirm(`Delete transaction ${tx.id}? This action cannot be undone.`)) return;
+
+		txDeleteActionId = tx.id;
+		transactionsActionMessage = '';
+		transactionsActionIsError = false;
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			transactionsActionMessage = 'Session expired. Please sign in again.';
+			transactionsActionIsError = true;
+			txDeleteActionId = null;
+			return;
+		}
+
+		const response = await fetch(`/api/admin/transactions?id=${encodeURIComponent(tx.id)}`, {
+			method: 'DELETE',
+			headers: {
+				Authorization: `Bearer ${session.access_token}`
+			}
+		});
+
+		const payload = await response.json();
+		if (!response.ok) {
+			transactionsActionMessage = payload?.error || 'Delete failed.';
+			transactionsActionIsError = true;
+			txDeleteActionId = null;
+			return;
+		}
+
+		transactions = transactions.filter((t) => t.id !== tx.id);
+		transactionsActionMessage = 'Transaction deleted.';
+		txDeleteActionId = null;
+
+		if (selectedTransaction?.id === tx.id) {
+			closeTransactionModal();
+		}
+	}
+
+	async function notifyDriver(tx: AdminTransaction) {
+		txNotifyActionId = tx.id;
+		txModalMessage = '';
+		txModalIsError = false;
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			txModalMessage = 'Session expired. Please sign in again.';
+			txModalIsError = true;
+			txNotifyActionId = null;
+			return;
+		}
+
+		const response = await fetch('/api/admin/transactions', {
+			method: 'PATCH',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${session.access_token}`
+			},
+			body: JSON.stringify({ transactionId: tx.id, action: 'notify_driver' })
+		});
+
+		const payload = await response.json();
+		txModalMessage = payload?.message || (response.ok ? 'Done.' : payload?.error || 'Error.');
+		txModalIsError = !payload?.success && !payload?.pending;
+		txNotifyActionId = null;
+		await loadTransactions();
+	}
+
+	async function exportTransactionsCSV() {
+		txExportLoading = true;
+		transactionsActionMessage = '';
+		transactionsActionIsError = false;
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			transactionsActionMessage = 'Session expired. Please sign in again.';
+			transactionsActionIsError = true;
+			txExportLoading = false;
+			return;
+		}
+
+		const params = new URLSearchParams({ format: 'csv' });
+		if (transactionFilterStatus) params.append('status', transactionFilterStatus);
+		if (transactionFilterRefundStatus) params.append('refund_status', transactionFilterRefundStatus);
+		if (transactionFilterAdminStatus) params.append('admin_status', transactionFilterAdminStatus);
+		if (transactionFilterFromDate) params.append('from_date', transactionFilterFromDate);
+		if (transactionFilterToDate) params.append('to_date', transactionFilterToDate);
+
+		try {
+			const response = await fetch(`/api/admin/transactions?${params.toString()}`, {
+				headers: { Authorization: `Bearer ${session.access_token}` }
+			});
+
+			if (!response.ok) {
+				transactionsActionMessage = 'CSV export failed.';
+				transactionsActionIsError = true;
+				txExportLoading = false;
+				return;
+			}
+
+			const blob = await response.blob();
+			const cd = response.headers.get('content-disposition');
+			let filename = 'transactions.csv';
+			if (cd) {
+				const m = cd.match(/filename="([^"]+)"/);
+				if (m) filename = m[1];
+			}
+			const url = window.URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = filename;
+			document.body.appendChild(a);
+			a.click();
+			window.URL.revokeObjectURL(url);
+			document.body.removeChild(a);
+		} catch {
+			transactionsActionMessage = 'An error occurred during export.';
+			transactionsActionIsError = true;
+		} finally {
+			txExportLoading = false;
+		}
 	}
 
 	async function saveTransactionFullDetails() {
@@ -3033,17 +3464,17 @@
 					{:else if activeTab === 'reports'}
 						<div class="space-y-6">
 							<div class="bg-white rounded-xl p-4 border border-gray-200">
-								<h3 class="text-sm font-semibold text-gray-900 mb-4">Filtres</h3>
-								<div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+								<div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+									<input type="text" placeholder="Search description, name, email..." class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" bind:value={reportSearch} on:input={applyReportFilters} />
 									<select
 										class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
 										bind:value={reportFilterType}
 										on:change={loadReports}
 									>
-										<option value="">Tous les types</option>
+										<option value="">All types</option>
 										<option value="user">User report</option>
 										<option value="ride">Ride report</option>
-										<option value="behavior">Comportement</option>
+										<option value="behavior">Behavior</option>
 										<option value="spam">Spam</option>
 										<option value="payment_issue">Payment issue</option>
 									</select>
@@ -3052,8 +3483,8 @@
 										bind:value={reportFilterStatus}
 										on:change={loadReports}
 									>
-										<option value="">Tous les statuts</option>
-										<option value="pending">En attente</option>
+										<option value="">All statuses</option>
+										<option value="pending">Pending</option>
 										<option value="ignored">Ignored</option>
 										<option value="resolved">Resolved</option>
 									</select>
@@ -3065,9 +3496,39 @@
 									</button>
 								</div>
 								{#if reportActionMessage}
-									<p class="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 mt-3">{reportActionMessage}</p>
+									<p class={`text-sm border rounded-lg px-3 py-2 mt-3 ${reportActionIsError ? 'text-red-700 bg-red-50 border-red-200' : 'text-green-700 bg-green-50 border-green-200'}`}>{reportActionMessage}</p>
 								{/if}
 							</div>
+
+							{#if reports.length > 0}
+								{@const pendingCount = reports.filter(r => r.status === 'pending').length}
+								{@const resolvedCount = reports.filter(r => r.status === 'resolved').length}
+								{@const ignoredCount = reports.filter(r => r.status === 'ignored').length}
+								{@const userReportCount = reports.filter(r => r.type === 'user').length}
+								{@const rideReportCount = reports.filter(r => r.type === 'ride').length}
+								<div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+									<div class="bg-white rounded-xl border border-yellow-200 px-4 py-3">
+										<p class="text-xs text-yellow-700">Pending</p>
+										<p class="text-2xl font-bold text-yellow-800 mt-0.5">{pendingCount}</p>
+									</div>
+									<div class="bg-white rounded-xl border border-green-200 px-4 py-3">
+										<p class="text-xs text-green-700">Resolved</p>
+										<p class="text-2xl font-bold text-green-800 mt-0.5">{resolvedCount}</p>
+									</div>
+									<div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
+										<p class="text-xs text-gray-500">Ignored</p>
+										<p class="text-2xl font-bold text-gray-700 mt-0.5">{ignoredCount}</p>
+									</div>
+									<div class="bg-white rounded-xl border border-red-200 px-4 py-3">
+										<p class="text-xs text-red-700">User reports</p>
+										<p class="text-2xl font-bold text-red-800 mt-0.5">{userReportCount}</p>
+									</div>
+									<div class="bg-white rounded-xl border border-indigo-200 px-4 py-3">
+										<p class="text-xs text-indigo-700">Ride reports</p>
+										<p class="text-2xl font-bold text-indigo-800 mt-0.5">{rideReportCount}</p>
+									</div>
+								</div>
+							{/if}
 
 							{#if reportsLoading}
 								<p class="text-sm text-gray-500">Loading reports...</p>
@@ -3081,9 +3542,10 @@
 										<thead class="bg-gray-50 text-left text-gray-600">
 											<tr>
 												<th class="px-4 py-3 font-medium">Type</th>
-												<th class="px-4 py-3 font-medium">Report</th>
-												<th class="px-4 py-3 font-medium">Statut</th>
-												<th class="px-4 py-3 font-medium">Liens</th>
+												<th class="px-4 py-3 font-medium">Description</th>
+												<th class="px-4 py-3 font-medium">Reporter</th>
+												<th class="px-4 py-3 font-medium">Reported user</th>
+												<th class="px-4 py-3 font-medium">Statut / Action</th>
 												<th class="px-4 py-3 font-medium">Actions</th>
 											</tr>
 										</thead>
@@ -3092,70 +3554,121 @@
 												<tr class="hover:bg-gray-50">
 													<td class="px-4 py-3 align-top">
 														<span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-																report.type === 'user'
-																	? 'bg-red-100 text-red-700'
-																	: report.type === 'ride'
-																		? 'bg-indigo-100 text-indigo-700'
-																		: report.type === 'behavior'
-																			? 'bg-orange-100 text-orange-700'
-																			: report.type === 'spam'
-																				? 'bg-purple-100 text-purple-700'
-																				: 'bg-blue-100 text-blue-700'
+																report.type === 'user' ? 'bg-red-100 text-red-700'
+																: report.type === 'ride' ? 'bg-indigo-100 text-indigo-700'
+																: report.type === 'behavior' ? 'bg-orange-100 text-orange-700'
+																: report.type === 'spam' ? 'bg-purple-100 text-purple-700'
+																: 'bg-blue-100 text-blue-700'
 														}`}>
 															{reportTypeLabel(report.type)}
 														</span>
+														<p class="text-xs text-gray-400 mt-1">{new Date(report.created_at).toLocaleDateString('en-US')}</p>
+													</td>
+													<td class="px-4 py-3 align-top max-w-xs">
+														<p class="text-sm text-gray-900 line-clamp-3">{report.description || '—'}</p>
+														{#if report.admin_note}
+															<p class="text-xs text-gray-400 mt-1 italic">Note: {report.admin_note}</p>
+														{/if}
 													</td>
 													<td class="px-4 py-3 align-top">
-														<p class="text-sm text-gray-900">{report.description || 'Sans description'}</p>
-														<p class="text-xs text-gray-500 mt-1">Created on {new Date(report.created_at).toLocaleDateString('en-US')}</p>
+														{#if report.reporter_profile}
+															<p class="text-sm font-medium text-gray-900">{report.reporter_profile.first_name} {report.reporter_profile.last_name}</p>
+															<p class="text-xs text-gray-500">{report.reporter_profile.email || '—'}</p>
+														{:else}
+															<p class="text-xs text-gray-400">Anonymous</p>
+														{/if}
+													</td>
+													<td class="px-4 py-3 align-top">
+														{#if report.reported_profile ?? report.profiles}
+															{@const rp = report.reported_profile ?? report.profiles}
+															<p class="text-sm font-medium text-gray-900">{rp?.first_name} {rp?.last_name}</p>
+															<p class="text-xs text-gray-500">{rp?.email || '—'}</p>
+														{/if}
+														{#if report.rides}
+															<p class="text-xs text-gray-400 mt-1">{report.rides.city_from} → {report.rides.city_to}</p>
+														{/if}
 													</td>
 													<td class="px-4 py-3 align-top">
 														<span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-															report.status === 'pending'
-																? 'bg-yellow-100 text-yellow-700'
-																: report.status === 'ignored'
-																	? 'bg-gray-100 text-gray-700'
-																	: 'bg-green-100 text-green-700'
+															report.status === 'pending' ? 'bg-yellow-100 text-yellow-700'
+															: report.status === 'ignored' ? 'bg-gray-100 text-gray-700'
+															: 'bg-green-100 text-green-700'
 														}`}>
 															{report.status === 'pending' ? 'Pending' : report.status === 'ignored' ? 'Ignored' : 'Resolved'}
 														</span>
+														{#if report.action_taken}
+															<p class="text-xs text-gray-500 mt-1">{actionTakenLabel(report.action_taken)}</p>
+														{/if}
 													</td>
 													<td class="px-4 py-3 align-top">
 														<div class="flex flex-wrap gap-1">
-															<button on:click={() => openReportedUser(report)} class="px-2 py-1 rounded text-xs border border-blue-200 text-blue-700 hover:bg-blue-50">Utilisateur</button>
-															<button on:click={() => openReportedRide(report)} class="px-2 py-1 rounded text-xs border border-indigo-200 text-indigo-700 hover:bg-indigo-50">Trajet</button>
-															<button on:click={() => openReportHistory(report)} class="px-2 py-1 rounded text-xs border border-gray-300 text-gray-700 hover:bg-gray-50">Historique</button>
+															<button on:click={() => openReportedUser(report)} class="px-2 py-1 rounded text-xs border border-blue-200 text-blue-700 hover:bg-blue-50">User</button>
+															{#if report.ride_id}
+																<button on:click={() => openReportedRide(report)} class="px-2 py-1 rounded text-xs border border-indigo-200 text-indigo-700 hover:bg-indigo-50">Ride</button>
+															{/if}
+															<button on:click={() => openReportHistory(report)} class="px-2 py-1 rounded text-xs border border-gray-300 text-gray-700 hover:bg-gray-50">Detail</button>
 														</div>
-													</td>
-													<td class="px-4 py-3 align-top">
-														<div class="flex flex-wrap gap-1">
+														<div class="flex flex-wrap gap-1 mt-1">
 															<button
-																disabled={reportActionId === report.id}
-																on:click={() => moderateReport(report, 'ignore')}
+																disabled={reportActionId === report.id || report.status === 'ignored'}
+																on:click={() => openReportNoteModal(report, 'ignore')}
 																class="px-2 py-1 rounded text-xs border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-															>
-																Ignorer
-															</button>
+															>Ignore</button>
 															<button
 																disabled={reportActionId === report.id}
-																on:click={() => moderateReport(report, 'warn')}
+																on:click={() => openReportNoteModal(report, 'warn')}
 																class="px-2 py-1 rounded text-xs border border-amber-200 text-amber-700 hover:bg-amber-50 disabled:opacity-50"
-															>
-																Avertir utilisateur
-															</button>
+															>Warn user</button>
+															<button
+																disabled={reportActionId === report.id || report.status === 'resolved'}
+																on:click={() => openReportNoteModal(report, 'resolve')}
+																class="px-2 py-1 rounded text-xs border border-green-200 text-green-700 hover:bg-green-50 disabled:opacity-50"
+															>Resolve</button>
 															<button
 																disabled={reportActionId === report.id}
-																on:click={() => moderateReport(report, 'suspend')}
+																on:click={() => openReportNoteModal(report, 'suspend')}
 																class="px-2 py-1 rounded text-xs border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
-															>
-																Suspend account
-															</button>
+															>Suspend</button>
 														</div>
 													</td>
 												</tr>
 											{/each}
 										</tbody>
 									</table>
+								</div>
+							{/if}
+
+							{#if showReportNoteModal && reportNoteModalReport && reportNoteModalAction}
+								<div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+									<div class="bg-white rounded-2xl max-w-lg w-full" role="dialog" aria-modal="true" aria-label="Report action modal">
+										<div class="border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+											<div>
+												<h3 class="text-base font-semibold text-gray-900">
+													{reportNoteModalAction === 'ignore' ? 'Ignore report'
+													: reportNoteModalAction === 'warn' ? 'Warn user'
+													: reportNoteModalAction === 'resolve' ? 'Resolve report'
+													: 'Suspend account'}
+												</h3>
+												<p class="text-xs text-gray-500 mt-0.5">Report: {reportNoteModalReport.description?.slice(0, 60) || '—'}</p>
+											</div>
+											<button on:click={closeReportNoteModal} class="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50">Close</button>
+										</div>
+										<div class="p-6 space-y-4">
+											{#if reportNoteModalAction === 'suspend'}
+												<p class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">This will suspend the reported user's account.</p>
+											{/if}
+											<div>
+												<label for="report-note-input" class="text-xs font-semibold text-gray-700 block mb-1">Admin note (optional)</label>
+												<textarea id="report-note-input" bind:value={reportNoteModalText} rows="3" placeholder="Add context or reason..." class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-y"></textarea>
+											</div>
+											<div class="flex gap-2">
+												<button on:click={submitReportNote} disabled={reportNoteModalSaving} class={`px-4 py-2 text-white text-sm rounded-lg font-medium disabled:opacity-50 ${reportNoteModalAction === 'suspend' ? 'bg-red-600 hover:bg-red-700' : reportNoteModalAction === 'warn' ? 'bg-amber-500 hover:bg-amber-600' : 'bg-green-600 hover:bg-green-700'}`}>
+													{reportNoteModalSaving ? 'Saving...' : 'Confirm'}
+												</button>
+												<button on:click={closeReportNoteModal} class="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50">Cancel</button>
+											</div>
+										</div>
+									</div>
 								</div>
 							{/if}
 						</div>
@@ -3291,12 +3804,50 @@
 									<input type="date" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" bind:value={transactionFilterToDate} on:change={loadTransactions} />
 									<button on:click={loadTransactions} class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 font-medium">Load transactions</button>
 								</div>
+								<div class="flex flex-wrap gap-2 mt-3">
+									<button on:click={openCreateTransactionModal} class="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 font-medium">+ New transaction</button>
+								</div>
 								{#if transactionsActionMessage}
 									<p class={`text-sm border rounded-lg px-3 py-2 mt-3 ${transactionsActionIsError ? 'text-red-700 bg-red-50 border-red-200' : 'text-green-700 bg-green-50 border-green-200'}`}>
 										{transactionsActionMessage}
 									</p>
 								{/if}
 							</div>
+
+							{#if transactions.length > 0}
+								{@const totalRevenue = transactions.filter(t => t.status === 'succeeded').reduce((s, t) => s + Number(t.amount || 0), 0)}
+								{@const totalCommission = transactions.filter(t => t.status === 'succeeded').reduce((s, t) => s + Number(t.commission_amount || 0), 0)}
+								{@const totalPayout = transactions.filter(t => t.status === 'succeeded').reduce((s, t) => s + Number(t.driver_payout_amount || 0), 0)}
+								{@const awaitingCount = transactions.filter(t => t.admin_status === 'awaiting_payout' && t.status === 'succeeded').length}
+								{@const disputeCount = transactions.filter(t => t.admin_status === 'dispute').length}
+								{@const refundedCount = transactions.filter(t => t.refund_status === 'refunded').length}
+								<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+									<div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
+										<p class="text-xs text-gray-500">Total revenue</p>
+										<p class="text-lg font-bold text-gray-900 mt-0.5">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(totalRevenue)}</p>
+									</div>
+									<div class="bg-white rounded-xl border border-green-200 px-4 py-3">
+										<p class="text-xs text-green-700">Commission earned</p>
+										<p class="text-lg font-bold text-green-800 mt-0.5">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(totalCommission)}</p>
+									</div>
+									<div class="bg-white rounded-xl border border-indigo-200 px-4 py-3">
+										<p class="text-xs text-indigo-700">Driver payouts</p>
+										<p class="text-lg font-bold text-indigo-800 mt-0.5">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(totalPayout)}</p>
+									</div>
+									<div class="bg-white rounded-xl border border-yellow-200 px-4 py-3">
+										<p class="text-xs text-yellow-700">Awaiting payout</p>
+										<p class="text-lg font-bold text-yellow-800 mt-0.5">{awaitingCount}</p>
+									</div>
+									<div class="bg-white rounded-xl border border-red-200 px-4 py-3">
+										<p class="text-xs text-red-700">Disputes</p>
+										<p class="text-lg font-bold text-red-800 mt-0.5">{disputeCount}</p>
+									</div>
+									<div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
+										<p class="text-xs text-gray-500">Refunded</p>
+										<p class="text-lg font-bold text-gray-700 mt-0.5">{refundedCount}</p>
+									</div>
+								</div>
+							{/if}
 
 							{#if transactionsLoading}
 								<p class="text-sm text-gray-500">Loading transactions...</p>
@@ -3313,7 +3864,7 @@
 												<th class="px-4 py-3 font-medium">Driver</th>
 												<th class="px-4 py-3 font-medium">Payment status</th>
 												<th class="px-4 py-3 font-medium">Admin status</th>
-												<th class="px-4 py-3 font-medium">Amount (USD)</th>
+												<th class="px-4 py-3 font-medium">Amount / Commission / Payout</th>
 												<th class="px-4 py-3 font-medium">Created at</th>
 												<th class="px-4 py-3 font-medium">Actions</th>
 											</tr>
@@ -3332,19 +3883,72 @@
 														<p class="text-xs text-gray-500 mt-1">{tx.ride_info?.departure || '-'} to {tx.ride_info?.arrival || '-'}</p>
 													</td>
 													<td class="px-4 py-3"><span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${tx.status === 'succeeded' ? 'bg-green-100 text-green-700' : tx.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{tx.status}</span></td>
-													<td class="px-4 py-3"><span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">{tx.admin_status || 'awaiting_payout'}</span></td>
-													<td class="px-4 py-3 font-medium text-gray-900">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(tx.amount || 0))}</td>
+													<td class="px-4 py-3"><span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${tx.admin_status === 'payout_done' ? 'bg-green-100 text-green-700' : tx.admin_status === 'dispute' ? 'bg-red-100 text-red-700' : tx.admin_status === 'validated' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}`}>{tx.admin_status || 'awaiting_payout'}</span></td>
+													<td class="px-4 py-3 align-top">
+														<p class="font-medium text-gray-900">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(tx.amount || 0))}</p>
+														<p class="text-xs text-green-700">Commission: {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(tx.commission_amount || 0))}</p>
+														<p class="text-xs text-indigo-700">Payout: {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(tx.driver_payout_amount || 0))}</p>
+													</td>
 													<td class="px-4 py-3 text-gray-600">{new Date(tx.created_at).toLocaleString('en-US')}</td>
 													<td class="px-4 py-3">
 														<div class="flex flex-wrap gap-2">
 															<button on:click={() => openTransactionModal(tx)} class="px-3 py-1 rounded text-xs font-medium border border-green-200 text-green-700 hover:bg-green-50">Details</button>
 															<button disabled={tx.refund_status === 'refunded' || tx.status !== 'succeeded' || transactionActionId === tx.id} on:click={() => refundTransaction(tx)} class="px-3 py-1 rounded text-xs font-medium border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50">{transactionActionId === tx.id ? 'Processing...' : 'Refund'}</button>
+															<button disabled={txDeleteActionId === tx.id} on:click={() => deleteTransaction(tx)} class="px-3 py-1 rounded text-xs font-medium border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50">{txDeleteActionId === tx.id ? 'Deleting...' : 'Delete'}</button>
 														</div>
 													</td>
 												</tr>
 											{/each}
 										</tbody>
 									</table>
+								</div>
+							{/if}
+
+							{#if showCreateTxModal}
+								<div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+									<div class="bg-white rounded-2xl max-w-2xl w-full max-h-[92vh] overflow-y-auto" role="dialog" aria-modal="true" aria-label="Create transaction modal">
+										<div class="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 z-10 flex items-start justify-between gap-4">
+											<div>
+												<h3 class="text-lg font-semibold text-gray-900">New transaction</h3>
+												<p class="text-xs text-gray-500 mt-1">Create a transaction manually.</p>
+											</div>
+											<button on:click={closeCreateTransactionModal} class="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50">Close</button>
+										</div>
+										<div class="p-6 space-y-5">
+											{#if createTxMessage}
+												<p class={`text-sm rounded-lg px-3 py-2 border ${createTxIsError ? 'text-red-700 bg-red-50 border-red-200' : 'text-green-700 bg-green-50 border-green-200'}`}>{createTxMessage}</p>
+											{/if}
+											<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+												<div><label for="ctx-booking-id" class="text-xs text-gray-500 mb-0.5 block">Booking ID (optional)</label><input id="ctx-booking-id" type="text" bind:value={createTxBookingId} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" /></div>
+												<div><label for="ctx-ride-id" class="text-xs text-gray-500 mb-0.5 block">Ride ID (optional)</label><input id="ctx-ride-id" type="text" bind:value={createTxRideId} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" /></div>
+												<div><label for="ctx-user-id" class="text-xs text-gray-500 mb-0.5 block">Passenger User ID (optional)</label><input id="ctx-user-id" type="text" bind:value={createTxUserId} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" /></div>
+												<div><label for="ctx-payment-at" class="text-xs text-gray-500 mb-0.5 block">Payment date & time</label><input id="ctx-payment-at" type="datetime-local" bind:value={createTxPaymentAt} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" /></div>
+											</div>
+											<div class="rounded-lg border border-green-200 bg-green-50 p-4 space-y-3">
+												<p class="text-xs font-semibold text-green-800 uppercase tracking-wide">Financial details (USD)</p>
+												<div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+													<div><label for="ctx-amount" class="text-xs text-gray-600 block mb-1">Total amount (USD)</label><input id="ctx-amount" type="number" min="0" step="0.01" bind:value={createTxAmount} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" /></div>
+													<div><label for="ctx-seats" class="text-xs text-gray-600 block mb-1">Seats booked</label><input id="ctx-seats" type="number" min="1" step="1" bind:value={createTxSeats} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" /></div>
+													<div><label for="ctx-commission" class="text-xs text-gray-600 block mb-1">Commission (%)</label><input id="ctx-commission" type="number" min="0" max="100" step="0.01" bind:value={createTxCommissionPercent} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" /></div>
+												</div>
+											</div>
+											<div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+												<div><label for="ctx-pay-status" class="text-xs text-gray-600 block mb-1">Payment status</label><select id="ctx-pay-status" bind:value={createTxPaymentStatus} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"><option value="pending">Pending</option><option value="succeeded">Succeeded</option><option value="failed">Failed</option><option value="canceled">Canceled</option></select></div>
+												<div><label for="ctx-refund-status" class="text-xs text-gray-600 block mb-1">Refund status</label><select id="ctx-refund-status" bind:value={createTxRefundStatus} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"><option value="none">None</option><option value="pending">Pending</option><option value="refunded">Refunded</option><option value="failed">Failed</option></select></div>
+												<div><label for="ctx-admin-status" class="text-xs text-gray-600 block mb-1">Admin status</label><select id="ctx-admin-status" bind:value={createTxAdminStatus} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"><option value="awaiting_payout">Awaiting payout</option><option value="validated">Validated</option><option value="payout_done">Payout done</option><option value="dispute">Dispute</option></select></div>
+											</div>
+											<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+												<div><label for="ctx-provider" class="text-xs text-gray-600 block mb-1">Payment provider</label><input id="ctx-provider" type="text" bind:value={createTxProvider} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" /></div>
+												<div><label for="ctx-provider-order" class="text-xs text-gray-600 block mb-1">Provider order ID</label><input id="ctx-provider-order" type="text" bind:value={createTxProviderOrderId} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" /></div>
+												<div><label for="ctx-ref" class="text-xs text-gray-600 block mb-1">External reference</label><input id="ctx-ref" type="text" bind:value={createTxRef} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" /></div>
+											</div>
+											<div><label for="ctx-notes" class="text-xs font-semibold text-gray-700 block mb-1">Internal notes</label><textarea id="ctx-notes" bind:value={createTxNotes} rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y"></textarea></div>
+											<div class="flex gap-2">
+												<button on:click={saveNewTransaction} disabled={createTxSaving} class="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 font-medium disabled:opacity-50">{createTxSaving ? 'Creating...' : 'Create transaction'}</button>
+												<button on:click={closeCreateTransactionModal} class="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50">Cancel</button>
+											</div>
+										</div>
+									</div>
 								</div>
 							{/if}
 
@@ -3437,6 +4041,11 @@
 												{#if selectedTransaction.status === 'succeeded' && selectedTransaction.refund_status !== 'refunded'}
 													<button disabled={transactionActionId === selectedTransaction.id} on:click={() => refundTransaction(selectedTransaction!)} class="px-4 py-2 border border-indigo-200 text-indigo-700 text-sm rounded-lg hover:bg-indigo-50 font-medium disabled:opacity-50">{transactionActionId === selectedTransaction.id ? 'Processing...' : 'Refund transaction'}</button>
 												{/if}
+												<div class="relative group">
+													<button disabled={txNotifyActionId === selectedTransaction.id} on:click={() => notifyDriver(selectedTransaction!)} class="px-4 py-2 border border-orange-200 text-orange-700 text-sm rounded-lg hover:bg-orange-50 font-medium disabled:opacity-50 cursor-not-allowed" title="Email domain not configured yet">{txNotifyActionId === selectedTransaction.id ? 'Sending...' : 'Notify driver'}</button>
+													<div class="absolute bottom-full left-0 mb-1 hidden group-hover:block bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-10">Email domain not configured yet — action will be logged only.</div>
+												</div>
+												<button disabled={txDeleteActionId === selectedTransaction.id} on:click={() => deleteTransaction(selectedTransaction!)} class="px-4 py-2 border border-red-200 text-red-700 text-sm rounded-lg hover:bg-red-50 font-medium disabled:opacity-50">{txDeleteActionId === selectedTransaction.id ? 'Deleting...' : 'Delete transaction'}</button>
 											</div>
 										</div>
 									</div>
@@ -3595,69 +4204,122 @@
 					{:else if activeTab === 'support'}
 						<div class="space-y-6">
 							<div class="bg-white rounded-xl p-4 border border-gray-200">
-								<div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+								<div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+									<input
+										type="text"
+										placeholder="Search subject, name, email..."
+										class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+										bind:value={supportSearch}
+										on:input={applySupportFilters}
+									/>
 									<select
 										class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
 										bind:value={supportFilterStatus}
 										on:change={loadSupportTickets}
 									>
-										<option value="">All tickets</option>
+										<option value="">All statuses</option>
 										<option value="open">Open</option>
-										<option value="in_progress">En cours</option>
+										<option value="in_progress">In progress</option>
 										<option value="resolved">Resolved</option>
 										<option value="closed">Closed</option>
+									</select>
+									<select
+										class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+										bind:value={supportFilterPriority}
+										on:change={loadSupportTickets}
+									>
+										<option value="">All priorities</option>
+										<option value="urgent">Urgent</option>
+										<option value="high">High</option>
+										<option value="normal">Normal</option>
+										<option value="low">Low</option>
 									</select>
 									<button
 										on:click={loadSupportTickets}
 										class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 font-medium"
 									>
-										Refresh tickets
+										Refresh
 									</button>
 								</div>
+								{#if supportActionMessage}
+									<p class={`text-sm border rounded-lg px-3 py-2 mt-3 ${supportActionIsError ? 'text-red-700 bg-red-50 border-red-200' : 'text-green-700 bg-green-50 border-green-200'}`}>{supportActionMessage}</p>
+								{/if}
+								{#if supportError}
+									<p class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mt-2">{supportError}</p>
+								{/if}
 							</div>
 
-							{#if supportError}
-								<p class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{supportError}</p>
-							{/if}
-							{#if supportActionMessage}
-								<p class="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">{supportActionMessage}</p>
+							{#if supportTickets.length > 0}
+								{@const openCount = supportTickets.filter(t => t.status === 'open').length}
+								{@const inProgressCount = supportTickets.filter(t => t.status === 'in_progress').length}
+								{@const resolvedCount = supportTickets.filter(t => t.status === 'resolved').length}
+								{@const urgentCount = supportTickets.filter(t => t.priority === 'urgent').length}
+								{@const highCount = supportTickets.filter(t => t.priority === 'high').length}
+								<div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+									<div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
+										<p class="text-xs text-gray-500">Total</p>
+										<p class="text-2xl font-bold text-gray-800 mt-0.5">{supportTickets.length}</p>
+									</div>
+									<div class="bg-white rounded-xl border border-yellow-200 px-4 py-3">
+										<p class="text-xs text-yellow-700">Open</p>
+										<p class="text-2xl font-bold text-yellow-800 mt-0.5">{openCount}</p>
+									</div>
+									<div class="bg-white rounded-xl border border-indigo-200 px-4 py-3">
+										<p class="text-xs text-indigo-700">In progress</p>
+										<p class="text-2xl font-bold text-indigo-800 mt-0.5">{inProgressCount}</p>
+									</div>
+									<div class="bg-white rounded-xl border border-green-200 px-4 py-3">
+										<p class="text-xs text-green-700">Resolved</p>
+										<p class="text-2xl font-bold text-green-800 mt-0.5">{resolvedCount}</p>
+									</div>
+									<div class="bg-white rounded-xl border border-red-200 px-4 py-3">
+										<p class="text-xs text-red-700">Urgent / High</p>
+										<p class="text-2xl font-bold text-red-800 mt-0.5">{urgentCount + highCount}</p>
+									</div>
+								</div>
 							{/if}
 
 							<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+								<!-- Ticket list -->
 								<div class="lg:col-span-1 border border-gray-200 rounded-xl overflow-hidden">
 									<div class="bg-gray-50 px-4 py-3 border-b border-gray-200">
-										<h3 class="text-sm font-semibold text-gray-900">Support tickets</h3>
+										<h3 class="text-sm font-semibold text-gray-900">Tickets ({filteredSupportTickets.length})</h3>
 									</div>
 									{#if supportLoading}
 										<p class="text-sm text-gray-500 px-4 py-3">Loading...</p>
-									{:else if supportTickets.length === 0}
+									{:else if filteredSupportTickets.length === 0}
 										<p class="text-sm text-gray-500 px-4 py-3">No tickets.</p>
 									{:else}
-										<div class="max-h-125 overflow-y-auto divide-y divide-gray-100">
-											{#each supportTickets as ticket}
+										<div class="max-h-150 overflow-y-auto divide-y divide-gray-100">
+											{#each filteredSupportTickets as ticket}
 												<button
 													type="button"
 													on:click={() => openSupportTicket(ticket)}
-													class="w-full text-left px-4 py-3 hover:bg-gray-50 {selectedSupportTicket?.id === ticket.id ? 'bg-green-50' : ''}"
+													class="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors {selectedSupportTicket?.id === ticket.id ? 'bg-green-50 border-l-2 border-l-green-500' : ''}"
 												>
-													<p class="text-sm font-medium text-gray-900 truncate">{ticket.subject}</p>
-													<p class="text-xs text-gray-500 truncate">
-														{ticket.profiles?.first_name} {ticket.profiles?.last_name} ��� {ticket.profiles?.email}
+													<div class="flex items-start justify-between gap-1">
+														<p class="text-sm font-medium text-gray-900 truncate flex-1">{ticket.subject}</p>
+														<span class="text-[10px] text-gray-400 shrink-0">{ticketAge(ticket.created_at)}</span>
+													</div>
+													<p class="text-xs text-gray-500 truncate mt-0.5">
+														{ticket.profiles?.first_name ?? ''} {ticket.profiles?.last_name ?? ''} · {ticket.profiles?.email ?? ''}
 													</p>
-													<div class="mt-1 flex gap-1">
-														<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-100 text-blue-700">
+													<div class="mt-1.5 flex gap-1 flex-wrap">
+														<span class={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+															ticket.priority === 'urgent' ? 'bg-red-100 text-red-700'
+															: ticket.priority === 'high' ? 'bg-orange-100 text-orange-700'
+															: ticket.priority === 'normal' ? 'bg-blue-100 text-blue-700'
+															: 'bg-gray-100 text-gray-600'
+														}`}>
 															{ticket.priority}
 														</span>
-														<span class={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${
-																ticket.status === 'open'
-																	? 'bg-yellow-100 text-yellow-700'
-																	: ticket.status === 'in_progress'
-																		? 'bg-indigo-100 text-indigo-700'
-																		: ticket.status === 'resolved'
-																			? 'bg-green-100 text-green-700'
-																			: 'bg-gray-100 text-gray-700'
+														<span class={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${
+															ticket.status === 'open' ? 'bg-yellow-100 text-yellow-700'
+															: ticket.status === 'in_progress' ? 'bg-indigo-100 text-indigo-700'
+															: ticket.status === 'resolved' ? 'bg-green-100 text-green-700'
+															: 'bg-gray-100 text-gray-600'
 														}`}>
-															{ticket.status}
+															{ticket.status.replace('_', ' ')}
 														</span>
 													</div>
 												</button>
@@ -3666,61 +4328,114 @@
 									{/if}
 								</div>
 
-								<div class="lg:col-span-2 border border-gray-200 rounded-xl overflow-hidden">
-									<div class="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-										<h3 class="text-sm font-semibold text-gray-900">
-											{selectedSupportTicket ? `Ticket: ${selectedSupportTicket.subject}` : 'Conversation'}
-										</h3>
-										{#if selectedSupportTicket}
-											<div class="flex gap-2">
-												<select
-													disabled={supportUpdatingStatus}
-													class="px-2 py-1 border border-gray-300 rounded text-xs"
-													on:change={(e) => updateSupportTicketStatus((e.currentTarget as HTMLSelectElement).value as SupportTicket['status'])}
-												>
-													<option selected={selectedSupportTicket.status === 'open'} value="open">Open</option>
-													<option selected={selectedSupportTicket.status === 'in_progress'} value="in_progress">En cours</option>
-													<option selected={selectedSupportTicket.status === 'resolved'} value="resolved">Resolved</option>
-													<option selected={selectedSupportTicket.status === 'closed'} value="closed">Closed</option>
-												</select>
-											</div>
-										{/if}
-									</div>
-
+								<!-- Conversation panel -->
+								<div class="lg:col-span-2 border border-gray-200 rounded-xl overflow-hidden flex flex-col">
 									{#if !selectedSupportTicket}
-										<p class="text-sm text-gray-500 p-4">Select a ticket to view messages.</p>
+										<div class="flex items-center justify-center h-64 text-sm text-gray-400">Select a ticket to view the conversation.</div>
 									{:else}
-										<div class="p-4 space-y-3 max-h-105 overflow-y-auto bg-gray-50">
+										<div class="bg-gray-50 px-4 py-3 border-b border-gray-200 space-y-2">
+											<div class="flex items-start justify-between gap-2">
+												<div class="flex-1 min-w-0">
+													<p class="text-sm font-semibold text-gray-900 truncate">{selectedSupportTicket.subject}</p>
+													<p class="text-xs text-gray-500 mt-0.5">
+														{selectedSupportTicket.profiles?.first_name ?? ''} {selectedSupportTicket.profiles?.last_name ?? ''} ·
+														{selectedSupportTicket.profiles?.email ?? '—'} ·
+														opened {ticketAge(selectedSupportTicket.created_at)}
+													</p>
+												</div>
+												<button
+													disabled={supportDeletingTicket}
+													on:click={() => deleteSupportTicket(selectedSupportTicket!)}
+													class="shrink-0 px-2 py-1 rounded text-xs border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
+													title="Delete ticket and all messages"
+												>Delete</button>
+											</div>
+											<div class="flex gap-2 flex-wrap items-center">
+												<div class="flex items-center gap-1">
+													<span class="text-xs text-gray-500">Status:</span>
+													<select
+														disabled={supportUpdatingStatus}
+														class="px-2 py-0.5 border border-gray-300 rounded text-xs"
+														value={selectedSupportTicket.status}
+														on:change={(e) => updateSupportTicketStatus((e.currentTarget as HTMLSelectElement).value as SupportTicket['status'])}
+													>
+														<option value="open">Open</option>
+														<option value="in_progress">In progress</option>
+														<option value="resolved">Resolved</option>
+														<option value="closed">Closed</option>
+													</select>
+												</div>
+												<div class="flex items-center gap-1">
+													<span class="text-xs text-gray-500">Priority:</span>
+													<select
+														disabled={supportUpdatingStatus}
+														class="px-2 py-0.5 border border-gray-300 rounded text-xs"
+														value={selectedSupportTicket.priority}
+														on:change={(e) => updateSupportTicketPriority((e.currentTarget as HTMLSelectElement).value as SupportTicket['priority'])}
+													>
+														<option value="low">Low</option>
+														<option value="normal">Normal</option>
+														<option value="high">High</option>
+														<option value="urgent">Urgent</option>
+													</select>
+												</div>
+												<div class="flex gap-1 ml-auto">
+													<button
+														disabled={supportUpdatingStatus || selectedSupportTicket.status === 'resolved'}
+														on:click={() => updateSupportTicketStatus('resolved')}
+														class="px-2 py-0.5 rounded text-xs border border-green-200 text-green-700 hover:bg-green-50 disabled:opacity-50"
+													>✓ Resolve</button>
+													<button
+														disabled={supportUpdatingStatus || selectedSupportTicket.status === 'closed'}
+														on:click={() => updateSupportTicketStatus('closed')}
+														class="px-2 py-0.5 rounded text-xs border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+													>Close</button>
+													{#if selectedSupportTicket.status === 'closed' || selectedSupportTicket.status === 'resolved'}
+														<button
+															disabled={supportUpdatingStatus}
+															on:click={() => updateSupportTicketStatus('open')}
+															class="px-2 py-0.5 rounded text-xs border border-yellow-200 text-yellow-700 hover:bg-yellow-50 disabled:opacity-50"
+														>Reopen</button>
+													{/if}
+												</div>
+											</div>
+										</div>
+
+										<div class="flex-1 p-4 space-y-3 max-h-95 overflow-y-auto bg-gray-50">
 											{#if supportMessagesLoading}
 												<p class="text-sm text-gray-500">Loading conversation...</p>
 											{:else if supportMessages.length === 0}
-												<p class="text-sm text-gray-500">No messages.</p>
+												<p class="text-sm text-gray-500">No messages yet.</p>
 											{:else}
 												{#each supportMessages as msg}
 													<div class="{msg.sender_role === 'admin' ? 'text-right' : 'text-left'}">
 														<div class="inline-block max-w-[85%] rounded-lg px-3 py-2 text-sm {msg.sender_role === 'admin' ? 'bg-green-100 text-green-900' : 'bg-white border border-gray-200 text-gray-800'}">
-															<p class="text-[11px] opacity-70 mb-1">
-																{msg.sender_role === 'admin' ? 'Admin' : 'User'} ��� {new Date(msg.created_at).toLocaleString('en-US')}
+															<p class="text-[11px] opacity-60 mb-1">
+																{msg.sender_role === 'admin' ? 'Admin' : (msg.profiles ? `${msg.profiles.first_name ?? ''} ${msg.profiles.last_name ?? ''}`.trim() || 'User' : 'User')} · {new Date(msg.created_at).toLocaleString('en-US')}
 															</p>
-															<p>{msg.message}</p>
+															<p class="whitespace-pre-wrap">{msg.message}</p>
 														</div>
 													</div>
 												{/each}
 											{/if}
 										</div>
 
-										<div class="p-4 border-t border-gray-200 space-y-2">
+										<div class="p-4 border-t border-gray-200 bg-white space-y-2">
 											<textarea
 												rows="3"
 												bind:value={supportReplyMessage}
-												placeholder="Reply to user..."
-												class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+												placeholder="Write a reply to the user..."
+												class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-y"
 											></textarea>
-											<div class="flex justify-end">
+											<div class="flex items-center justify-between gap-2">
+												<label class="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+													<input type="checkbox" bind:checked={supportReplyAndResolve} class="rounded" />
+													Mark as resolved after sending
+												</label>
 												<button
 													disabled={supportSendingReply || !supportReplyMessage.trim()}
 													on:click={sendSupportReply}
-													class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50"
+													class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50 font-medium"
 												>
 													{supportSendingReply ? 'Sending...' : 'Reply'}
 												</button>
@@ -3962,8 +4677,30 @@
 					</div>
 					<div class="rounded-lg border border-gray-200 p-4">
 						<p class="text-gray-500">Description</p>
-						<p class="font-medium text-gray-900">{selectedReportHistory.description || 'Sans description'}</p>
+						<p class="font-medium text-gray-900">{selectedReportHistory.description || 'No description'}</p>
 					</div>
+					{#if selectedReportHistory.reporter_profile}
+						<div class="rounded-lg border border-blue-100 bg-blue-50 p-4">
+							<p class="text-blue-600 font-medium mb-1">Reporter</p>
+							<p class="font-medium text-gray-900">{selectedReportHistory.reporter_profile.first_name} {selectedReportHistory.reporter_profile.last_name}</p>
+							<p class="text-gray-500 text-xs">{selectedReportHistory.reporter_profile.email || '—'}</p>
+						</div>
+					{/if}
+					{#if selectedReportHistory.reported_profile ?? selectedReportHistory.profiles}
+						{@const rp = selectedReportHistory.reported_profile ?? selectedReportHistory.profiles}
+						<div class="rounded-lg border border-orange-100 bg-orange-50 p-4">
+							<p class="text-orange-600 font-medium mb-1">Reported user</p>
+							<p class="font-medium text-gray-900">{rp?.first_name} {rp?.last_name}</p>
+							<p class="text-gray-500 text-xs">{rp?.email || '—'}</p>
+						</div>
+					{/if}
+					{#if selectedReportHistory.rides}
+						<div class="rounded-lg border border-indigo-100 bg-indigo-50 p-4">
+							<p class="text-indigo-600 font-medium mb-1">Ride</p>
+							<p class="font-medium text-gray-900">{selectedReportHistory.rides.city_from} → {selectedReportHistory.rides.city_to}</p>
+							<p class="text-gray-500 text-xs">{selectedReportHistory.rides.ride_date ? new Date(selectedReportHistory.rides.ride_date).toLocaleDateString('en-US') : ''}</p>
+						</div>
+					{/if}
 					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 						<div class="rounded-lg border border-gray-200 p-4">
 							<p class="text-gray-500">Created on</p>
@@ -3975,11 +4712,11 @@
 						</div>
 					</div>
 					<div class="rounded-lg border border-gray-200 p-4">
-						<p class="text-gray-500">Action prise</p>
-						<p class="font-medium text-gray-900">{selectedReportHistory.action_taken || 'No action yet'}</p>
+						<p class="text-gray-500">Action taken</p>
+						<p class="font-medium text-gray-900">{actionTakenLabel(selectedReportHistory.action_taken)}</p>
 					</div>
 					<div class="rounded-lg border border-gray-200 p-4">
-						<p class="text-gray-500">Note admin</p>
+						<p class="text-gray-500">Admin note</p>
 						<p class="font-medium text-gray-900">{selectedReportHistory.admin_note || 'No note'}</p>
 					</div>
 				</div>

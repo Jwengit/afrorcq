@@ -99,6 +99,8 @@ export const GET: RequestHandler = async ({ request, url }) => {
 			return json({ ticket, messages: messages ?? [] });
 		}
 
+		const priority = url.searchParams.get('priority');
+
 		let query = adminClient
 			.from('support_tickets')
 			.select('id, user_id, subject, status, priority, created_at, updated_at, profiles(first_name, last_name, email)')
@@ -106,6 +108,9 @@ export const GET: RequestHandler = async ({ request, url }) => {
 
 		if (status) {
 			query = query.eq('status', status);
+		}
+		if (priority) {
+			query = query.eq('priority', priority);
 		}
 
 		const { data: tickets, error: ticketsError } = await query;
@@ -175,20 +180,70 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		const body = await request.json();
 		const ticketId = body?.ticketId as string | undefined;
 		const status = body?.status as 'open' | 'in_progress' | 'resolved' | 'closed' | undefined;
+		const action = body?.action as string | undefined;
+		const priority = body?.priority as 'low' | 'normal' | 'high' | 'urgent' | undefined;
 
-		if (!ticketId || !status) {
-			return json({ error: 'ticketId and status are required' }, { status: 400 });
+		if (!ticketId) {
+			return json({ error: 'ticketId is required' }, { status: 400 });
 		}
 
 		const result = adminClientOrError();
 		if (result.error) return result.error;
 		const adminClient = result.client;
 
+		if (action === 'update_priority') {
+			if (!priority) return json({ error: 'priority is required' }, { status: 400 });
+			const { error } = await adminClient
+				.from('support_tickets')
+				.update({ priority, updated_at: new Date().toISOString() })
+				.eq('id', ticketId);
+			if (error) return json({ error: error.message }, { status: 500 });
+			return json({ success: true });
+		}
+
+		if (!status) {
+			return json({ error: 'status or action is required' }, { status: 400 });
+		}
+
 		const { error } = await adminClient
 			.from('support_tickets')
 			.update({ status, updated_at: new Date().toISOString() })
 			.eq('id', ticketId);
 		if (error) return json({ error: error.message }, { status: 500 });
+
+		return json({ success: true });
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Internal server error';
+		return json({ error: message }, { status: 500 });
+	}
+};
+
+export const DELETE: RequestHandler = async ({ request, url }) => {
+	try {
+		const token = getBearerToken(request);
+		if (!token) return json({ error: 'Unauthorized' }, { status: 401 });
+
+		const adminCheck = await isRequesterAdmin(token);
+		if (!adminCheck.ok) return json({ error: 'Forbidden' }, { status: 403 });
+
+		const ticketId = url.searchParams.get('ticketId');
+		if (!ticketId) return json({ error: 'ticketId is required' }, { status: 400 });
+
+		const result = adminClientOrError();
+		if (result.error) return result.error;
+		const adminClient = result.client;
+
+		const { error: msgError } = await adminClient
+			.from('support_messages')
+			.delete()
+			.eq('ticket_id', ticketId);
+		if (msgError) return json({ error: msgError.message }, { status: 500 });
+
+		const { error: ticketError } = await adminClient
+			.from('support_tickets')
+			.delete()
+			.eq('id', ticketId);
+		if (ticketError) return json({ error: ticketError.message }, { status: 500 });
 
 		return json({ success: true });
 	} catch (error) {

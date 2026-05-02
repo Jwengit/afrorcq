@@ -74,7 +74,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
 		let query = adminClient
 			.from('reports')
 			.select(
-				'id, user_id, ride_id, type, description, status, action_taken, admin_note, created_at, updated_at, profiles(first_name, last_name, email), rides(departure, arrival, ride_date)'
+				'id, user_id, reporter_id, ride_id, type, description, status, action_taken, admin_note, created_at, updated_at, profiles(first_name, last_name, email), rides(departure, arrival, ride_date)'
 			)
 			.order('created_at', { ascending: false });
 
@@ -95,9 +95,12 @@ export const GET: RequestHandler = async ({ request, url }) => {
 
 		const normalizedReports = (data ?? []).map((report) => {
 			const ride = Array.isArray(report.rides) ? report.rides[0] : report.rides;
+			const reportedProfile = Array.isArray(report.profiles) ? report.profiles[0] : report.profiles;
 
 			return {
 				...report,
+				profiles: reportedProfile ?? null,
+				reported_profile: reportedProfile ?? null,
 				rides: ride
 					? {
 						...ride,
@@ -108,7 +111,36 @@ export const GET: RequestHandler = async ({ request, url }) => {
 			};
 		});
 
-		return json({ reports: normalizedReports });
+		// Enrich with reporter profiles in one query
+		const reporterIds = Array.from(
+			new Set(normalizedReports.map((r) => r.reporter_id).filter(Boolean))
+		) as string[];
+
+		const reporterProfileMap: Record<string, { first_name: string | null; last_name: string | null; email: string | null }> = {};
+
+		if (reporterIds.length > 0) {
+			const { data: reporterProfiles } = await adminClient
+				.from('profiles')
+				.select('id, first_name, last_name, email')
+				.in('id', reporterIds);
+
+			if (reporterProfiles) {
+				for (const p of reporterProfiles) {
+					reporterProfileMap[p.id] = {
+						first_name: p.first_name ?? null,
+						last_name: p.last_name ?? null,
+						email: p.email ?? null
+					};
+				}
+			}
+		}
+
+		const enriched = normalizedReports.map((r) => ({
+			...r,
+			reporter_profile: r.reporter_id ? (reporterProfileMap[r.reporter_id] ?? null) : null
+		}));
+
+		return json({ reports: enriched });
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Internal server error';
 		return json({ error: message }, { status: 500 });
@@ -133,7 +165,7 @@ export const PATCH: RequestHandler = async ({ request }) => {
 
 		const body = await request.json();
 		const reportId = body?.reportId as string | undefined;
-		const action = body?.action as 'ignore' | 'warn' | 'suspend' | undefined;
+		const action = body?.action as 'ignore' | 'warn' | 'suspend' | 'resolve' | undefined;
 		const note = (body?.note as string | undefined) ?? null;
 		const userId = body?.userId as string | null | undefined;
 
@@ -160,6 +192,10 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		if (action === 'ignore') {
 			status = 'ignored';
 			actionTaken = 'ignored';
+		}
+		if (action === 'resolve') {
+			status = 'resolved';
+			actionTaken = 'resolved';
 		}
 		if (action === 'suspend') {
 			status = 'resolved';
