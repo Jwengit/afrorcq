@@ -72,6 +72,10 @@
 	let profileDocumentsError = '';
 	let profileDocumentsMessage = '';
 	let profileDocumentActionId: string | null = null;
+	let privateProfile: Record<string, unknown> | null = null;
+	let privateProfileLoading = false;
+	let privateProfileError = '';
+	let privateProfileOpenInProgress = false;
 	const documentTypeLabelMap: Record<string, string> = {
 		identity_card: 'Identity card',
 		driver_license: 'Driver license',
@@ -1052,39 +1056,11 @@
 		profileDocuments = [];
 		profileDocumentsError = '';
 		profileDocumentsMessage = '';
+		privateProfile = null;
+		privateProfileError = '';
 		ridesLoading = true;
 		profileDocumentsLoading = true;
-
-		const {
-			data: { session }
-		} = await supabase.auth.getSession();
-
-		if (!session?.access_token) {
-			ridesLoading = false;
-			return;
-		}
-
-		const response = await fetch(`/api/admin/user-rides?userId=${encodeURIComponent(user.id)}`, {
-			method: 'GET',
-			headers: {
-				Authorization: `Bearer ${session.access_token}`
-			}
-		});
-
-		const payload = await response.json();
-		if (response.ok) {
-			profileRides = payload.driverRides ?? [];
-			profileBookings = payload.bookings ?? [];
-		}
-
-		await loadProfileDocuments(user.id);
-
-		ridesLoading = false;
-	}
-
-	async function loadProfileDocuments(userId: string) {
-		profileDocumentsLoading = true;
-		profileDocumentsError = '';
+		privateProfileLoading = true;
 
 		const {
 			data: { session }
@@ -1092,31 +1068,256 @@
 
 		if (!session?.access_token) {
 			profileDocumentsError = 'Session expired. Please sign in again.';
-			profileDocuments = [];
+			privateProfileError = 'Session expired. Please sign in again.';
+			ridesLoading = false;
 			profileDocumentsLoading = false;
+			privateProfileLoading = false;
 			return;
 		}
 
-		const response = await fetch(
-			`/api/admin/user-documents?userId=${encodeURIComponent(userId)}`,
-			{
+		try {
+			const response = await fetch(`/api/admin/user-rides?userId=${encodeURIComponent(user.id)}`, {
 				method: 'GET',
 				headers: {
 					Authorization: `Bearer ${session.access_token}`
 				}
-			}
-		);
+			});
 
-		const payload = await response.json();
-		if (!response.ok) {
-			profileDocumentsError = payload?.error || 'Unable to load verification documents.';
-			profileDocuments = [];
-			profileDocumentsLoading = false;
-			return;
+			const payload = await response
+				.json()
+				.catch(() => null) as { driverRides?: unknown[]; bookings?: unknown[] } | null;
+
+			if (response.ok) {
+				profileRides = payload?.driverRides ?? [];
+				profileBookings = payload?.bookings ?? [];
+			}
+		} catch {
+			profileRides = [];
+			profileBookings = [];
+		} finally {
+			ridesLoading = false;
 		}
 
-		profileDocuments = (payload?.documents ?? []) as AdminVerificationDocument[];
-		profileDocumentsLoading = false;
+		await Promise.allSettled([loadProfileDocuments(user.id), loadPrivateProfile(user.id)]);
+	}
+
+	async function loadPrivateProfile(userId: string) {
+		privateProfileLoading = true;
+		privateProfileError = '';
+
+		try {
+			const {
+				data: { session }
+			} = await supabase.auth.getSession();
+
+			if (!session?.access_token) {
+				privateProfileError = 'Session expired. Please sign in again.';
+				privateProfile = null;
+				return;
+			}
+
+			const response = await fetch(`/api/admin/user-profile?userId=${encodeURIComponent(userId)}`, {
+				method: 'GET',
+				headers: {
+					Authorization: `Bearer ${session.access_token}`
+				}
+			});
+
+			const payload = await response
+				.json()
+				.catch(() => null) as {
+					error?: string;
+					full_profile?: Record<string, unknown>;
+					profile?: Record<string, unknown>;
+				} | null;
+
+			if (!response.ok) {
+				if (response.status === 404) {
+					const fallback = buildPrivateProfileFallback(userId);
+					if (fallback) {
+						privateProfile = fallback;
+						privateProfileError = '';
+						return;
+					}
+				}
+
+				privateProfileError = payload?.error || `Unable to load private profile (${response.status}).`;
+				privateProfile = null;
+				return;
+			}
+
+			privateProfile = (payload?.full_profile ?? payload?.profile ?? payload) as Record<string, unknown> | null;
+		} catch {
+			privateProfileError = 'Unable to load private profile.';
+			privateProfile = null;
+		} finally {
+			privateProfileLoading = false;
+		}
+	}
+
+	function escapeHtml(value: string): string {
+		return value
+			.replaceAll('&', '&amp;')
+			.replaceAll('<', '&lt;')
+			.replaceAll('>', '&gt;')
+			.replaceAll('"', '&quot;')
+			.replaceAll("'", '&#39;');
+	}
+
+	function buildPrivateProfileFallback(userId: string): Record<string, unknown> | null {
+		const baseUser =
+			(selectedProfile?.id === userId ? selectedProfile : users.find((u) => u.id === userId)) ?? null;
+
+		if (!baseUser) {
+			return null;
+		}
+
+		return {
+			source: 'admin-fallback',
+			generated_at: new Date().toISOString(),
+			user_from_admin_list: baseUser,
+			activity_snapshot: {
+				driver_rides_count: profileRides.length,
+				bookings_count: profileBookings.length,
+				verification_documents_count: profileDocuments.length
+			}
+		};
+	}
+
+	async function openPrivateProfileJson(userId: string) {
+		privateProfileOpenInProgress = true;
+		privateProfileError = '';
+		const opened = window.open('', '_blank');
+		if (opened) {
+			opened.document.open();
+			opened.document.write('<!doctype html><title>Loading...</title><body style="font-family:system-ui;padding:16px">Loading private profile...</body>');
+			opened.document.close();
+		}
+
+		try {
+			const {
+				data: { session }
+			} = await supabase.auth.getSession();
+
+			if (!session?.access_token) {
+				privateProfileError = 'Session expired. Please sign in again.';
+				return;
+			}
+
+			const response = await fetch(`/api/admin/user-profile?userId=${encodeURIComponent(userId)}`, {
+				method: 'GET',
+				headers: {
+					Authorization: `Bearer ${session.access_token}`
+				}
+			});
+
+			const payload = await response
+				.json()
+				.catch(() => null) as { error?: string; full_profile?: Record<string, unknown>; profile?: Record<string, unknown> } | null;
+
+			if (!response.ok) {
+				if (response.status === 404) {
+					const fallback = buildPrivateProfileFallback(userId);
+					if (fallback) {
+						privateProfile = fallback;
+						const serializedFallback = JSON.stringify(fallback, null, 2);
+						const safeFallback = escapeHtml(serializedFallback);
+						const fallbackHtml = `<!doctype html><html><head><meta charset="utf-8"><title>Admin Private Profile (Fallback)</title><style>body{font-family:ui-monospace,Menlo,Monaco,Consolas,'Courier New',monospace;padding:16px;background:#f8fafc;color:#0f172a}h1{font-size:16px;margin:0 0 12px}p{font-family:system-ui;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:8px 10px}pre{white-space:pre-wrap;word-break:break-word;background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:12px}</style></head><body><h1>Admin Private Profile (Fallback Data)</h1><p>Private endpoint returned 404. Showing snapshot from admin data.</p><pre>${safeFallback}</pre></body></html>`;
+						if (opened) {
+							opened.document.open();
+							opened.document.write(fallbackHtml);
+							opened.document.close();
+						}
+						return;
+					}
+				}
+
+				privateProfileError = payload?.error || `Unable to load private profile (${response.status}).`;
+				if (opened) {
+					opened.document.open();
+					opened.document.write(`<!doctype html><title>Error</title><body style="font-family:system-ui;padding:16px;color:#991b1b">${escapeHtml(privateProfileError)}</body>`);
+					opened.document.close();
+				}
+				return;
+			}
+
+			const fullProfile = (payload?.full_profile ?? payload?.profile ?? payload) as Record<string, unknown> | null;
+			if (!fullProfile) {
+				privateProfileError = 'Profile not found.';
+				if (opened) {
+					opened.document.open();
+					opened.document.write('<!doctype html><title>Not found</title><body style="font-family:system-ui;padding:16px;color:#991b1b">Profile not found.</body>');
+					opened.document.close();
+				}
+				return;
+			}
+
+			privateProfile = fullProfile;
+			const serialized = JSON.stringify(fullProfile, null, 2);
+			const safeContent = escapeHtml(serialized);
+			const html = `<!doctype html><html><head><meta charset="utf-8"><title>Admin Private Profile</title><style>body{font-family:ui-monospace,Menlo,Monaco,Consolas,'Courier New',monospace;padding:16px;background:#f8fafc;color:#0f172a}h1{font-size:16px;margin:0 0 12px}pre{white-space:pre-wrap;word-break:break-word;background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:12px}</style></head><body><h1>Admin Private Profile (Full Data)</h1><pre>${safeContent}</pre></body></html>`;
+
+			if (opened) {
+				opened.document.open();
+				opened.document.write(html);
+				opened.document.close();
+			} else {
+				privateProfileError = 'Popup blocked by browser. Please allow popups for this site.';
+			}
+		} catch {
+			privateProfileError = 'Unable to load private profile.';
+			if (opened) {
+				opened.document.open();
+				opened.document.write('<!doctype html><title>Error</title><body style="font-family:system-ui;padding:16px;color:#991b1b">Unable to load private profile.</body>');
+				opened.document.close();
+			}
+		} finally {
+			privateProfileOpenInProgress = false;
+		}
+	}
+
+	async function loadProfileDocuments(userId: string) {
+		profileDocumentsLoading = true;
+		profileDocumentsError = '';
+
+		try {
+			const {
+				data: { session }
+			} = await supabase.auth.getSession();
+
+			if (!session?.access_token) {
+				profileDocumentsError = 'Session expired. Please sign in again.';
+				profileDocuments = [];
+				return;
+			}
+
+			const response = await fetch(
+				`/api/admin/user-documents?userId=${encodeURIComponent(userId)}`,
+				{
+					method: 'GET',
+					headers: {
+						Authorization: `Bearer ${session.access_token}`
+					}
+				}
+			);
+
+			const payload = await response
+				.json()
+				.catch(() => null) as { error?: string; documents?: AdminVerificationDocument[] } | null;
+
+			if (!response.ok) {
+				profileDocumentsError = payload?.error || 'Unable to load verification documents.';
+				profileDocuments = [];
+				return;
+			}
+
+			profileDocuments = (payload?.documents ?? []) as AdminVerificationDocument[];
+		} catch {
+			profileDocumentsError = 'Unable to load verification documents.';
+			profileDocuments = [];
+		} finally {
+			profileDocumentsLoading = false;
+		}
 	}
 
 	async function reviewProfileDocument(
@@ -1200,6 +1401,9 @@
 		profileDocumentsError = '';
 		profileDocumentsMessage = '';
 		profileDocumentActionId = null;
+		privateProfile = null;
+		privateProfileError = '';
+		privateProfileLoading = false;
 		statusActionMessage = '';
 	}
 
@@ -4860,6 +5064,24 @@
 						</div>
 					</div>
 
+					<div>
+						<h3 class="text-sm font-semibold text-gray-900 mb-3">Private profile (admin only)</h3>
+						{#if privateProfileLoading}
+							<p class="text-sm text-gray-500 mb-2">Loading private profile...</p>
+						{/if}
+						{#if privateProfileError}
+							<p class="text-sm bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 mb-2">{privateProfileError}</p>
+						{/if}
+						<button
+							type="button"
+							disabled={privateProfileOpenInProgress}
+							on:click={() => openPrivateProfileJson(selectedProfile.id)}
+							class="px-3 py-2 rounded-lg border border-blue-300 text-blue-700 bg-blue-50 text-xs font-medium hover:bg-blue-100 disabled:opacity-50"
+						>
+							{privateProfileOpenInProgress ? 'Opening...' : 'Open full profile in new window'}
+						</button>
+					</div>
+
 					<!-- Status Actions -->
 					<div>
 						<h3 class="text-sm font-semibold text-gray-900 mb-3">Account management</h3>
@@ -4930,7 +5152,7 @@
 										on:click={() => changeUserStatus('active')}
 										class="w-full px-3 py-2 rounded-lg border text-sm font-medium {selectedProfile.user_status === 'active' ? 'border-green-300 bg-green-50 text-green-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'} disabled:opacity-50"
 									>
-										{selectedProfile.user_status === 'active' ? 'ԣ� ' : ''}Active
+										{selectedProfile.user_status === 'active' ? '[Current] ' : ''}Active
 									</button>
 									<button
 										type="button"
@@ -4938,7 +5160,7 @@
 										on:click={() => changeUserStatus('suspended')}
 										class="w-full px-3 py-2 rounded-lg border text-sm font-medium {selectedProfile.user_status === 'suspended' ? 'border-yellow-300 bg-yellow-50 text-yellow-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'} disabled:opacity-50"
 									>
-										{selectedProfile.user_status === 'suspended' ? 'ԣ� ' : ''}Suspended
+										{selectedProfile.user_status === 'suspended' ? '[Current] ' : ''}Suspended
 									</button>
 									<button
 										type="button"
@@ -4946,7 +5168,7 @@
 										on:click={() => changeUserStatus('banned')}
 										class="w-full px-3 py-2 rounded-lg border text-sm font-medium {selectedProfile.user_status === 'banned' ? 'border-red-300 bg-red-50 text-red-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'} disabled:opacity-50"
 									>
-										{selectedProfile.user_status === 'banned' ? 'ԣ� ' : ''}Banned
+										{selectedProfile.user_status === 'banned' ? '[Current] ' : ''}Banned
 									</button>
 								</div>
 							</div>
@@ -4983,7 +5205,7 @@
 										<div class="flex items-start justify-between gap-3">
 											<div>
 												<p class="text-sm font-semibold text-gray-900">{documentTypeLabel(doc.document_type)}</p>
-												<p class="text-xs text-gray-500">{doc.file_name} ��� {new Date(doc.created_at).toLocaleDateString('en-US')}</p>
+													<p class="text-xs text-gray-500">{doc.file_name} | {new Date(doc.created_at).toLocaleDateString('en-US')}</p>
 												{#if doc.admin_note}
 													<p class="text-xs text-red-600 mt-1">Note: {doc.admin_note}</p>
 												{/if}
@@ -5039,8 +5261,8 @@
 										<p class="text-xs font-medium text-gray-600 mb-2">Rides as driver</p>
 										{#each profileRides as ride}
 											<div class="text-xs border border-gray-200 rounded p-2 mb-2">
-												<p><strong>{ride.city_from}</strong> ��� <strong>{ride.city_to}</strong></p>
-												<p class="text-gray-600">{new Date(ride.ride_date).toLocaleDateString('en-US')} ��� {ride.available_seats} seats ��� ${ride.price}</p>
+												<p><strong>{ride.city_from}</strong> -> <strong>{ride.city_to}</strong></p>
+												<p class="text-gray-600">{new Date(ride.ride_date).toLocaleDateString('en-US')} | {ride.available_seats} seats | ${ride.price}</p>
 											</div>
 										{/each}
 									</div>
@@ -5050,7 +5272,7 @@
 										<p class="text-xs font-medium text-gray-600 mb-2">Booked rides</p>
 										{#each profileBookings as booking}
 											<div class="text-xs border border-gray-200 rounded p-2 mb-2">
-												<p>{booking.ride?.[0]?.city_from || '-'} ��� {booking.ride?.[0]?.city_to || '-'} ({booking.seats_booked} seats)</p>
+												<p>{booking.ride?.[0]?.city_from || '-'} -> {booking.ride?.[0]?.city_to || '-'} ({booking.seats_booked} seats)</p>
 												<p class="text-gray-600">{booking.status}</p>
 											</div>
 										{/each}
