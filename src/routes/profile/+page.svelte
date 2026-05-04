@@ -85,6 +85,7 @@
 	let formData = { ...profile };
 	let selectedFile: File | null = null;
 	let previewUrl = '';
+	let profilePhotoFileName = 'No file selected';
 
 	// Verification documents
 	let documentsLoading = false;
@@ -95,6 +96,7 @@
 	let verificationDocuments: VerificationDocument[] = [];
 	let selectedDocumentType = 'identity_card';
 	let selectedDocumentFile: File | null = null;
+	let documentFileName = 'Choose a file';
 
 	const documentTypeOptions = [
 		{ value: 'identity_card', label: 'Identity card' },
@@ -447,6 +449,7 @@
 	function handleVerificationDocumentSelect(event: Event) {
 		const target = event.target as HTMLInputElement;
 		selectedDocumentFile = target.files?.[0] ?? null;
+		documentFileName = selectedDocumentFile?.name ?? 'Choose a file';
 		documentsMessage = '';
 		documentsError = '';
 	}
@@ -565,6 +568,7 @@
 		const file = target.files?.[0];
 		if (file) {
 			selectedFile = file;
+			profilePhotoFileName = file.name;
 			previewUrl = URL.createObjectURL(file);
 		}
 	}
@@ -1056,12 +1060,15 @@
 									{/if}
 								</div>
 								<div>
+									<label for="profile_photo" class="inline-block px-4 py-2 rounded-full bg-green-50 text-green-700 text-sm font-semibold hover:bg-green-100 cursor-pointer">
+										{profilePhotoFileName}
+									</label>
 									<input
 										id="profile_photo"
 										type="file"
 										accept="image/*"
 										on:change={handleFileSelect}
-										class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+										class="hidden"
 									/>
 									<p class="text-xs text-gray-500 mt-1">JPG, PNG or GIF. Max size 5MB.</p>
 								</div>
@@ -1355,17 +1362,22 @@
 							<option value={option.value}>{option.label}</option>
 						{/each}
 					</select>
-					<input
-						type="file"
-						accept=".pdf,.png,.jpg,.jpeg,.webp"
-						on:change={handleVerificationDocumentSelect}
-						class="text-sm text-gray-600 file:mr-3 file:rounded-md file:border-0 file:bg-emerald-100 file:px-3 file:py-2 file:font-semibold file:text-emerald-700"
-					/>
+					<div class="relative">
+						<label class="block px-3 py-2 text-sm text-emerald-700 bg-emerald-100 rounded-md font-semibold cursor-pointer hover:bg-emerald-200 text-center">
+							{documentFileName}
+							<input
+								type="file"
+								accept=".pdf,.png,.jpg,.jpeg,.webp"
+								on:change={handleVerificationDocumentSelect}
+								class="hidden"
+							/>
+						</label>
+					</div>
 					<button
 						type="button"
 						on:click={uploadVerificationDocument}
 						disabled={!selectedDocumentFile || uploadingDocument}
-						class="px-4 py-2 rounded-md bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50"
+						class="px-4 py-2 rounded-md bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
 					>
 						{uploadingDocument ? 'Uploading...' : 'Upload document'}
 					</button>
