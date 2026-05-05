@@ -602,6 +602,7 @@
 		try {
 			const trimmedFirstName = formData.first_name.trim();
 			const trimmedLastName = formData.last_name.trim();
+			const normalizedGender = formData.gender.trim().toLowerCase();
 			const trimmedPhoneNumber = formData.phone_number.trim();
 			const trimmedCityOfBirth = formData.city_of_birth.trim();
 			const trimmedAddress = formData.address.trim();
@@ -616,6 +617,11 @@
 			const carYear = Number.isNaN(parsedCarYear) ? null : parsedCarYear;
 			if (!trimmedFirstName || !formData.gender) {
 				alert('First name and gender are required.');
+				return;
+			}
+
+			if (trimmedLastName && trimmedLastName.toLowerCase() === normalizedGender) {
+				alert('Last name cannot be the same as gender. Please enter a valid last name.');
 				return;
 			}
 
@@ -654,7 +660,7 @@
 					plate_number: trimmedPlateNumber || null,
 					proof_of_resident_type: trimmedProofOfResidentType || null,
 					gender: formData.gender,
-					bio: formData.bio || null,
+					bio: formData.bio.trim() || null,
 					languages: sanitizedLanguages,
 					ride_preferences: sanitizedRidePreferences,
 					payment_method: formData.payment_method,
@@ -682,7 +688,7 @@
 					plate_number: trimmedPlateNumber,
 					proof_of_resident_type: trimmedProofOfResidentType,
 					gender: formData.gender,
-					bio: formData.bio,
+					bio: formData.bio.trim(),
 					languages: sanitizedLanguages,
 					ride_preferences: sanitizedRidePreferences,
 					payment_method: formData.payment_method,

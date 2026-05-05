@@ -76,6 +76,28 @@
 	let privateProfileLoading = false;
 	let privateProfileError = '';
 	let privateProfileOpenInProgress = false;
+	let privateProfilePrettyJson = '';
+	let privateProfileSummary: {
+		firstName: string;
+		lastName: string;
+		email: string;
+		phone: string;
+		status: string;
+		isVerified: boolean | null;
+		emailConfirmedAt: string;
+		lastSignInAt: string;
+		provider: string;
+	} = {
+		firstName: '',
+		lastName: '',
+		email: '',
+		phone: '',
+		status: '',
+		isVerified: null,
+		emailConfirmedAt: '',
+		lastSignInAt: '',
+		provider: ''
+	};
 	const documentTypeLabelMap: Record<string, string> = {
 		identity_card: 'Identity card',
 		driver_license: 'Driver license',
@@ -1164,6 +1186,43 @@
 			.replaceAll("'", '&#39;');
 	}
 
+	function asRecord(value: unknown): Record<string, unknown> | null {
+		return value && typeof value === 'object' && !Array.isArray(value)
+			? (value as Record<string, unknown>)
+			: null;
+	}
+
+	function asString(value: unknown): string {
+		return typeof value === 'string' ? value : '';
+	}
+
+	function asBoolean(value: unknown): boolean | null {
+		return typeof value === 'boolean' ? value : null;
+	}
+
+	function buildPrivateProfileSummary(value: Record<string, unknown> | null) {
+		const root = asRecord(value);
+		const profilePart = asRecord(root?.profile) ?? root;
+		const authPart = asRecord(root?.auth);
+		const appMetadata = asRecord(authPart?.app_metadata);
+		const verified = asBoolean(profilePart?.is_verified);
+
+		return {
+			firstName: asString(profilePart?.first_name),
+			lastName: asString(profilePart?.last_name),
+			email: asString(profilePart?.email) || asString(authPart?.email),
+			phone: asString(profilePart?.phone_number) || asString(authPart?.phone),
+			status: asString(profilePart?.status),
+			isVerified: verified,
+			emailConfirmedAt: asString(authPart?.email_confirmed_at),
+			lastSignInAt: asString(authPart?.last_sign_in_at),
+			provider: asString(appMetadata?.provider)
+		};
+	}
+
+	$: privateProfilePrettyJson = privateProfile ? JSON.stringify(privateProfile, null, 2) : '';
+	$: privateProfileSummary = buildPrivateProfileSummary(privateProfile);
+
 	function buildPrivateProfileFallback(userId: string): Record<string, unknown> | null {
 		const baseUser =
 			(selectedProfile?.id === userId ? selectedProfile : users.find((u) => u.id === userId)) ?? null;
@@ -1253,9 +1312,161 @@
 			}
 
 			privateProfile = fullProfile;
-			const serialized = JSON.stringify(fullProfile, null, 2);
-			const safeContent = escapeHtml(serialized);
-			const html = `<!doctype html><html><head><meta charset="utf-8"><title>Admin Private Profile</title><style>body{font-family:ui-monospace,Menlo,Monaco,Consolas,'Courier New',monospace;padding:16px;background:#f8fafc;color:#0f172a}h1{font-size:16px;margin:0 0 12px}pre{white-space:pre-wrap;word-break:break-word;background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:12px}</style></head><body><h1>Admin Private Profile (Full Data)</h1><pre>${safeContent}</pre></body></html>`;
+			const p = (fullProfile?.profile ?? fullProfile) as Record<string, unknown>;
+			const a = (fullProfile?.auth) as Record<string, unknown> | null;
+			const am = (a?.app_metadata ?? {}) as Record<string, unknown>;
+			const um = (a?.user_metadata ?? {}) as Record<string, unknown>;
+
+			function row(label: string, value: unknown): string {
+				const v = value === null || value === undefined ? '—' : String(value);
+				return `<tr><td class="label">${escapeHtml(label)}</td><td class="value">${escapeHtml(v)}</td></tr>`;
+			}
+			function badge(text: string, color: string): string {
+				return `<span class="badge" style="background:${color}20;color:${color};border:1px solid ${color}40">${escapeHtml(text)}</span>`;
+			}
+			function fmt(iso: unknown): string {
+				if (!iso || typeof iso !== 'string') return '—';
+				try { return new Date(iso).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }); } catch { return iso; }
+			}
+			function fmtDate(iso: unknown): string {
+				if (!iso || typeof iso !== 'string') return '—';
+				try { return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }); } catch { return iso; }
+			}
+
+			const isVerified = Boolean(p?.is_verified);
+			const verifiedBadge = isVerified ? badge('Verified', '#16a34a') : badge('Unverified', '#d97706');
+			const adminBadge = p?.is_admin ? badge('Admin', '#7c3aed') : '';
+			const statusColors: Record<string, string> = { active: '#16a34a', suspended: '#d97706', banned: '#dc2626' };
+			const userStatusColor = statusColors[String(p?.user_status ?? '')] ?? '#64748b';
+			const userStatusBadge = badge(String(p?.user_status ?? 'active'), userStatusColor);
+			const providerBadge = badge(String(am?.provider ?? 'email'), '#0ea5e9');
+
+			const langRaw = p?.languages;
+			const langStr = Array.isArray(langRaw) ? langRaw.join(', ') : (langRaw ? String(langRaw) : '—');
+
+			let prefStr = '—';
+			try {
+				const raw = p?.ride_preferences;
+				const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+				prefStr = Array.isArray(parsed) ? parsed.join(', ') : String(raw ?? '—');
+			} catch { prefStr = String(p?.ride_preferences ?? '—'); }
+
+			const photoUrl = typeof p?.profile_photo_url === 'string' ? p.profile_photo_url : '';
+			const photoHtml = photoUrl
+				? `<img src="${escapeHtml(photoUrl)}" alt="Profile photo" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid #e2e8f0;margin-bottom:8px">`
+				: `<div style="width:80px;height:80px;border-radius:50%;background:#e2e8f0;display:flex;align-items:center;justify-content:center;font-size:28px;margin-bottom:8px">👤</div>`;
+
+			const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin — Private Profile #${escapeHtml(String(p?.public_id ?? ''))}</title><style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:#f1f5f9;color:#0f172a;min-height:100vh;padding:24px}
+.page{max-width:860px;margin:0 auto}
+h1{font-size:20px;font-weight:700;color:#0f172a;margin-bottom:4px}
+.subtitle{font-size:13px;color:#64748b;margin-bottom:24px}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;margin-bottom:16px;overflow:hidden}
+.card-header{padding:14px 18px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:10px}
+.card-header h2{font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#475569}
+.card-body{padding:18px}
+.hero{display:flex;align-items:flex-start;gap:18px;padding:18px}
+.hero-info h2{font-size:18px;font-weight:700;margin-bottom:4px}
+.hero-info p{font-size:13px;color:#64748b;margin-bottom:8px}
+.badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.badge{display:inline-block;padding:2px 9px;border-radius:99px;font-size:11px;font-weight:600}
+table{width:100%;border-collapse:collapse}
+td{padding:8px 12px;font-size:13px;border-bottom:1px solid #f1f5f9;vertical-align:top}
+td.label{width:42%;font-weight:500;color:#64748b}
+td.value{color:#0f172a;word-break:break-word}
+tr:last-child td{border-bottom:none}
+.icon{font-size:16px;flex-shrink:0}
+details summary{cursor:pointer;font-size:13px;font-weight:600;color:#2563eb;padding:12px 18px;user-select:none}
+details summary:hover{color:#1d4ed8}
+pre{background:#f8fafc;border-top:1px solid #e2e8f0;padding:16px;font-size:12px;font-family:ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-word;overflow:auto;max-height:400px}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:0}
+@media(max-width:600px){.grid-2{grid-template-columns:1fr}.hero{flex-direction:column}}
+.section-icon{width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+.ts{font-size:11px;color:#94a3b8;margin-top:16px;text-align:right}
+</style></head><body><div class="page">
+<h1>Admin Private Profile</h1>
+<p class="subtitle">Full data — confidential, admin access only</p>
+
+<div class="card">
+  <div class="hero">
+    ${photoHtml}
+    <div class="hero-info">
+      <h2>${escapeHtml(String(p?.first_name ?? '—'))}${p?.last_name ? ' ' + escapeHtml(String(p.last_name)) : ''}</h2>
+      <p>${escapeHtml(String(a?.email ?? p?.email ?? '—'))}</p>
+      <div class="badges">${verifiedBadge}${adminBadge}${userStatusBadge}${providerBadge}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><span class="section-icon">👤</span><h2>Personal Information</h2></div>
+  <div class="grid-2">
+    <table>
+      ${row('Public ID', '#' + String(p?.public_id ?? '—'))}
+      ${row('First name', p?.first_name)}
+      ${row('Last name', p?.last_name ?? null)}
+      ${row('Gender', p?.gender)}
+      ${row('Date of birth', fmtDate(p?.date_of_birth))}
+      ${row('City of birth', p?.city_of_birth)}
+    </table>
+    <table>
+      ${row('Phone', p?.phone_number)}
+      ${row('Address', p?.address)}
+      ${row('Zip code', p?.zip_code)}
+      ${row('Languages', langStr)}
+      ${row('Ride preferences', prefStr)}
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><span class="section-icon">🚗</span><h2>Vehicle & Documents</h2></div>
+  <div class="grid-2">
+    <table>
+      ${row('Car make', p?.car_make)}
+      ${row('Car year', p?.car_year)}
+      ${row('Plate number', p?.plate_number)}
+    </table>
+    <table>
+      ${row('Insurance', p?.insurance_company)}
+      ${row('Resident proof type', p?.proof_of_resident_type)}
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><span class="section-icon">💳</span><h2>Payment & Payout</h2></div>
+  <table>
+    ${row('Method', p?.payment_method)}
+    ${row('PayPal email', p?.paypal_email)}
+    ${row('Venmo handle', p?.venmo_handle)}
+  </table>
+</div>
+
+<div class="card">
+  <div class="card-header"><span class="section-icon">🔐</span><h2>Auth & Account</h2></div>
+  <div class="grid-2">
+    <table>
+      ${row('Email', a?.email)}
+      ${row('Phone (auth)', a?.phone || '—')}
+      ${row('Provider', am?.provider)}
+      ${row('Email confirmed', fmt(a?.email_confirmed_at))}
+    </table>
+    <table>
+      ${row('Account created', fmt(a?.created_at))}
+      ${row('Last sign-in', fmt(a?.last_sign_in_at))}
+      ${row('Profile created', fmt(p?.created_at))}
+      ${row('Profile updated', fmt(p?.updated_at))}
+    </table>
+  </div>
+  ${um?.status ? `<table><tr><td class="label">Status (auth metadata)</td><td class="value">${escapeHtml(String(um.status))}</td></tr></table>` : ''}
+</div>
+
+${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon">📝</span><h2>Bio</h2></div><div class="card-body" style="font-size:14px;line-height:1.6;white-space:pre-wrap">${escapeHtml(String(p.bio))}</div></div>` : ''}
+
+<p class="ts">Generated ${new Date().toLocaleString('en-US', { dateStyle: 'full', timeStyle: 'short' })}</p>
+</div></body></html>`;
 
 			if (opened) {
 				opened.document.open();
@@ -5072,10 +5283,45 @@
 						{#if privateProfileError}
 							<p class="text-sm bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 mb-2">{privateProfileError}</p>
 						{/if}
+						{#if privateProfile && !privateProfileLoading && !privateProfileError}
+							<div class="rounded-lg border border-gray-200 bg-gray-50 p-3 mb-3">
+								<div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+									<div>
+										<p class="text-xs text-gray-500">Name</p>
+										<p class="font-medium text-gray-900">{privateProfileSummary.firstName || '-'} {privateProfileSummary.lastName || ''}</p>
+									</div>
+									<div>
+										<p class="text-xs text-gray-500">Email</p>
+										<p class="font-medium text-gray-900 break-all">{privateProfileSummary.email || '-'}</p>
+									</div>
+									<div>
+										<p class="text-xs text-gray-500">Phone</p>
+										<p class="font-medium text-gray-900">{privateProfileSummary.phone || '-'}</p>
+									</div>
+									<div>
+										<p class="text-xs text-gray-500">Verification status</p>
+										<p class="font-medium {privateProfileSummary.isVerified ? 'text-emerald-700' : 'text-amber-700'}">
+											{privateProfileSummary.status || (privateProfileSummary.isVerified ? 'Verified' : 'Unverified')}
+										</p>
+									</div>
+									<div>
+										<p class="text-xs text-gray-500">Auth provider</p>
+										<p class="font-medium text-gray-900">{privateProfileSummary.provider || '-'}</p>
+									</div>
+									<div>
+										<p class="text-xs text-gray-500">Last sign-in</p>
+										<p class="font-medium text-gray-900">
+											{privateProfileSummary.lastSignInAt ? new Date(privateProfileSummary.lastSignInAt).toLocaleString('en-US') : '-'}
+										</p>
+									</div>
+								</div>
+							</div>
+
+						{/if}
 						<button
 							type="button"
-							disabled={privateProfileOpenInProgress}
-							on:click={() => openPrivateProfileJson(selectedProfile.id)}
+							disabled={privateProfileOpenInProgress || !selectedProfile}
+							on:click={() => selectedProfile && openPrivateProfileJson(selectedProfile.id)}
 							class="px-3 py-2 rounded-lg border border-blue-300 text-blue-700 bg-blue-50 text-xs font-medium hover:bg-blue-100 disabled:opacity-50"
 						>
 							{privateProfileOpenInProgress ? 'Opening...' : 'Open full profile in new window'}

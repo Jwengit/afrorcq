@@ -6,6 +6,10 @@ const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
 const BUCKET = 'verification-documents';
 
+function resolveVerificationLabel(isVerified: boolean): 'Verified' | 'Unverified' {
+  return isVerified ? 'Verified' : 'Unverified';
+}
+
 function normalizeLegacyStatus(status: 'approved' | 'rejected'): string {
   return status === 'approved' ? 'Approved' : 'Rejected';
 }
@@ -294,14 +298,22 @@ export const PATCH: RequestHandler = async ({ request }) => {
     if (status === 'approved') {
       await adminClient
         .from('profiles')
-        .update({ is_verified: true, updated_at: new Date().toISOString() })
+        .update({
+          is_verified: true,
+          status: resolveVerificationLabel(true),
+          updated_at: new Date().toISOString()
+        })
         .eq('id', existingDoc.user_id);
     }
 
     if (status === 'rejected') {
       await adminClient
         .from('profiles')
-        .update({ is_verified: false, updated_at: new Date().toISOString() })
+        .update({
+          is_verified: false,
+          status: resolveVerificationLabel(false),
+          updated_at: new Date().toISOString()
+        })
         .eq('id', existingDoc.user_id);
     }
 

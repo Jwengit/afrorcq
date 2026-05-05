@@ -27,6 +27,28 @@ const PROFILE_SELECT_WITHOUT_RATING =
 const PROFILE_SELECT_BASE =
 	'id, first_name, last_name, email, phone_number, gender, is_admin, is_verified, user_status, created_at';
 
+function resolveVerificationLabel(isVerified: boolean): 'Verified' | 'Unverified' {
+	return isVerified ? 'Verified' : 'Unverified';
+}
+
+function normalizeNameValue(value: string | null): string | null {
+	if (!value) {
+		return null;
+	}
+
+	const normalized = value.trim();
+	if (!normalized) {
+		return null;
+	}
+
+	const lowered = normalized.toLowerCase();
+	if (lowered === 'male' || lowered === 'female') {
+		return null;
+	}
+
+	return normalized;
+}
+
 function isMissingAverageRatingColumnError(error: { message?: string } | null): boolean {
 	if (!error?.message) {
 		return false;
@@ -282,8 +304,10 @@ export const PATCH: RequestHandler = async ({ request }) => {
 				: null;
 		const value = typeof body.value === 'boolean' ? body.value : typeof body.value === 'string' ? body.value : null;
 		const email = typeof body.email === 'string' ? body.email : null;
-		const firstName = typeof body.firstName === 'string' && body.firstName.trim() ? body.firstName.trim() : 'User';
-		const lastName = typeof body.lastName === 'string' && body.lastName.trim() ? body.lastName.trim() : null;
+		const rawFirstName = typeof body.firstName === 'string' && body.firstName.trim() ? body.firstName.trim() : 'User';
+		const firstName = normalizeNameValue(rawFirstName) ?? 'User';
+		const rawLastName = typeof body.lastName === 'string' && body.lastName.trim() ? body.lastName.trim() : null;
+		const lastName = normalizeNameValue(rawLastName);
 
 		if (!userId || !field || value === null) {
 			return json({ error: 'Invalid payload' }, { status: 400 });
@@ -322,6 +346,10 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		if (field === 'is_admin' || field === 'is_verified') {
 			payload.first_name = firstName;
 			payload.last_name = lastName;
+		}
+
+		if (field === 'is_verified' && typeof value === 'boolean') {
+			payload.status = resolveVerificationLabel(value);
 		}
 
 		payload[field] = value;

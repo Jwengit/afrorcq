@@ -5,6 +5,47 @@ import { env } from '$env/dynamic/private';
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
 
+const SENSITIVE_METADATA_KEYS = new Set([
+  'recaptcha_token',
+  'captcha_token',
+  'access_token',
+  'refresh_token',
+  'token',
+  'secret',
+  'password'
+]);
+
+function sanitizeUserMetadata(
+  value: unknown,
+  normalizedStatus?: 'Verified' | 'Unverified'
+): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+
+  const input = value as Record<string, unknown>;
+  const sanitized: Record<string, unknown> = {};
+
+  for (const [key, item] of Object.entries(input)) {
+    if (SENSITIVE_METADATA_KEYS.has(key.toLowerCase())) {
+      sanitized[key] = '[REDACTED]';
+      continue;
+    }
+
+    sanitized[key] = item;
+  }
+
+  if (normalizedStatus) {
+    sanitized.status = normalizedStatus;
+  }
+
+  return sanitized;
+}
+
+function resolveVerificationLabel(isVerified: boolean): 'Verified' | 'Unverified' {
+  return isVerified ? 'Verified' : 'Unverified';
+}
+
 function getBearerToken(request: Request): string | null {
   const authHeader = request.headers.get('authorization');
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -88,8 +129,27 @@ export const GET: RequestHandler = async ({ request, url }) => {
     }
 
     const authUser = authUserData?.user ?? null;
+    const normalizedStatus = resolveVerificationLabel(Boolean(profile?.is_verified));
+    const profileForResponse = profile
+      ? {
+          ...profile,
+          status: normalizedStatus
+        }
+      : null;
 
-    if (!authUser && !profile) {
+    const sanitizedAuth = {
+      id: authUser?.id ?? profile?.id ?? userId,
+      email: authUser?.email ?? null,
+      phone: authUser?.phone ?? null,
+      created_at: authUser?.created_at ?? null,
+      email_confirmed_at: authUser?.email_confirmed_at ?? null,
+      confirmed_at: authUser?.confirmed_at ?? null,
+      last_sign_in_at: authUser?.last_sign_in_at ?? null,
+      app_metadata: authUser?.app_metadata ?? {},
+      user_metadata: sanitizeUserMetadata(authUser?.user_metadata ?? {}, normalizedStatus)
+    };
+
+    if (!authUser && !profileForResponse) {
       return json({
         profile: null,
         auth: null,
@@ -102,31 +162,11 @@ export const GET: RequestHandler = async ({ request, url }) => {
     }
 
     return json({
-      profile: profile ?? null,
-      auth: {
-        id: authUser?.id ?? profile?.id ?? userId,
-        email: authUser?.email ?? null,
-        phone: authUser?.phone ?? null,
-        created_at: authUser?.created_at ?? null,
-        email_confirmed_at: authUser?.email_confirmed_at ?? null,
-        confirmed_at: authUser?.confirmed_at ?? null,
-        last_sign_in_at: authUser?.last_sign_in_at ?? null,
-        app_metadata: authUser?.app_metadata ?? {},
-        user_metadata: authUser?.user_metadata ?? {}
-      },
+      profile: profileForResponse,
+      auth: sanitizedAuth,
       full_profile: {
-        profile: profile ?? null,
-        auth: {
-          id: authUser?.id ?? profile?.id ?? userId,
-          email: authUser?.email ?? null,
-          phone: authUser?.phone ?? null,
-          created_at: authUser?.created_at ?? null,
-          email_confirmed_at: authUser?.email_confirmed_at ?? null,
-          confirmed_at: authUser?.confirmed_at ?? null,
-          last_sign_in_at: authUser?.last_sign_in_at ?? null,
-          app_metadata: authUser?.app_metadata ?? {},
-          user_metadata: authUser?.user_metadata ?? {}
-        }
+        profile: profileForResponse,
+        auth: sanitizedAuth
       },
       warning: authUserError?.message ?? null
     });
