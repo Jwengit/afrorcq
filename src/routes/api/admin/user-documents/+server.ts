@@ -63,23 +63,14 @@ function resolveRowDocumentType(row: AdminDocumentRow): string {
   return row.document_type ?? row.doc_type ?? row.type ?? 'other';
 }
 
-type VerificationDocumentsReader = {
-  from: (table: 'verification_documents') => {
-    select: (columns: string) => {
-      eq: (column: 'user_id', value: string) => Promise<{
-        data: Array<{
-          document_type?: string | null;
-          doc_type?: string | null;
-          type?: string | null;
-          status?: string | null;
-        }> | null;
-        error: { message: string } | null;
-      }>;
-    };
-  };
+type VerificationDocumentStatusRow = {
+  document_type?: string | null;
+  doc_type?: string | null;
+  type?: string | null;
+  status?: string | null;
 };
 
-async function shouldMarkProfileVerified(adminClient: VerificationDocumentsReader, userId: string): Promise<boolean> {
+async function shouldMarkProfileVerified(adminClient: any, userId: string): Promise<boolean> {
   const { data, error } = await adminClient
     .from('verification_documents')
     .select('document_type, doc_type, type, status')
@@ -89,8 +80,9 @@ async function shouldMarkProfileVerified(adminClient: VerificationDocumentsReade
     throw error;
   }
 
+  const rows = (data ?? []) as VerificationDocumentStatusRow[];
   const approvedTypes = new Set(
-    ((data ?? []) as Array<{ document_type?: string | null; doc_type?: string | null; type?: string | null; status?: string | null }> )
+    rows
       .filter((doc) => isApprovedStatus(doc.status))
       .map((doc) => normalizeDocumentType(doc.document_type ?? doc.doc_type ?? doc.type ?? ''))
       .filter(Boolean)
