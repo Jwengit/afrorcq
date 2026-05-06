@@ -50,6 +50,8 @@
 	});
 
 	onMount(async () => {
+		applyPrefilledRouteFromUrl();
+
 		await ensureAuthenticatedUser();
 
 		if (!currentUser) {
@@ -63,6 +65,24 @@
 		await loadPublishingEligibility(currentUser.id);
 		loading = false;
 	});
+
+	function applyPrefilledRouteFromUrl() {
+		if (!browser) {
+			return;
+		}
+
+		const params = new URLSearchParams(window.location.search);
+		const departure = params.get('departure')?.trim() ?? '';
+		const arrival = params.get('arrival')?.trim() ?? '';
+
+		if (departure) {
+			form.departure = departure;
+		}
+
+		if (arrival) {
+			form.arrival = arrival;
+		}
+	}
 
 	async function ensureAuthenticatedUser() {
 		if (currentUser) {

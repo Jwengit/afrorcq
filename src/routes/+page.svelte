@@ -23,11 +23,18 @@
 	let footerTermsOfServiceUrl = '/terms';
 	user.subscribe((u) => (currentUser = u));
 
-	function handlePublishClick() {
+	function handlePublishClick(departure?: string, arrival?: string) {
 		if (!currentUser) {
 			goto('/auth/login');
 			return;
 		}
+
+		if (departure && arrival) {
+			const params = new URLSearchParams({ departure, arrival });
+			goto(`/publish-ride?${params.toString()}`);
+			return;
+		}
+
 		goto('/publish-ride');
 	}
 
@@ -47,6 +54,20 @@
 		}
 
 		goto(`/search${params.toString() ? `?${params.toString()}` : ''}`);
+	}
+
+	function handlePopularRideSearch(departure: string, arrival: string) {
+		const params = new URLSearchParams();
+		params.set('departure', departure);
+		params.set('arrival', arrival);
+		if (searchDate) {
+			params.set('date', searchDate);
+		}
+		if (searchSeats > 0) {
+			params.set('seats', String(searchSeats));
+		}
+
+		goto(`/search?${params.toString()}`);
 	}
 
 	onMount(async () => {
@@ -160,6 +181,59 @@
 		</div>
 	</section>
 
+	<!-- Most Popular Rides Section -->
+	<section id="popular-rides" class="py-10 px-4 bg-white">
+		<div class="max-w-7xl mx-auto text-center">
+			<h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-12">
+				Most popular rides
+			</h2>
+			<div class="grid md:grid-cols-3 gap-8 text-gray-800">
+				<div class="flex flex-col items-center gap-6">
+					<h3 class="text-xl font-semibold">Provo &harr; Rexbury</h3>
+					<div class="flex justify-center gap-4">
+						<button type="button" on:click={() => handlePublishClick('Provo', 'Rexbury')} class="bg-white text-gray-900 border border-gray-300 px-8 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition">Post</button>
+						<button
+							type="button"
+							on:click={() => handlePopularRideSearch('Provo', 'Rexbury')}
+							class="text-white px-8 py-3 rounded-lg font-bold text-center transition hover:opacity-90"
+							style="background-color: #2BB573;"
+						>
+							Search
+						</button>
+					</div>
+				</div>
+				<div class="flex flex-col items-center gap-6">
+					<h3 class="text-xl font-semibold">Salt Lake City &harr; Las Vegas</h3>
+					<div class="flex justify-center gap-4">
+						<button type="button" on:click={() => handlePublishClick('Salt Lake City', 'Las Vegas')} class="bg-white text-gray-900 border border-gray-300 px-8 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition">Post</button>
+						<button
+							type="button"
+							on:click={() => handlePopularRideSearch('Salt Lake City', 'Las Vegas')}
+							class="text-white px-8 py-3 rounded-lg font-bold text-center transition hover:opacity-90"
+							style="background-color: #2BB573;"
+						>
+							Search
+						</button>
+					</div>
+				</div>
+				<div class="flex flex-col items-center gap-6">
+					<h3 class="text-xl font-semibold">Salt Lake City &harr; Los Angeles</h3>
+					<div class="flex justify-center gap-4">
+						<button type="button" on:click={() => handlePublishClick('Salt Lake City', 'Los Angeles')} class="bg-white text-gray-900 border border-gray-300 px-8 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition">Post</button>
+						<button
+							type="button"
+							on:click={() => handlePopularRideSearch('Salt Lake City', 'Los Angeles')}
+							class="text-white px-8 py-3 rounded-lg font-bold text-center transition hover:opacity-90"
+							style="background-color: #2BB573;"
+						>
+							Search
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	</section>
+
 	<!-- Features Section -->
 	<section id="features" class="py-20 bg-white">
 		<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -248,38 +322,6 @@
 					</div>
 					<h3 class="text-xl font-semibold mb-2">3. Travel together</h3>
 					<p class="text-gray-600">Meet your driver, enjoy the ride, and save money while reducing your carbon footprint.</p>
-				</div>
-			</div>
-		</div>
-	</section>
-
-	<!-- Most Popular Rides Section -->
-	<section id="popular-rides" class="py-10 px-4 bg-white">
-		<div class="max-w-7xl mx-auto text-center">
-			<h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-12">
-				Most popular rides
-			</h2>
-			<div class="grid md:grid-cols-3 gap-8 text-gray-800">
-				<div class="flex flex-col items-center gap-6">
-					<h3 class="text-xl font-semibold">Utah &harr; Idaho</h3>
-					<div class="flex justify-center gap-4">
-						<button type="button" on:click={handlePublishClick} class="bg-white text-gray-900 border border-gray-300 px-8 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition">Post</button>
-						<a href="#search" class="text-white px-8 py-3 rounded-lg font-bold text-center transition hover:opacity-90" style="background-color: #2BB573;">Search</a>
-					</div>
-				</div>
-				<div class="flex flex-col items-center gap-6">
-					<h3 class="text-xl font-semibold">Utah &harr; Nevada</h3>
-					<div class="flex justify-center gap-4">
-						<button type="button" on:click={handlePublishClick} class="bg-white text-gray-900 border border-gray-300 px-8 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition">Post</button>
-						<a href="#search" class="text-white px-8 py-3 rounded-lg font-bold text-center transition hover:opacity-90" style="background-color: #2BB573;">Search</a>
-					</div>
-				</div>
-				<div class="flex flex-col items-center gap-6">
-					<h3 class="text-xl font-semibold">Utah &harr; California</h3>
-					<div class="flex justify-center gap-4">
-						<button type="button" on:click={handlePublishClick} class="bg-white text-gray-900 border border-gray-300 px-8 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition">Post</button>
-						<a href="#search" class="text-white px-8 py-3 rounded-lg font-bold text-center transition hover:opacity-90" style="background-color: #2BB573;">Search</a>
-					</div>
 				</div>
 			</div>
 		</div>
