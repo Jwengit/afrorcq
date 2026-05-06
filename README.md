@@ -24,8 +24,9 @@ PAYPAL_MODE=sandbox
 Note: `SUPABASE_SERVICE_ROLE_KEY` is required for admin APIs (`/api/admin/users` and `/api/admin/overview`).
 Do not expose this key in client code.
 `PAYPAL_CLIENT_SECRET` must never be exposed in client code.
-`VITE_SUPABASE_PERSIST_SESSION` controls "remember me" behavior for Supabase auth in production.
-Set it to `true` to keep users logged in across browser restarts, or `false` to require login again.
+`VITE_SUPABASE_PERSIST_SESSION` controls whether auth survives a full browser restart.
+Set it to `true` to keep users logged in across browser restarts via `localStorage`.
+Set it to `false` to keep users logged in only for the current browser session via `sessionStorage`.
 
 ### Supabase Configuration
 
