@@ -5,6 +5,12 @@ import { env } from '$env/dynamic/private';
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
 const BUCKET = 'verification-documents';
+const REQUIRED_VERIFICATION_DOCUMENT_TYPES = [
+  'identity_card',
+  'driver_license',
+  'insurance',
+  'vehicle_registration'
+] as const;
 
 function resolveVerificationLabel(isVerified: boolean): 'Verified' | 'Unverified' {
   return isVerified ? 'Verified' : 'Unverified';
@@ -12,6 +18,21 @@ function resolveVerificationLabel(isVerified: boolean): 'Verified' | 'Unverified
 
 function normalizeLegacyStatus(status: 'approved' | 'rejected'): string {
   return status === 'approved' ? 'Approved' : 'Rejected';
+}
+
+function normalizeDocumentType(value: string | null | undefined): string {
+  const normalized = (value || '').trim().toLowerCase();
+
+  if (normalized === 'identity' || normalized === 'id_card') return 'identity_card';
+  if (normalized === 'license' || normalized === 'driving_license') return 'driver_license';
+  if (normalized === 'insurance_proof') return 'insurance';
+  if (normalized === 'registration' || normalized === 'vehicle_papers') return 'vehicle_registration';
+
+  return normalized;
+}
+
+function isApprovedStatus(value: string | null | undefined): boolean {
+  return (value || '').trim().toLowerCase() === 'approved';
 }
 
 function isStatusConstraintError(message: string | undefined): boolean {
@@ -38,8 +59,44 @@ type AdminDocumentRow = {
   updated_at: string;
 };
 
-function normalizeDocumentType(row: AdminDocumentRow): string {
+function resolveRowDocumentType(row: AdminDocumentRow): string {
   return row.document_type ?? row.doc_type ?? row.type ?? 'other';
+}
+
+type VerificationDocumentsReader = {
+  from: (table: 'verification_documents') => {
+    select: (columns: string) => {
+      eq: (column: 'user_id', value: string) => Promise<{
+        data: Array<{
+          document_type?: string | null;
+          doc_type?: string | null;
+          type?: string | null;
+          status?: string | null;
+        }> | null;
+        error: { message: string } | null;
+      }>;
+    };
+  };
+};
+
+async function shouldMarkProfileVerified(adminClient: VerificationDocumentsReader, userId: string): Promise<boolean> {
+  const { data, error } = await adminClient
+    .from('verification_documents')
+    .select('document_type, doc_type, type, status')
+    .eq('user_id', userId);
+
+  if (error) {
+    throw error;
+  }
+
+  const approvedTypes = new Set(
+    ((data ?? []) as Array<{ document_type?: string | null; doc_type?: string | null; type?: string | null; status?: string | null }> )
+      .filter((doc) => isApprovedStatus(doc.status))
+      .map((doc) => normalizeDocumentType(doc.document_type ?? doc.doc_type ?? doc.type ?? ''))
+      .filter(Boolean)
+  );
+
+  return REQUIRED_VERIFICATION_DOCUMENT_TYPES.every((documentType) => approvedTypes.has(documentType));
 }
 
 function getBearerToken(request: Request): string | null {
@@ -128,7 +185,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
     if (!primaryQuery.error) {
       docs = ((primaryQuery.data ?? []) as unknown as AdminDocumentRow[]).map((doc) => ({
         ...doc,
-        document_type: normalizeDocumentType(doc)
+        document_type: resolveRowDocumentType(doc)
       }));
 
       if (docs.some((doc) => !doc.document_type || doc.document_type === 'other')) {
@@ -172,7 +229,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
       if (!fallbackDocTypeQuery.error) {
         docs = ((fallbackDocTypeQuery.data ?? []) as unknown as AdminDocumentRow[]).map((doc) => ({
           ...doc,
-          document_type: normalizeDocumentType(doc)
+          document_type: resolveRowDocumentType(doc)
         }));
       } else {
         const fallbackTypeQuery = await adminClient
@@ -187,7 +244,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
 
         docs = ((fallbackTypeQuery.data ?? []) as unknown as AdminDocumentRow[]).map((doc) => ({
           ...doc,
-          document_type: normalizeDocumentType(doc)
+          document_type: resolveRowDocumentType(doc)
         }));
       }
     }
@@ -295,27 +352,18 @@ export const PATCH: RequestHandler = async ({ request }) => {
       return json({ error: effectiveUpdateError.message }, { status: 500 });
     }
 
-    if (status === 'approved') {
-      await adminClient
-        .from('profiles')
-        .update({
-          is_verified: true,
-          status: resolveVerificationLabel(true),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', existingDoc.user_id);
-    }
+    const isVerified = status === 'approved'
+      ? await shouldMarkProfileVerified(adminClient, existingDoc.user_id)
+      : false;
 
-    if (status === 'rejected') {
-      await adminClient
-        .from('profiles')
-        .update({
-          is_verified: false,
-          status: resolveVerificationLabel(false),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', existingDoc.user_id);
-    }
+    await adminClient
+      .from('profiles')
+      .update({
+        is_verified: isVerified,
+        status: resolveVerificationLabel(isVerified),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', existingDoc.user_id);
 
     return json({ success: true });
   } catch (error) {
