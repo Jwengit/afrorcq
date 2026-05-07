@@ -7,6 +7,10 @@ const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
 const BUCKET = 'verification-documents';
 const REQUIRED_VERIFICATION_DOCUMENT_TYPES = [
   'identity_card',
+  'proof_of_address'
+] as const;
+
+const DRIVER_REQUIRED_DOCUMENT_TYPES = [
   'driver_license',
   'insurance',
   'vehicle_registration'
@@ -71,24 +75,46 @@ type VerificationDocumentStatusRow = {
 };
 
 async function shouldMarkProfileVerified(adminClient: any, userId: string): Promise<boolean> {
-  const { data, error } = await adminClient
-    .from('verification_documents')
-    .select('document_type, doc_type, type, status')
-    .eq('user_id', userId);
+  try {
+    // Fetch approved document types for this user
+    const { data, error } = await adminClient
+      .from('verification_documents')
+      .select('document_type, status')
+      .eq('user_id', userId);
 
-  if (error) {
-    throw error;
+    if (error) {
+      return false;
+    }
+
+    const rows = (data ?? []) as Array<{ document_type?: string | null; status?: string | null }>;
+    const approvedTypes = new Set(
+      rows
+        .filter((doc) => isApprovedStatus(doc.status))
+        .map((doc) => normalizeDocumentType(doc.document_type ?? ''))
+        .filter(Boolean)
+    );
+
+    // All users need base documents
+    const hasBase = REQUIRED_VERIFICATION_DOCUMENT_TYPES.every((t) => approvedTypes.has(t));
+    if (!hasBase) return false;
+
+    // Check if user is a driver (has plate_number or car_make)
+    const { data: profile } = await adminClient
+      .from('profiles')
+      .select('plate_number, car_make')
+      .eq('id', userId)
+      .maybeSingle();
+
+    const isDriver = Boolean(profile?.plate_number || profile?.car_make);
+
+    if (isDriver) {
+      return DRIVER_REQUIRED_DOCUMENT_TYPES.every((t) => approvedTypes.has(t));
+    }
+
+    return true;
+  } catch {
+    return false;
   }
-
-  const rows = (data ?? []) as VerificationDocumentStatusRow[];
-  const approvedTypes = new Set(
-    rows
-      .filter((doc) => isApprovedStatus(doc.status))
-      .map((doc) => normalizeDocumentType(doc.document_type ?? doc.doc_type ?? doc.type ?? ''))
-      .filter(Boolean)
-  );
-
-  return REQUIRED_VERIFICATION_DOCUMENT_TYPES.every((documentType) => approvedTypes.has(documentType));
 }
 
 function getBearerToken(request: Request): string | null {

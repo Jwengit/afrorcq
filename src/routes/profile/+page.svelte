@@ -97,6 +97,7 @@
 	let selectedDocumentType = 'identity_card';
 	let selectedDocumentFile: File | null = null;
 	let documentFileName = 'Choose a file';
+	let documentFileInput: HTMLInputElement;
 
 	const documentTypeOptions = [
 		{ value: 'identity_card', label: 'Identity card' },
@@ -125,14 +126,11 @@
 		vehicle_papers: 'Vehicle registration'
 	};
 
-	const requiredVerificationDocumentTypes = [
-		'identity_card',
-		'driver_license',
-		'insurance',
-		'vehicle_registration'
-	] as const;
+	const baseRequiredDocumentTypes = ['identity_card', 'proof_of_address'] as const;
+	const driverOnlyDocumentTypes = ['driver_license', 'insurance', 'vehicle_registration'] as const;
+	const allKnownRequiredTypes = [...baseRequiredDocumentTypes, ...driverOnlyDocumentTypes] as const;
 
-	type RequiredVerificationDocumentType = (typeof requiredVerificationDocumentTypes)[number];
+	type RequiredVerificationDocumentType = (typeof allKnownRequiredTypes)[number];
 
 	function normalizeVerificationDocumentType(value: string | null | undefined): string {
 		const normalized = (value || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
@@ -144,7 +142,7 @@
 	}
 
 	function isRequiredVerificationDocumentType(value: string): value is RequiredVerificationDocumentType {
-		return requiredVerificationDocumentTypes.includes(value as RequiredVerificationDocumentType);
+		return allKnownRequiredTypes.includes(value as RequiredVerificationDocumentType);
 	}
 
 	function isApprovedVerificationStatus(value: string | null | undefined): boolean {
@@ -155,7 +153,15 @@
 		return (value || '').trim().toLowerCase() === 'pending';
 	}
 
-	$: isProfileInfoComplete = Boolean(profile.first_name && profile.last_name && profile.gender);
+	$: isProfileInfoComplete =
+		Boolean(profile.first_name && profile.last_name && profile.gender) &&
+		missingRequiredDocumentTypes.length === 0;
+
+	$: isDriver = Boolean(profile.plate_number || profile.car_make);
+
+	$: requiredVerificationDocumentTypes = isDriver
+		? allKnownRequiredTypes
+		: baseRequiredDocumentTypes;
 
 	$: approvedRequiredDocumentTypes = new Set(
 		verificationDocuments
@@ -164,7 +170,7 @@
 			.filter((documentType) => isRequiredVerificationDocumentType(documentType))
 	);
 
-	$: missingRequiredDocumentTypes = requiredVerificationDocumentTypes.filter(
+	$: missingRequiredDocumentTypes = (requiredVerificationDocumentTypes as readonly string[]).filter(
 		(documentType) => !approvedRequiredDocumentTypes.has(documentType)
 	);
 
@@ -179,7 +185,7 @@
 			? 'Pending review'
 			: 'Unverified';
 
-	$: approvedRequiredCount = requiredVerificationDocumentTypes.length - missingRequiredDocumentTypes.length;
+	$: approvedRequiredCount = (requiredVerificationDocumentTypes as readonly string[]).length - missingRequiredDocumentTypes.length;
 
 	// Available options
 	const genderOptions = [
@@ -549,6 +555,8 @@
 
 			documentsMessage = 'Document uploaded. It is now pending admin review.';
 			selectedDocumentFile = null;
+			documentFileName = 'Choose a file';
+			if (documentFileInput) documentFileInput.value = '';
 			await loadVerificationDocuments();
 		} catch (error) {
 			documentsError = error instanceof Error ? error.message : 'Unable to upload document.';
@@ -630,24 +638,25 @@
 	}
 
 	async function uploadPhoto(file: File): Promise<string | null> {
-		const fileExt = file.name.split('.').pop();
-		const fileName = `${currentUser!.id}_${Date.now()}.${fileExt}`;
-		const filePath = `${currentUser!.id}/${fileName}`;
+		const token = await getSessionAccessToken();
+		if (!token) return null;
 
-		const { error: uploadError } = await supabase.storage
-			.from('profile-photos')
-			.upload(filePath, file);
+		const formData = new FormData();
+		formData.append('file', file);
 
-		if (uploadError) {
-			console.error('Error uploading file:', uploadError);
+		const response = await fetch('/api/profile/photo', {
+			method: 'POST',
+			headers: { Authorization: `Bearer ${token}` },
+			body: formData
+		});
+
+		const payload = await response.json();
+		if (!response.ok) {
+			console.error('Error uploading photo:', payload?.error);
 			return null;
 		}
 
-		const { data } = supabase.storage
-			.from('profile-photos')
-			.getPublicUrl(filePath);
-
-		return data.publicUrl;
+		return payload.publicUrl ?? null;
 	}
 
 	async function saveProfile() {
@@ -671,8 +680,8 @@
 			const trimmedVenmoHandle = formData.venmo_handle.trim();
 			const parsedCarYear = Number.parseInt(formData.car_year, 10);
 			const carYear = Number.isNaN(parsedCarYear) ? null : parsedCarYear;
-			if (!trimmedFirstName || !formData.gender) {
-				alert('First name and gender are required.');
+if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
+					alert('First name, last name and gender are required.');
 				return;
 			}
 
@@ -692,7 +701,8 @@
 			if (selectedFile) {
 				const uploadedUrl = await uploadPhoto(selectedFile);
 				if (!uploadedUrl) {
-					alert('Error uploading profile photo. Please try again.');
+					profileError = 'Error uploading profile photo. Please check the file and try again.';
+					saving = false;
 					return;
 				}
 
@@ -1164,12 +1174,13 @@
 
 							<div>
 								<label for="last_name" class="block text-sm font-medium text-gray-700 mb-2">
-									Last Name
+									Last Name <span class="text-red-500">*</span>
 								</label>
 								<input
 									type="text"
 									id="last_name"
 									bind:value={formData.last_name}
+									required
 									class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
 									placeholder="Enter your last name"
 								/>
@@ -1419,7 +1430,12 @@
 						<h2 class="text-xl font-semibold text-slate-900">Verification Documents</h2>
 						<p class="text-sm text-slate-600 mt-1">Upload required documents so admins can verify your account.</p>
 						<p class="text-xs text-slate-500 mt-1">
-							Required for verification: Identity card, Driver license, Insurance proof, Vehicle registration.
+							{#if isDriver}
+								As a driver: Driver's license, Car insurance, Vehicle registration, Identity card, Proof of address.
+							{:else}
+								As a passenger: Identity card, Proof of address.
+								Add your car info to register as a driver.
+							{/if}
 						</p>
 					</div>
 					<div class="text-sm text-slate-500">
@@ -1446,6 +1462,7 @@
 						<label class="block px-3 py-2 text-sm text-emerald-700 bg-emerald-100 rounded-md font-semibold cursor-pointer hover:bg-emerald-200 text-center">
 							{documentFileName}
 							<input
+								bind:this={documentFileInput}
 								type="file"
 								accept=".pdf,.png,.jpg,.jpeg,.webp"
 								on:change={handleVerificationDocumentSelect}
