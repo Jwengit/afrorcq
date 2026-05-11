@@ -187,6 +187,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
 		const pendingProfileVerifications = profiles.filter((p) => p.is_verified !== true).length;
 		const accountsToVerify = pendingProfileVerifications + missingProfileCount;
 
+
 		const [activeRidesRes, completedRidesRes, reservationsInProgressRes, confirmedBookingsWithRideRes] =
 			await Promise.all([
 				adminClient
@@ -208,8 +209,8 @@ export const GET: RequestHandler = async ({ request, url }) => {
 					.from('bookings')
 					.select('seats_booked, ride:rides(price)')
 					.eq('status', 'Confirmed')
-					.gte('created_at', dateRange.start)
-					.lte('created_at', dateRange.end)
+					.gte('confirmed_at', dateRange.start)
+					.lte('confirmed_at', dateRange.end)
 			]);
 
 		if (activeRidesRes.error || completedRidesRes.error || reservationsInProgressRes.error || confirmedBookingsWithRideRes.error) {

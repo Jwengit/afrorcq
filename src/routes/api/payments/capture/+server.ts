@@ -233,7 +233,12 @@ export const POST: RequestHandler = async ({ request }) => {
 			status: 'Pending'
 		};
 
-		const bookingInsert = await adminClient.from('bookings').insert(bookingPayload).select().maybeSingle();
+
+		// Insert booking and set confirmed_at
+		const bookingInsert = await adminClient.from('bookings').insert({
+			...bookingPayload,
+			confirmed_at: new Date().toISOString()
+		}).select().maybeSingle();
 		if (bookingInsert.error || !bookingInsert.data) {
 			await adminClient
 				.from('transactions')
@@ -247,6 +252,12 @@ export const POST: RequestHandler = async ({ request }) => {
 
 			return json({ error: 'Payment captured but booking creation failed. Please contact support.' }, { status: 500 });
 		}
+
+		// Update transaction and booking confirmed_at
+		await adminClient
+			.from('bookings')
+			.update({ confirmed_at: new Date().toISOString() })
+			.eq('id', bookingInsert.data.id);
 
 		const transactionUpdate = await adminClient
 			.from('transactions')

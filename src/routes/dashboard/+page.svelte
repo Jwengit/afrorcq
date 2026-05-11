@@ -658,7 +658,7 @@
 		reportActionMessage = '';
 		reportActionError = '';
 
-		const description = prompt('Decris le probleme. Ce texte est visible uniquement par les admins.')?.trim();
+		const description = prompt('Describe the issue. This text is only visible to admins.')?.trim();
 		if (!description) {
 			return;
 		}
@@ -1366,7 +1366,7 @@
 
 		<section class="dashboard-card p-6">
 			<h2 class="text-xl font-semibold text-gray-900 mb-2">Report a ride</h2>
-			<p class="text-sm text-gray-600 mb-4">Signale un trajet directement depuis le dashboard. Le texte est visible uniquement par les admins.</p>
+										<p class="text-sm text-gray-600 mb-4">Report a ride directly from the dashboard. The text is only visible to admins.</p>
 			<div class="grid grid-cols-1 md:grid-cols-3 gap-3">
 				<input
 					type="text"
@@ -1378,7 +1378,7 @@
 					bind:value={quickReportDescription}
 					rows="2"
 					maxlength="2000"
-					placeholder="Decris le probleme..."
+										placeholder="Describe the issue..."
 					class="md:col-span-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
 				></textarea>
 			</div>
