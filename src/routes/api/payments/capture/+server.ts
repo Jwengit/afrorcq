@@ -17,6 +17,18 @@ function paypalBaseUrl() {
 	return env.PAYPAL_MODE === 'sandbox' ? 'https://api-m.sandbox.paypal.com' : 'https://api-m.paypal.com';
 }
 
+function roundCurrency(value: number): number {
+	return Math.round(value * 100) / 100;
+}
+
+function sanitizeCommissionPercent(value: unknown): number {
+	const parsed = Number(value);
+	if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) {
+		return 10;
+	}
+	return parsed;
+}
+
 async function getPayPalAccessToken(): Promise<string | null> {
 	const clientId = env.PAYPAL_CLIENT_ID;
 	const clientSecret = env.PAYPAL_CLIENT_SECRET;
@@ -89,22 +101,6 @@ export const POST: RequestHandler = async ({ request }) => {
 			return json({ error: 'orderId, rideId and seats are required' }, { status: 400 });
 		}
 
-		const anonClient = createClient(supabaseUrl, supabaseAnonKey);
-		const { data: ride, error: rideError } = await anonClient.from('rides').select('id, seats, price').eq('id', rideId).maybeSingle();
-
-		if (rideError || !ride) {
-			return json({ error: 'Ride not found' }, { status: 404 });
-		}
-
-		if (seats > ride.seats) {
-			return json({ error: 'Not enough seats available' }, { status: 400 });
-		}
-
-		const amount = Number(ride.price) * seats;
-		if (Number.isNaN(amount) || amount <= 0) {
-			return json({ error: 'Invalid amount' }, { status: 400 });
-		}
-
 		const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
 		if (!serviceRoleKey) {
 			return json(
@@ -117,6 +113,31 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 
 		const adminClient = createClient(supabaseUrl, serviceRoleKey);
+		const { data: ride, error: rideError } = await adminClient.from('rides').select('id, seats, price').eq('id', rideId).maybeSingle();
+
+		if (rideError || !ride) {
+			return json({ error: 'Ride not found' }, { status: 404 });
+		}
+
+		if (seats > ride.seats) {
+			return json({ error: 'Not enough seats available' }, { status: 400 });
+		}
+
+		const { data: platformSettings } = await adminClient
+			.from('platform_settings')
+			.select('commission_percent')
+			.eq('id', 1)
+			.maybeSingle();
+
+		const baseAmount = roundCurrency(Number(ride.price) * seats);
+		if (Number.isNaN(baseAmount) || baseAmount <= 0) {
+			return json({ error: 'Invalid amount' }, { status: 400 });
+		}
+
+		const commissionPercent = sanitizeCommissionPercent(platformSettings?.commission_percent);
+		const commissionAmount = roundCurrency((baseAmount * commissionPercent) / 100);
+		const amount = roundCurrency(baseAmount + commissionAmount);
+
 		const { data: pendingTransaction, error: pendingTransactionError } = await adminClient
 			.from('transactions')
 			.select('id, booking_id, ride_id, seats_booked, amount, currency, status, paypal_order_id, paypal_capture_id')
@@ -148,7 +169,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			return json({ error: 'Order and seats mismatch' }, { status: 409 });
 		}
 
-		const expectedAmount = Number(amount.toFixed(2));
+		const expectedAmount = amount;
 		const storedAmount = Number(pendingTransaction.amount);
 		if (!Number.isFinite(storedAmount) || Math.abs(storedAmount - expectedAmount) > 0.009) {
 			return json({ error: 'Order and amount mismatch' }, { status: 409 });

@@ -17,6 +17,18 @@ function paypalBaseUrl() {
 	return env.PAYPAL_MODE === 'sandbox' ? 'https://api-m.sandbox.paypal.com' : 'https://api-m.paypal.com';
 }
 
+function roundCurrency(value: number): number {
+	return Math.round(value * 100) / 100;
+}
+
+function sanitizeCommissionPercent(value: unknown): number {
+	const parsed = Number(value);
+	if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) {
+		return 10;
+	}
+	return parsed;
+}
+
 async function getPayPalAccessToken(): Promise<string | null> {
 	const clientId = env.PAYPAL_CLIENT_ID;
 	const clientSecret = env.PAYPAL_CLIENT_SECRET;
@@ -88,22 +100,6 @@ export const POST: RequestHandler = async ({ request }) => {
 			return json({ error: 'rideId and seats are required' }, { status: 400 });
 		}
 
-		const anonClient = createClient(supabaseUrl, supabaseAnonKey);
-		const { data: ride, error: rideError } = await anonClient.from('rides').select('id, seats, price').eq('id', rideId).maybeSingle();
-
-		if (rideError || !ride) {
-			return json({ error: 'Ride not found' }, { status: 404 });
-		}
-
-		if (seats > ride.seats) {
-			return json({ error: 'Not enough seats available' }, { status: 400 });
-		}
-
-		const amount = Number(ride.price) * seats;
-		if (Number.isNaN(amount) || amount <= 0) {
-			return json({ error: 'Invalid amount' }, { status: 400 });
-		}
-
 		const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
 		if (!serviceRoleKey) {
 			return json(
@@ -114,6 +110,32 @@ export const POST: RequestHandler = async ({ request }) => {
 				{ status: 500 }
 			);
 		}
+
+		const adminClient = createClient(supabaseUrl, serviceRoleKey);
+		const { data: ride, error: rideError } = await adminClient.from('rides').select('id, seats, price').eq('id', rideId).maybeSingle();
+
+		if (rideError || !ride) {
+			return json({ error: 'Ride not found' }, { status: 404 });
+		}
+
+		if (seats > ride.seats) {
+			return json({ error: 'Not enough seats available' }, { status: 400 });
+		}
+
+		const { data: platformSettings } = await adminClient
+			.from('platform_settings')
+			.select('commission_percent')
+			.eq('id', 1)
+			.maybeSingle();
+
+		const baseAmount = roundCurrency(Number(ride.price) * seats);
+		if (Number.isNaN(baseAmount) || baseAmount <= 0) {
+			return json({ error: 'Invalid amount' }, { status: 400 });
+		}
+
+		const commissionPercent = sanitizeCommissionPercent(platformSettings?.commission_percent);
+		const commissionAmount = roundCurrency((baseAmount * commissionPercent) / 100);
+		const amount = roundCurrency(baseAmount + commissionAmount);
 
 		const accessToken = await getPayPalAccessToken();
 		if (!accessToken) {
@@ -155,12 +177,14 @@ export const POST: RequestHandler = async ({ request }) => {
 			return json({ error: 'PayPal order id missing' }, { status: 500 });
 		}
 
-		const adminClient = createClient(supabaseUrl, serviceRoleKey);
 		const transactionInsert = await adminClient.from('transactions').insert({
 			ride_id: ride.id,
 			user_id: userId,
 			seats_booked: seats,
 			amount,
+			commission_percent: commissionPercent,
+			commission_amount: commissionAmount,
+			driver_payout_amount: baseAmount,
 			status: 'pending',
 			refund_status: 'none',
 			currency: 'USD',

@@ -40,7 +40,7 @@
 	const sections: SectionLink[] = [
 		{ id: 'my-rides', label: 'My rides', caption: 'Published trips and activity' },
 		{ id: 'my-bookings', label: 'My bookings', caption: 'Seats reserved and upcoming plans' },
-		{ id: 'profile', label: 'Profile', caption: 'Verification and trust signals' }
+		{ id: 'profile', label: 'Profile', caption: 'Verification and trust indicators' }
 	];
 
 	const stats: StatCard[] = [
@@ -229,7 +229,7 @@
 					<div class="section-heading compact-gap">
 						<div>
 							<p class="eyebrow">Profile</p>
-							<h3>Verification signals that build trust</h3>
+							<h3>Verification indicators that build trust</h3>
 						</div>
 						<button type="button" class="inline-action" on:click={goToProfile}>Complete profile</button>
 					</div>

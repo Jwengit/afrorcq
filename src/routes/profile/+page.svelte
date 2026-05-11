@@ -431,8 +431,8 @@
 			console.error('Error loading profile:', error);
 			profileError = error instanceof Error ? error.message : 'Unable to load profile.';
 		} finally {
-			loading = false;
 			await loadVerificationDocuments();
+			loading = false;
 		}
 	}
 

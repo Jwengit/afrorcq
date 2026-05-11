@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/stores';
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { supabase } from '$lib/supabaseClient';
 	import type { User } from '@supabase/supabase-js';
 
@@ -39,7 +39,13 @@ let reportingRide = false;
 let reportMessage = '';
 let reportError = '';
 let driverPublicProfileId: number | null = null;
-const paypalClientId = import.meta.env.VITE_PUBLIC_PAYPAL_CLIENT_ID || '';
+let commissionPercent = 10;
+let paypalClientId = '';
+let paypalMode: 'sandbox' | 'live' = 'live';
+
+$: bookingBaseAmount = ride ? ride.price * bookingSeats : 0;
+$: bookingCommissionAmount = bookingBaseAmount * (commissionPercent / 100);
+$: bookingTotalAmount = bookingBaseAmount + bookingCommissionAmount;
 
 function parsePositiveInt(value: string): number | null {
 	if (!/^\d+$/.test(value)) {
@@ -93,28 +99,86 @@ onMount(async () => {
 		.maybeSingle();
 	driverPublicProfileId = driverProfile?.public_id ?? null;
 
+	if (browser) {
+		await loadPayPalConfig();
+	}
+
 	if (browser && paypalClientId) {
 		await loadPayPalScript();
 	}
 
+	if (browser) {
+		try {
+			const settingsResponse = await fetch('/api/platform-settings');
+			if (settingsResponse.ok) {
+				const settingsPayload = await settingsResponse.json();
+				const fetchedCommission = Number(settingsPayload?.settings?.commission_percent);
+				if (Number.isFinite(fetchedCommission) && fetchedCommission >= 0 && fetchedCommission <= 100) {
+					commissionPercent = fetchedCommission;
+				}
+			}
+		} catch {
+			// Keep default commission when settings are unavailable.
+		}
+	}
+
 	loading = false;
+
+	if (browser && paypalLoaded) {
+		await tick();
+		renderPayPalButtons();
+	}
 });
+
+	async function loadPayPalConfig() {
+		try {
+			const response = await fetch('/api/payments/config');
+			const payload = await response.json();
+
+			if (!response.ok) {
+				paymentError = payload?.error || 'Unable to load PayPal configuration.';
+				return;
+			}
+
+			const mode = payload?.mode;
+			if (mode === 'sandbox' || mode === 'live') {
+				paypalMode = mode;
+			}
+
+			const clientId = String(payload?.clientId ?? '').trim();
+			if (clientId) {
+				paypalClientId = clientId;
+			} else {
+				paymentError = 'PayPal client id is missing.';
+			}
+		} catch {
+			paymentError = 'Unable to load PayPal configuration.';
+		}
+	}
 
 	async function loadPayPalScript() {
 		if (!browser || paypalLoaded || !paypalClientId) return;
 
 		return new Promise<void>((resolvePromise, reject) => {
-			const existingScript = document.querySelector(`script[src*="paypal.com/sdk/js"]`);
+			const existingScript = document.querySelector('script[src*="paypal.com/sdk/js"]') as
+				| HTMLScriptElement
+				| null;
 			if (existingScript) {
+				const currentClientId = new URL(existingScript.src).searchParams.get('client-id') || '';
+				if (currentClientId && currentClientId !== paypalClientId) {
+					existingScript.remove();
+					(window as PayPalWindow).paypal = undefined;
+				} else {
 				paypalLoaded = Boolean((window as PayPalWindow).paypal);
 				if (paypalLoaded) {
 					renderPayPalButtons();
 				}
 				return resolvePromise();
+				}
 			}
 
 			const script = document.createElement('script');
-			script.src = `https://www.paypal.com/sdk/js?client-id=${paypalClientId}&currency=USD&enable-funding=venmo,card`;
+			script.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(paypalClientId)}&currency=USD&enable-funding=venmo,card&intent=capture`;
 			script.async = true;
 			script.onload = () => {
 				paypalLoaded = true;
@@ -321,34 +385,6 @@ onMount(async () => {
 					</button>
 				</div>
 
-				{#if currentUser && currentUser.id !== ride.driver_id}
-					<div class="mt-6 rounded-xl border border-red-200 bg-red-50 p-4">
-						<p class="text-sm font-semibold text-red-900">Report this ride</p>
-						<p class="text-xs text-red-700 mt-1">This text is only visible to admins.</p>
-						<textarea
-							bind:value={reportDescription}
-							rows="3"
-							maxlength="2000"
-							placeholder="Describe what happened..."
-							class="mt-3 w-full rounded-md border border-red-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-						></textarea>
-						{#if reportError}
-							<p class="mt-2 text-xs text-red-700">{reportError}</p>
-						{/if}
-						{#if reportMessage}
-							<p class="mt-2 text-xs text-green-700">{reportMessage}</p>
-						{/if}
-						<button
-							type="button"
-							disabled={reportingRide}
-							on:click={submitRideReport}
-							class="mt-3 inline-flex items-center rounded-md border border-red-300 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
-						>
-							{reportingRide ? 'Sending...' : 'Report ride'}
-						</button>
-					</div>
-				{/if}
-
 				<div class="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-4">
 					<div><p class="text-sm text-gray-500">Pickup</p><p class="text-base font-semibold text-gray-900">{ride.pickup}</p></div>
 					<div><p class="text-sm text-gray-500">Drop-off</p><p class="text-base font-semibold text-gray-900">{ride.dropoff}</p></div>
@@ -361,6 +397,7 @@ onMount(async () => {
 
 				{#if currentUser && currentUser.id !== ride.driver_id && ride.seats > 0}
 					<div class="mt-8 space-y-4 border-t border-gray-200 pt-6">
+						<h2 class="text-lg font-semibold text-gray-900">Book this ride</h2>
 						<div>
 							<label for="seats" class="block text-sm font-medium text-gray-700 mb-2">Number of seats</label>
 							<select id="seats" bind:value={bookingSeats} class="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500">
@@ -370,8 +407,13 @@ onMount(async () => {
 							</select>
 						</div>
 						{#if paypalClientId}
-							<div class="text-sm text-gray-600">
-								Total: <strong>${(ride.price * bookingSeats).toFixed(2)}</strong> USD
+							<div class="space-y-1 text-sm text-gray-600">
+								<p>Ride subtotal: <strong>${bookingBaseAmount.toFixed(2)}</strong> USD</p>
+								<p>Hizli service fee ({commissionPercent.toFixed(0)}%): <strong>${bookingCommissionAmount.toFixed(2)}</strong> USD</p>
+								{#if paypalMode === 'sandbox'}
+									<p class="text-amber-700">Sandbox checkout mode (test payment)</p>
+								{/if}
+								<p class="text-gray-900">Total to pay: <strong>${bookingTotalAmount.toFixed(2)}</strong> USD</p>
 							</div>
 							<div id="paypal-button-container" class="mt-4"></div>
 							{#if paymentError}
@@ -386,6 +428,40 @@ onMount(async () => {
 							</p>
 						{/if}
 					</div>
+				{:else if currentUser && currentUser.id !== ride.driver_id && ride.seats <= 0}
+					<div class="mt-8 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+						No seats are available for this ride.
+					</div>
+				{/if}
+
+				{#if currentUser && currentUser.id !== ride.driver_id}
+					<details class="mt-8 rounded-lg border border-gray-200 bg-gray-50 p-4">
+						<summary class="cursor-pointer text-sm font-medium text-gray-600 hover:text-gray-900">
+							Want to report this ride?
+						</summary>
+						<p class="mt-3 text-xs text-gray-500">Your report is confidential and only visible to admins.</p>
+						<textarea
+							bind:value={reportDescription}
+							rows="3"
+							maxlength="2000"
+							placeholder="Describe the issue with this ride..."
+							class="mt-3 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
+						></textarea>
+						{#if reportError}
+							<p class="mt-2 text-xs text-red-700">{reportError}</p>
+						{/if}
+						{#if reportMessage}
+							<p class="mt-2 text-xs text-green-700">{reportMessage}</p>
+						{/if}
+						<button
+							type="button"
+							disabled={reportingRide}
+							on:click={submitRideReport}
+							class="mt-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-60"
+						>
+							{reportingRide ? 'Sending...' : 'Send report'}
+						</button>
+					</details>
 				{/if}
 			</div>
 		</div>

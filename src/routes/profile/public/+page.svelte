@@ -487,15 +487,17 @@
 
 				{#if !viewingOwnProfile}
 					<div class="border-t border-slate-200 pt-6 mt-6">
-						<div class="rounded-xl border border-red-200 bg-red-50 p-4">
-							<p class="text-sm font-semibold text-red-900">Report this user</p>
-							<p class="text-xs text-red-700 mt-1">This text is only visible to admins.</p>
+						<details class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+							<summary class="cursor-pointer text-sm font-medium text-slate-600 hover:text-slate-900">
+								Want to report this user?
+							</summary>
+							<p class="mt-3 text-xs text-slate-500">Your report is confidential and only visible to admins.</p>
 							<textarea
 								bind:value={reportDescription}
 								rows="3"
 								maxlength="2000"
-								placeholder="Describe the issue with this user..."
-								class="mt-3 w-full rounded-md border border-red-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+								placeholder="Describe the issue with this user... (e.g., inappropriate behavior, spam, etc.)"
+								class="mt-3 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
 							></textarea>
 							{#if reportError}
 								<p class="mt-2 text-xs text-red-700">{reportError}</p>
@@ -507,11 +509,11 @@
 								type="button"
 								disabled={reportingUser}
 								on:click={submitUserReport}
-								class="mt-3 inline-flex items-center rounded-md border border-red-300 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
+								class="mt-3 inline-flex items-center rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
 							>
-								{reportingUser ? 'Sending...' : 'Report user'}
+								{reportingUser ? 'Sending...' : 'Send report'}
 							</button>
-						</div>
+						</details>
 					</div>
 				{/if}
 

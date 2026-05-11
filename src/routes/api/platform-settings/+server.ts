@@ -6,6 +6,7 @@ const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
 
 const DEFAULT_PUBLIC_SETTINGS = {
+  commission_percent: 10,
   footer_brand_description: 'A carpooling platform that connects people.',
   footer_about_us_label: 'About Us',
   footer_about_us_url: '/about',
@@ -52,7 +53,7 @@ export const GET: RequestHandler = async () => {
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
     const fullSelect =
-      'footer_brand_description, footer_about_us_label, footer_about_us_url, footer_how_it_works_label, footer_how_it_works_url, footer_faq_label, footer_faq_url, footer_help_center_label, footer_help_center_url, footer_privacy_policy_label, footer_privacy_policy_url, footer_terms_of_service_label, footer_terms_of_service_url, about_page_title, about_page_content, how_it_works_page_title, how_it_works_page_content, faq_page_title, faq_page_content, help_page_title, help_page_content, privacy_page_title, privacy_page_content, terms_page_title, terms_page_content';
+      'commission_percent, footer_brand_description, footer_about_us_label, footer_about_us_url, footer_how_it_works_label, footer_how_it_works_url, footer_faq_label, footer_faq_url, footer_help_center_label, footer_help_center_url, footer_privacy_policy_label, footer_privacy_policy_url, footer_terms_of_service_label, footer_terms_of_service_url, about_page_title, about_page_content, how_it_works_page_title, how_it_works_page_content, faq_page_title, faq_page_content, help_page_title, help_page_content, privacy_page_title, privacy_page_content, terms_page_title, terms_page_content';
 
     const { data, error } = await adminClient
       .from('platform_settings')
