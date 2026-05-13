@@ -97,6 +97,7 @@
 	let archivedRequests: DriverBookingRequest[] = [];
 	let showArchive = false;
 	let openReviewFormId: string | null = null;
+	let pendingArchiveReviewsCount = 0;
 
 	let editRideForm = {
 		departure: '',
@@ -130,8 +131,75 @@
 		await loadMyRides(user!.id);
 		await loadMyBookings(user!.id);
 		await loadIncomingBookingRequests(user!.id);
+		await refreshPendingArchiveReviewsCount();
 		loading = false;
 	});
+
+	function getArchiveReviewTargets() {
+		if (!currentUser) return [] as Array<{ rideId: string; revieweeId: string }>;
+
+		const targets: Array<{ rideId: string; revieweeId: string }> = [];
+
+		for (const request of archivedRequests) {
+			if (request.status !== 'Confirmed') continue;
+			if (!request.ride.id || !request.passenger_id) continue;
+			if (request.passenger_id === currentUser.id) continue;
+			targets.push({ rideId: request.ride.id, revieweeId: request.passenger_id });
+		}
+
+		for (const booking of myArchivedBookings) {
+			if (booking.status !== 'Confirmed') continue;
+			if (!booking.ride_id || !booking.ride.driver_id) continue;
+			if (booking.ride.driver_id === currentUser.id) continue;
+			targets.push({ rideId: booking.ride_id, revieweeId: booking.ride.driver_id });
+		}
+
+		const seen = new Set<string>();
+		return targets.filter((target) => {
+			const key = `${target.rideId}:${target.revieweeId}`;
+			if (seen.has(key)) return false;
+			seen.add(key);
+			return true;
+		});
+	}
+
+	async function refreshPendingArchiveReviewsCount() {
+		if (!currentUser) {
+			pendingArchiveReviewsCount = 0;
+			return;
+		}
+
+		const targets = getArchiveReviewTargets();
+		if (targets.length === 0) {
+			pendingArchiveReviewsCount = 0;
+			return;
+		}
+
+		const { data, error } = await supabase
+			.from('reviews')
+			.select('ride_id,reviewee_id')
+			.eq('reviewer_id', currentUser.id);
+
+		if (error) {
+			console.error('Pending reviews count error:', error);
+			pendingArchiveReviewsCount = targets.length;
+			return;
+		}
+
+		const reviewedTargets = new Set(
+			((data ?? []) as Array<{ ride_id: string; reviewee_id: string }>).map(
+				(item) => `${item.ride_id}:${item.reviewee_id}`
+			)
+		);
+
+		pendingArchiveReviewsCount = targets.filter(
+			(target) => !reviewedTargets.has(`${target.rideId}:${target.revieweeId}`)
+		).length;
+	}
+
+	async function handleReviewSubmitted() {
+		await refreshPendingArchiveReviewsCount();
+	}
 
 	async function loadDriverEligibility(userId: string) {
 		const { data, error } = await supabase
@@ -833,7 +901,7 @@
 						<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
 						{showArchive
 							? 'Back to dashboard'
-							: `View archive (${myArchivedRides.length + myArchivedBookings.length + archivedRequests.length})`}
+							: `View archive (${myArchivedRides.length + myArchivedBookings.length + archivedRequests.length})${pendingArchiveReviewsCount > 0 ? ` · ${pendingArchiveReviewsCount} review${pendingArchiveReviewsCount > 1 ? 's' : ''} left` : ''}`}
 					</button>
 				</nav>
 			</section>
@@ -1076,6 +1144,7 @@
 											revieweeName={fullName(request.passenger.first_name, request.passenger.last_name, 'Passenger')}
 											user={currentUser}
 											accessToken={currentAccessToken}
+											onSuccess={handleReviewSubmitted}
 										/>
 									</div>
 								{/if}
@@ -1195,6 +1264,7 @@
 										revieweeName={booking.driver ? fullName(booking.driver.first_name, booking.driver.last_name, 'Driver') : 'Driver'}
 										user={currentUser}
 										accessToken={currentAccessToken}
+										onSuccess={handleReviewSubmitted}
 									/>
 								</div>
 							{/if}
@@ -1212,6 +1282,11 @@
 					<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
 					Archive
 					<span class="text-sm font-normal text-gray-400">({myArchivedRides.length + myArchivedBookings.length + archivedRequests.length})</span>
+					{#if pendingArchiveReviewsCount > 0}
+						<span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
+							{pendingArchiveReviewsCount} review{pendingArchiveReviewsCount > 1 ? 's' : ''} left to post
+						</span>
+					{/if}
 				</h2>
 			</div>
 
@@ -1289,6 +1364,7 @@
 												revieweeName={fullName(request.passenger.first_name, request.passenger.last_name, 'Passenger')}
 												user={currentUser}
 												accessToken={currentAccessToken}
+												onSuccess={handleReviewSubmitted}
 											/>
 										{/if}
 								</article>
@@ -1363,6 +1439,7 @@
 												revieweeName={booking.driver ? fullName(booking.driver.first_name, booking.driver.last_name, 'Driver') : 'Driver'}
 												user={currentUser}
 												accessToken={currentAccessToken}
+												onSuccess={handleReviewSubmitted}
 											/>
 										{/if}
 								</article>

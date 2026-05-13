@@ -78,6 +78,12 @@
 		return full || 'Conducteur';
 	}
 
+	function swapCities() {
+		const oldDeparture = departure;
+		departure = arrival;
+		arrival = oldDeparture;
+	}
+
 	async function searchRides() {
 		const dep = departure.trim();
 		const arr = arrival.trim();
@@ -152,14 +158,13 @@
 			results = ridesWithDrivers.filter((ride) => {
 				const rideDeparture = ride.departure.toLowerCase();
 				const rideArrival = ride.arrival.toLowerCase();
+				const rideTimestamp = Date.parse(ride.ride_date);
+				const isUpcomingRide = Number.isFinite(rideTimestamp) && rideTimestamp >= Date.now();
 
 				let routeMatches = true;
 				if (depLower && arrLower) {
-					const directMatch =
+					routeMatches =
 						rideDeparture.includes(depLower) && rideArrival.includes(arrLower);
-					const reverseMatch =
-						rideDeparture.includes(arrLower) && rideArrival.includes(depLower);
-					routeMatches = directMatch || reverseMatch;
 				} else if (depLower) {
 					routeMatches =
 						rideDeparture.includes(depLower) || rideArrival.includes(depLower);
@@ -176,7 +181,7 @@
 
 				const girlsOnlyMatch = ride.girls_only ? isFemaleUser : true;
 
-				return routeMatches && dateMatches && seatsMatch && girlsOnlyMatch;
+				return isUpcomingRide && routeMatches && dateMatches && seatsMatch && girlsOnlyMatch;
 			});
 		}
 
@@ -251,6 +256,15 @@
 						placeholder="e.g. Marrakech"
 						class="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
 					/>
+				</div>
+				<div class="sm:col-span-2 flex justify-center">
+					<button
+						type="button"
+						on:click={swapCities}
+						class="inline-flex items-center rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+					>
+						Swap cities
+					</button>
 				</div>
 			</div>
 

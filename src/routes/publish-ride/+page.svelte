@@ -123,6 +123,12 @@
 		}
 	}
 
+	function swapCities() {
+		const oldDeparture = form.departure;
+		form.departure = form.arrival;
+		form.arrival = oldDeparture;
+	}
+
 	async function submitRide() {
 		if (!currentUser || !allowedToPublish) {
 			return;
@@ -250,6 +256,15 @@
 								required
 								class="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
 							/>
+						</div>
+						<div class="sm:col-span-2 flex justify-center">
+							<button
+								type="button"
+								on:click={swapCities}
+								class="inline-flex items-center rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+							>
+								Swap cities
+							</button>
 						</div>
 						<div>
 							<label for="pickup" class="block text-sm font-medium text-gray-700 mb-1">Pickup Point</label>
