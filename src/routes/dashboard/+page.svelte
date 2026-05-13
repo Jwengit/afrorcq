@@ -107,12 +107,17 @@
 		girlsOnly: false
 	};
 
+	let currentAccessToken: string | null = null;
+
 	onMount(async () => {
 		const {
 			data: { user }
 		} = await supabase.auth.getUser();
 
 		currentUser = user;
+
+		// Get and store access token for child components
+		currentAccessToken = await getSessionAccessToken();
 
 		if (!user && browser) {
 			goto(resolve('/auth/login'));
@@ -938,7 +943,7 @@
 												on:click={() => useRideIdForReport(ride.public_id)}
 												class="px-3 py-2 rounded-md border border-red-300 text-red-700 text-sm font-medium hover:bg-red-50"
 											>
-												Utiliser pour signaler
+												Use to report ride
 											</button>
 										{#if deletingRideId === ride.id}
 											<button
@@ -1060,7 +1065,7 @@
 										on:click={() => useRideIdForReport(request.ride.public_id)}
 										class="px-3 py-2 rounded-md border border-red-300 text-red-700 text-sm font-medium hover:bg-red-50"
 									>
-										Utiliser pour signaler trajet
+										Use to report ride
 									</button>
 								</div>
 								{#if request.status === 'Confirmed' && hasRideEnded(request.ride.ride_date) && openReviewFormId === `active-request:${request.id}`}
@@ -1070,6 +1075,7 @@
 											revieweeId={request.passenger_id}
 											revieweeName={fullName(request.passenger.first_name, request.passenger.last_name, 'Passenger')}
 											user={currentUser}
+											accessToken={currentAccessToken}
 										/>
 									</div>
 								{/if}
@@ -1168,7 +1174,7 @@
 										disabled={reportingTargetId === `ride:${booking.ride_id}`}
 										class="px-3 py-2 rounded-md border border-red-300 text-red-700 text-sm font-medium hover:bg-red-50 disabled:opacity-60"
 									>
-										{reportingTargetId === `ride:${booking.ride_id}` ? 'Envoi...' : 'Signaler trajet'}
+										{reportingTargetId === `ride:${booking.ride_id}` ? 'Sending...' : 'Report ride'}
 									</button>
 								{/if}
 								{#if booking.ride_public_id}
@@ -1177,7 +1183,7 @@
 										on:click={() => useRideIdForReport(booking.ride_public_id)}
 										class="px-3 py-2 rounded-md border border-red-300 text-red-700 text-sm font-medium hover:bg-red-50"
 									>
-										Utiliser pour signaler trajet
+										Use to report ride
 									</button>
 								{/if}
 							</div>
@@ -1188,6 +1194,7 @@
 										revieweeId={booking.ride.driver_id}
 										revieweeName={booking.driver ? fullName(booking.driver.first_name, booking.driver.last_name, 'Driver') : 'Driver'}
 										user={currentUser}
+										accessToken={currentAccessToken}
 									/>
 								</div>
 							{/if}
@@ -1271,7 +1278,7 @@
 													disabled={reportingTargetId === `user:${request.passenger_id}`}
 													class="px-3 py-1.5 rounded-md border border-red-300 text-red-700 text-sm font-medium hover:bg-red-50 disabled:opacity-60"
 												>
-													{reportingTargetId === `user:${request.passenger_id}` ? 'Envoi...' : 'Signaler utilisateur'}
+													{reportingTargetId === `user:${request.passenger_id}` ? 'Sending...' : 'Report user'}
 												</button>
 											{/if}
 										</div>
@@ -1281,6 +1288,7 @@
 												revieweeId={request.passenger_id}
 												revieweeName={fullName(request.passenger.first_name, request.passenger.last_name, 'Passenger')}
 												user={currentUser}
+												accessToken={currentAccessToken}
 											/>
 										{/if}
 								</article>
@@ -1334,7 +1342,7 @@
 													disabled={reportingTargetId === `user:${booking.ride.driver_id}`}
 													class="px-3 py-1.5 rounded-md border border-red-300 text-red-700 text-sm font-medium hover:bg-red-50 disabled:opacity-60"
 												>
-													{reportingTargetId === `user:${booking.ride.driver_id}` ? 'Envoi...' : 'Signaler utilisateur'}
+													{reportingTargetId === `user:${booking.ride.driver_id}` ? 'Sending...' : 'Report user'}
 												</button>
 											{/if}
 											{#if booking.ride_id}
@@ -1344,7 +1352,7 @@
 													disabled={reportingTargetId === `ride:${booking.ride_id}`}
 													class="px-3 py-1.5 rounded-md border border-red-300 text-red-700 text-sm font-medium hover:bg-red-50 disabled:opacity-60"
 												>
-													{reportingTargetId === `ride:${booking.ride_id}` ? 'Envoi...' : 'Signaler trajet'}
+													{reportingTargetId === `ride:${booking.ride_id}` ? 'Sending...' : 'Report ride'}
 												</button>
 											{/if}
 										</div>
@@ -1354,6 +1362,7 @@
 												revieweeId={booking.ride.driver_id}
 												revieweeName={booking.driver ? fullName(booking.driver.first_name, booking.driver.last_name, 'Driver') : 'Driver'}
 												user={currentUser}
+												accessToken={currentAccessToken}
 											/>
 										{/if}
 								</article>
@@ -1389,7 +1398,7 @@
 					disabled={quickReportingRide}
 					class="px-4 py-2 rounded-md border border-red-300 text-red-700 text-sm font-medium hover:bg-red-50 disabled:opacity-60"
 				>
-					{quickReportingRide ? 'Envoi...' : 'Signaler trajet'}
+					{quickReportingRide ? 'Sending...' : 'Report ride'}
 				</button>
 			</div>
 			{#if reportActionError}

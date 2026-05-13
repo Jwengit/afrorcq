@@ -1,5 +1,6 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
+import { env } from '$env/dynamic/private';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -14,29 +15,39 @@ authorization: `Bearer ${token}`
 });
 }
 
+function getTokenFromRequest(request: Request): string | null {
+const authHeader = request.headers.get('authorization');
+if (!authHeader || !authHeader.startsWith('Bearer ')) {
+return null;
+}
+return authHeader.slice(7).trim();
+}
+
 export const POST: RequestHandler = async ({ request }) => {
 if (!supabaseUrl || !supabaseKey) {
 return json({ error: 'Server configuration error' }, { status: 500 });
 }
 
-const authHeader = request.headers.get('authorization');
-if (!authHeader || !authHeader.startsWith('Bearer ')) {
+const token = getTokenFromRequest(request);
+if (!token) {
 return json({ error: 'Unauthorized' }, { status: 401 });
 }
 
-const token = authHeader.slice(7);
-const supabase = getAuthedClient(token);
+const authClient = createClient(supabaseUrl, supabaseKey);
 const {
 data: { user },
 error: userError
-} = await supabase.auth.getUser();
+} = await authClient.auth.getUser(token);
 
 if (userError || !user) {
 return json({ error: 'Unauthorized' }, { status: 401 });
 }
 
+const supabase = getAuthedClient(token);
+
 const body = await request.json();
 const { reviewee_id, ride_id, rating, comment } = body;
+const normalizedComment = (comment || '').trim();
 
 if (!reviewee_id || !ride_id || !rating) {
 return json({ error: 'Missing required fields' }, { status: 400 });
@@ -46,6 +57,9 @@ return json({ error: 'You cannot review yourself' }, { status: 400 });
 }
 if (typeof rating !== 'number' || rating < 1 || rating > 5) {
 return json({ error: 'Rating must be between 1 and 5' }, { status: 400 });
+}
+if (!normalizedComment) {
+return json({ error: 'Comment is required' }, { status: 400 });
 }
 
 const { data: ride, error: rideError } = await supabase
@@ -115,7 +129,7 @@ reviewer_id: user.id,
 reviewee_id,
 ride_id,
 rating,
-comment: (comment || '').trim() || null,
+comment: normalizedComment,
 status: 'pending'
 })
 .select('id,rating,comment,status,created_at,reviewer_id,reviewee_id,ride_id')
@@ -144,7 +158,7 @@ const client = token ? getAuthedClient(token) : createClient(supabaseUrl, supaba
 const { data: reviews, error } = await client
 .from('reviews')
 .select(
-'id,rating,comment,status,created_at,reviewer_id,ride_id,reviewer:profiles!reviews_reviewer_id_fkey(id,first_name,last_name,profile_photo_url)'
+'id,rating,comment,status,created_at,reviewer_id,ride_id'
 )
 .eq('reviewee_id', userId)
 .order('created_at', { ascending: false });
@@ -161,21 +175,33 @@ type ReviewRow = {
 	created_at: string;
 	reviewer_id: string;
 	ride_id: string;
-	reviewer:
-		| {
-		id: string;
-		first_name: string | null;
-		last_name: string | null;
-		profile_photo_url: string | null;
-	  }
-		| Array<{
-			id: string;
-			first_name: string | null;
-			last_name: string | null;
-			profile_photo_url: string | null;
-	  }>
-		| null;
 };
+
+type ReviewerProfile = {
+	id: string;
+	first_name: string | null;
+	last_name: string | null;
+	profile_photo_url: string | null;
+	is_verified: boolean | null;
+};
+
+const reviewerIds = Array.from(
+	new Set(((reviews || []) as ReviewRow[]).map((item) => item.reviewer_id).filter(Boolean))
+);
+
+const profileMap: Record<string, ReviewerProfile> = {};
+if (reviewerIds.length > 0) {
+	const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
+	const profileClient = serviceRoleKey ? createClient(supabaseUrl, serviceRoleKey) : client;
+	const { data: profileRows } = await profileClient
+		.from('profiles')
+		.select('id,first_name,last_name,profile_photo_url,is_verified')
+		.in('id', reviewerIds);
+
+	for (const profile of (profileRows || []) as ReviewerProfile[]) {
+		profileMap[profile.id] = profile;
+	}
+}
 
 const mapped = ((reviews || []) as ReviewRow[]).map((item) => ({
 id: item.id,
@@ -185,7 +211,7 @@ status: item.status,
 created_at: item.created_at,
 reviewer_id: item.reviewer_id,
 ride_id: item.ride_id,
-	profiles: Array.isArray(item.reviewer) ? item.reviewer[0] ?? null : item.reviewer
+	profiles: profileMap[item.reviewer_id] ?? null
 }));
 
 return json(mapped);

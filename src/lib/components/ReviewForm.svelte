@@ -6,6 +6,7 @@ export let rideId: string;
 export let revieweeId: string;
 export let revieweeName = '';
 export let user: User | null = null;
+export let accessToken: string | null = null;
 export let onSuccess: (() => void) | undefined = undefined;
 
 let rating = 5;
@@ -44,23 +45,27 @@ error = 'You must be logged in to submit a review';
 return;
 }
 
+const commentTrimmed = (comment || '').trim();
+if (!commentTrimmed) {
+error = 'Please provide feedback in your review';
+return;
+}
+
+if (!accessToken) {
+error = 'Session expired. Please refresh the page.';
+return;
+}
+
 loading = true;
 error = null;
 success = false;
 
 try {
-const {
-data: { session }
-} = await supabase.auth.getSession();
-if (!session?.access_token) {
-throw new Error('Unauthorized');
-}
-
 const response = await fetch('/api/reviews', {
 method: 'POST',
 headers: {
 'Content-Type': 'application/json',
-Authorization: `Bearer ${session.access_token}`
+Authorization: `Bearer ${accessToken}`
 },
 body: JSON.stringify({
 reviewee_id: revieweeId,
@@ -108,9 +113,10 @@ on:click={() => (rating = star)}
 
 <textarea
 bind:value={comment}
-placeholder="Optional comment"
+placeholder="Please share your feedback"
 maxlength="500"
 rows="4"
+required
 ></textarea>
 
 {#if error}
