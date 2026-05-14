@@ -59,6 +59,11 @@ const last = (review.profiles?.last_name ?? '').trim();
 const chars = `${first.charAt(0)}${last.charAt(0)}`.trim();
 return chars ? chars.toUpperCase() : 'U';
 }
+
+function isReviewAuthorVerified(review: Review): boolean {
+const hasPhoto = Boolean(review.profiles?.profile_photo_url?.trim());
+return Boolean(review.profiles?.is_verified) && hasPhoto;
+}
 </script>
 
 <section class="reviews-section">
@@ -94,7 +99,7 @@ return chars ? chars.toUpperCase() : 'U';
 <div>
 <p class="name-row">
 <span class="name">{fullName(review)}</span>
-{#if review.profiles?.is_verified}
+{#if isReviewAuthorVerified(review)}
 <span class="verified-badge" title="Verified member" aria-label="Verified member">
 <svg class="verified-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
 <path fill-rule="evenodd" d="M16.704 5.29a1 1 0 010 1.42l-7.02 7.02a1 1 0 01-1.415 0L4.29 9.752a1 1 0 111.415-1.415l3.271 3.272 6.313-6.313a1 1 0 011.415-.006z" clip-rule="evenodd" />

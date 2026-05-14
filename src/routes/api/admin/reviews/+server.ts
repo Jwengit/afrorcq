@@ -201,7 +201,7 @@ export const PATCH: RequestHandler = async ({ request }) => {
 
 		const {
 			data: { user: requesterUser }
-		} = await requesterClient.auth.getUser();
+		} = await requesterClient.auth.getUser(token);
 
 		const { error: updateError } = await adminClient
 			.from('reviews')

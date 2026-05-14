@@ -349,6 +349,30 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		}
 
 		if (field === 'is_verified' && typeof value === 'boolean') {
+			if (value) {
+				const { data: profileForVerification, error: profileForVerificationError } = await adminClient
+					.from('profiles')
+					.select('profile_photo_url')
+					.eq('id', userId)
+					.maybeSingle();
+
+				if (profileForVerificationError) {
+					return json({ error: profileForVerificationError.message }, { status: 500 });
+				}
+
+				const profilePhotoUrl =
+					typeof profileForVerification?.profile_photo_url === 'string'
+						? profileForVerification.profile_photo_url.trim()
+						: '';
+
+				if (!profilePhotoUrl) {
+					return json(
+						{ error: 'Profile photo is required before marking this account as verified.' },
+						{ status: 400 }
+					);
+				}
+			}
+
 			payload.status = resolveVerificationLabel(value);
 		}
 

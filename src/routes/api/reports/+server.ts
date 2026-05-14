@@ -43,7 +43,7 @@ export const POST: RequestHandler = async ({ request }) => {
 	const {
 		data: { user },
 		error: userError
-	} = await supabase.auth.getUser();
+	} = await supabase.auth.getUser(token);
 
 	if (userError || !user) {
 		return json({ error: 'Unauthorized' }, { status: 401 });

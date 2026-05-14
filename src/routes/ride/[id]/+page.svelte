@@ -60,6 +60,13 @@ function parsePositiveInt(value: string): number | null {
 	return parsed;
 }
 
+async function getSessionAccessToken(): Promise<string | null> {
+	const {
+		data: { session }
+	} = await supabase.auth.getSession();
+	return session?.access_token ?? null;
+}
+
 onMount(async () => {
 	const {
 		data: { user }

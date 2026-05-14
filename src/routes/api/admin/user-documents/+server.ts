@@ -101,9 +101,15 @@ async function shouldMarkProfileVerified(adminClient: any, userId: string): Prom
     // Check if user is a driver (has plate_number or car_make)
     const { data: profile } = await adminClient
       .from('profiles')
-      .select('plate_number, car_make')
+      .select('plate_number, car_make, profile_photo_url')
       .eq('id', userId)
       .maybeSingle();
+
+    const profilePhotoUrl =
+      typeof profile?.profile_photo_url === 'string' ? profile.profile_photo_url.trim() : '';
+    if (!profilePhotoUrl) {
+      return false;
+    }
 
     const isDriver = Boolean(profile?.plate_number || profile?.car_make);
 

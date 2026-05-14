@@ -346,7 +346,10 @@
 
 	function normalizeProfile(data?: Partial<Profile> | null): Profile {
 		const legacyStatus = (data?.status ?? '').toString().toLowerCase();
-		const isVerified = Boolean(data?.is_verified) || legacyStatus === 'verified';
+		const hasProfilePhoto = Boolean(
+			typeof data?.profile_photo_url === 'string' && data.profile_photo_url.trim()
+		);
+		const isVerified = (Boolean(data?.is_verified) || legacyStatus === 'verified') && hasProfilePhoto;
 
 		return {
 			...emptyProfile,

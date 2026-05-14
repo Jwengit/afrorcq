@@ -30,7 +30,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		});
 
 		// Validate user with their token
-		const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+		const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token);
 
 		if (userError || !user) {
 			console.error('Auth error:', userError);

@@ -9,7 +9,18 @@
 
 	type DriverProfile = {
 		gender?: string | null;
+		car_make?: string | null;
+		car_year?: string | number | null;
+		plate_number?: string | null;
 	};
+
+	type MissingRequirement =
+		| 'car_info'
+		| 'driver_license'
+		| 'insurance'
+		| 'vehicle_registration';
+
+	let missingRequirements: MissingRequirement[] = [];
 
 	type RideForm = {
 		departure: string;
@@ -100,10 +111,11 @@
 
 	async function loadPublishingEligibility(userId: string) {
 		errorMessage = '';
+		missingRequirements = [];
 
 		const { data, error } = await supabase
 			.from('profiles')
-			.select('*')
+			.select('gender, car_make, car_year, plate_number')
 			.eq('id', userId)
 			.maybeSingle();
 
@@ -116,7 +128,46 @@
 
 		const profile = (data as DriverProfile | null) ?? null;
 		isFemaleDriver = (profile?.gender ?? '').toLowerCase() === 'female';
-		allowedToPublish = true;
+
+		// Check car information
+		const hasCarInfo =
+			Boolean((profile?.car_make ?? '').toString().trim()) &&
+			Boolean((profile?.car_year ?? '').toString().trim()) &&
+			Boolean((profile?.plate_number ?? '').toString().trim());
+
+		if (!hasCarInfo) {
+			missingRequirements.push('car_info');
+		}
+
+		// Check driver documents (driver_license, insurance, vehicle_registration)
+		const DRIVER_DOCS: MissingRequirement[] = ['driver_license', 'insurance', 'vehicle_registration'];
+
+		if (currentUser) {
+			const { data: docs, error: docsError } = await supabase
+				.from('verification_documents')
+				.select('document_type, status')
+				.eq('user_id', currentUser.id);
+
+			if (!docsError && docs) {
+				const approvedTypes = new Set(
+					docs
+						.filter((d: { document_type?: string | null; status?: string | null }) =>
+							(d.status ?? '').toLowerCase() === 'approved'
+						)
+						.map((d: { document_type?: string | null }) =>
+							(d.document_type ?? '').trim().toLowerCase()
+						)
+				);
+
+				for (const docType of DRIVER_DOCS) {
+					if (!approvedTypes.has(docType)) {
+						missingRequirements.push(docType);
+					}
+				}
+			}
+		}
+
+		allowedToPublish = missingRequirements.length === 0;
 
 		if (!isFemaleDriver) {
 			form.girlsOnly = false;
@@ -231,6 +282,34 @@
 			{#if successMessage}
 				<div class="mt-5 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700">
 					{successMessage}
+				</div>
+			{/if}
+
+			{#if !allowedToPublish && missingRequirements.length > 0}
+				<div class="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4">
+					<p class="text-sm font-semibold text-amber-800 mb-2">
+						You need to complete your driver profile before publishing a ride.
+					</p>
+					<ul class="list-disc list-inside space-y-1 text-sm text-amber-700">
+						{#if missingRequirements.includes('car_info')}
+							<li>Car information (make, year, and plate number) — complete in your profile</li>
+						{/if}
+						{#if missingRequirements.includes('driver_license')}
+							<li>Driver license document — upload and get it approved in your profile</li>
+						{/if}
+						{#if missingRequirements.includes('insurance')}
+							<li>Insurance proof — upload and get it approved in your profile</li>
+						{/if}
+						{#if missingRequirements.includes('vehicle_registration')}
+							<li>Vehicle registration — upload and get it approved in your profile</li>
+						{/if}
+					</ul>
+					<a
+						href="/profile"
+						class="mt-3 inline-block rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 transition-colors"
+					>
+						Go to my profile
+					</a>
 				</div>
 			{/if}
 

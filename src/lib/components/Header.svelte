@@ -6,26 +6,24 @@
 	let isMenuOpen = false;
 	let currentUser: any = null;
 	let hasAdminAccess = false;
+	let profilePhotoUrl: string | null = null;
 
 	async function updateAdminAccess(userId: string, email?: string | null) {
 		if (!userId) {
 			hasAdminAccess = false;
+			profilePhotoUrl = null;
 			return;
 		}
 
 		const isTargetEmail = (email ?? '').toLowerCase() === 'hizli.carpooling@gmail.com';
-		if (isTargetEmail) {
-			hasAdminAccess = true;
-			return;
-		}
-
 		const { data: profile, error } = await supabase
 			.from('profiles')
-			.select('is_admin')
+			.select('is_admin, profile_photo_url')
 			.eq('id', userId)
 			.single();
 
-		hasAdminAccess = !error && Boolean(profile?.is_admin);
+		hasAdminAccess = isTargetEmail || (!error && Boolean(profile?.is_admin));
+		profilePhotoUrl = !error ? (profile?.profile_photo_url ?? null) : null;
 	}
 
 	// Subscribe to user store
@@ -35,6 +33,7 @@
 			updateAdminAccess(u.id, u.email);
 		} else {
 			hasAdminAccess = false;
+			profilePhotoUrl = null;
 		}
 	});
 
@@ -85,11 +84,19 @@
 						Dashboard
 					</a>
 					<a href="/profile" class="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors">
-						<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/>
-							<circle cx="12" cy="7" r="4"/>
-						</svg>
-						Profile
+						{#if profilePhotoUrl}
+							<img
+								src={profilePhotoUrl}
+								alt="Profile"
+								class="w-9 h-9 rounded-full object-cover border border-gray-200"
+							/>
+						{:else}
+							<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/>
+								<circle cx="12" cy="7" r="4"/>
+							</svg>
+						{/if}
+						<span class="sr-only">Profile</span>
 					</a>
 					{#if hasAdminAccess}
 						<a href="/admin" class="text-gray-600 hover:text-gray-900 transition-colors">
@@ -161,8 +168,17 @@
 					>
 					<a
 						href="/profile"
-						class="block px-3 py-2 text-gray-600 hover:text-primary hover:bg-gray-50 rounded-md"
-						>Profile</a
+						class="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-primary hover:bg-gray-50 rounded-md"
+					>
+						{#if profilePhotoUrl}
+							<img
+								src={profilePhotoUrl}
+								alt="Profile"
+								class="w-7 h-7 rounded-full object-cover border border-gray-200"
+							/>
+						{/if}
+						<span>Profile</span>
+					</a
 					>
 					{#if hasAdminAccess}
 						<a

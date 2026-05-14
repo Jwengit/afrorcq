@@ -65,7 +65,8 @@
 
 	function mapPublicProfileFromRow(data: Record<string, unknown>): PublicProfile {
 		const legacyStatus = String(data.status ?? '').toLowerCase();
-		const isVerified = Boolean(data.is_verified) || legacyStatus === 'verified';
+		const hasProfilePhoto = Boolean(String(data.profile_photo_url ?? '').trim());
+		const isVerified = (Boolean(data.is_verified) || legacyStatus === 'verified') && hasProfilePhoto;
 
 		return {
 			first_name: String(data.first_name ?? ''),

@@ -141,7 +141,12 @@
 								first_name: profile.first_name ?? null,
 								last_name: profile.last_name ?? null,
 								profile_photo_url: profile.profile_photo_url ?? null,
-								is_verified: Boolean(profile.is_verified)
+								is_verified:
+									Boolean(profile.is_verified) &&
+									Boolean(
+										typeof profile.profile_photo_url === 'string' &&
+										profile.profile_photo_url.trim()
+									)
 							}
 						])
 					);
