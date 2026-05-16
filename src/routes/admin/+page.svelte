@@ -2596,6 +2596,10 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 		if (!session?.access_token) {
 			transactionsActionMessage = 'Session expired. Please sign in again.';
 			transactionsActionIsError = true;
+			if (selectedTransaction?.id === transaction.id) {
+				txModalMessage = 'Session expired. Please sign in again.';
+				txModalIsError = true;
+			}
 			transactionActionId = null;
 			return;
 		}
@@ -2614,8 +2618,13 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 
 		const payload = await response.json();
 		if (!response.ok) {
-			transactionsActionMessage = payload?.error || 'Refund unavailable right now.';
+			const errMsg = payload?.error || 'Refund unavailable right now.';
+			transactionsActionMessage = errMsg;
 			transactionsActionIsError = true;
+			if (selectedTransaction?.id === transaction.id) {
+				txModalMessage = errMsg;
+				txModalIsError = true;
+			}
 			transactionActionId = null;
 			return;
 		}
@@ -2623,6 +2632,12 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 		transactions = transactions.map((t) =>
 			t.id === transaction.id ? { ...t, refund_status: 'refunded' } : t
 		);
+		if (selectedTransaction?.id === transaction.id) {
+			selectedTransaction = { ...selectedTransaction, refund_status: 'refunded' };
+			txModalRefundStatus = 'refunded';
+			txModalMessage = 'Transaction marked as refunded.';
+			txModalIsError = false;
+		}
 		transactionsActionMessage = 'Transaction refunded.';
 		transactionActionId = null;
 	}
@@ -4298,7 +4313,12 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 														<p class="text-xs text-gray-500 mt-1">{tx.ride_info?.departure || '-'} to {tx.ride_info?.arrival || '-'}</p>
 													</td>
 													<td class="px-4 py-3"><span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${tx.status === 'succeeded' ? 'bg-green-100 text-green-700' : tx.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{tx.status}</span></td>
-													<td class="px-4 py-3"><span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${tx.admin_status === 'payout_done' ? 'bg-green-100 text-green-700' : tx.admin_status === 'dispute' ? 'bg-red-100 text-red-700' : tx.admin_status === 'validated' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}`}>{tx.admin_status || 'awaiting_payout'}</span></td>
+													<td class="px-4 py-3">
+														<span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${tx.admin_status === 'payout_done' ? 'bg-green-100 text-green-700' : tx.admin_status === 'dispute' ? 'bg-red-100 text-red-700' : tx.admin_status === 'validated' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}`}>{tx.admin_status || 'awaiting_payout'}</span>
+														{#if tx.refund_status && tx.refund_status !== 'none'}
+															<span class={`mt-1 inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${tx.refund_status === 'refunded' ? 'bg-indigo-100 text-indigo-700' : tx.refund_status === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{tx.refund_status}</span>
+														{/if}
+													</td>
 													<td class="px-4 py-3 align-top">
 														<p class="font-medium text-gray-900">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(tx.amount || 0))}</p>
 														<p class="text-xs text-green-700">Commission: {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(tx.commission_amount || 0))}</p>
