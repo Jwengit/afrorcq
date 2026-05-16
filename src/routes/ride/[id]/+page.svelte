@@ -291,14 +291,6 @@ onMount(async () => {
 		processingPayment = false;
 	}
 
-	async function getSessionAccessToken(): Promise<string | null> {
-		const {
-			data: { session }
-		} = await supabase.auth.getSession();
-
-		return session?.access_token ?? null;
-	}
-
 	function goBackToSearchResults() {
 		goto(resolve('/search'));
 	}
