@@ -1,5 +1,6 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
+import { env } from '$env/dynamic/private';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -31,6 +32,11 @@ type ReportPayload = {
 
 export const POST: RequestHandler = async ({ request }) => {
 	if (!supabaseUrl || !supabaseKey) {
+		return json({ error: 'Server configuration error' }, { status: 500 });
+	}
+
+	const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
+	if (!serviceRoleKey) {
 		return json({ error: 'Server configuration error' }, { status: 500 });
 	}
 
@@ -99,19 +105,43 @@ export const POST: RequestHandler = async ({ request }) => {
 		targetUserId = ride.driver_id ?? null;
 	}
 
+	const adminClient = createClient(supabaseUrl, serviceRoleKey);
+
+	const profileIdsToCheck = Array.from(
+		new Set([user.id, targetUserId].filter((id): id is string => Boolean(id)))
+	);
+
+	let existingProfileIds = new Set<string>();
+	if (profileIdsToCheck.length > 0) {
+		const { data: profileRows } = await adminClient
+			.from('profiles')
+			.select('id')
+			.in('id', profileIdsToCheck);
+
+		existingProfileIds = new Set((profileRows ?? []).map((row) => row.id));
+	}
+
 	const insertPayload = {
-		reporter_id: user.id,
-		user_id: targetUserId,
+		reporter_id: existingProfileIds.has(user.id) ? user.id : null,
+		user_id: targetUserId && existingProfileIds.has(targetUserId) ? targetUserId : null,
 		ride_id: targetRideId,
 		type: targetType,
 		description,
 		status: 'pending'
 	};
 
-	const { error: insertError } = await supabase.from('reports').insert(insertPayload);
+	const { data: insertedRows, error: insertError } = await adminClient
+		.from('reports')
+		.insert(insertPayload)
+		.select('id')
+		.limit(1);
 	if (insertError) {
+		console.error('[REPORTS_POST] Insert error:', insertError);
 		return json({ error: insertError.message }, { status: 400 });
 	}
 
-	return json({ success: true });
+	const reportId = insertedRows?.[0]?.id ?? null;
+	console.log('[REPORTS_POST] Report created successfully:', { reportId, insertPayload });
+
+	return json({ success: true, reportId });
 };

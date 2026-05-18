@@ -66,6 +66,7 @@
 			price: number;
 		};
 	};
+
 	let currentUser: User | null = null;
 	let isFemaleDriver = false;
 	let loading = true;
@@ -88,9 +89,6 @@
 	let reportActionMessage = '';
 	let reportActionError = '';
 	let reportingTargetId: string | null = null;
-	let quickReportRidePublicId = '';
-	let quickReportDescription = '';
-	let quickReportingRide = false;
 
 	let myArchivedRides: Ride[] = [];
 	let myArchivedBookings: Booking[] = [];
@@ -765,7 +763,10 @@
 				return;
 			}
 
-			reportActionMessage = 'Signalement envoye. Notre equipe admin va le traiter.';
+			const reportId = payload?.reportId;
+			reportActionMessage = reportId
+				? `Signalement envoye (ID: ${reportId}). Notre equipe admin va le traiter.`
+				: 'Signalement envoye. Notre equipe admin va le traiter.';
 		} catch {
 			reportActionError = 'Erreur inattendue lors de l envoi du signalement.';
 		} finally {
@@ -773,91 +774,6 @@
 		}
 	}
 
-	async function submitQuickRideReport() {
-		reportActionMessage = '';
-		reportActionError = '';
-
-		const ridePublicId = quickReportRidePublicId.trim();
-		const description = quickReportDescription.trim();
-
-		if (!ridePublicId) {
-			reportActionError = 'Ride ID requis.';
-			return;
-		}
-
-		if (!/^\d+$/.test(ridePublicId)) {
-			reportActionError = 'Ride ID must be numeric.';
-			return;
-		}
-
-		if (!description) {
-			reportActionError = 'Merci de decrire le probleme.';
-			return;
-		}
-
-		const token = await getSessionAccessToken();
-		if (!token) {
-			reportActionError = 'Session expired. Please sign in again.';
-			goto(resolve('/auth/login'));
-			return;
-		}
-
-		quickReportingRide = true;
-		try {
-			const { data: rideRow, error: rideLookupError } = await supabase
-				.from('rides')
-				.select('id')
-				.eq('public_id', Number.parseInt(ridePublicId, 10))
-				.maybeSingle();
-
-			if (rideLookupError || !rideRow) {
-				reportActionError = 'Ride not found for this public ID.';
-				return;
-			}
-
-			const response = await fetch('/api/reports', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${token}`
-				},
-				body: JSON.stringify({
-					targetType: 'ride',
-					targetRideId: rideRow.id,
-					description
-				})
-			});
-
-			const payload = await response.json();
-			if (!response.ok) {
-				reportActionError = payload?.error || 'Impossible d envoyer le signalement pour le moment.';
-				return;
-			}
-
-			reportActionMessage = 'Signalement envoye. Notre equipe admin va le traiter.';
-			quickReportRidePublicId = '';
-			quickReportDescription = '';
-		} catch {
-			reportActionError = 'Erreur inattendue lors de l envoi du signalement.';
-		} finally {
-			quickReportingRide = false;
-		}
-	}
-
-	function useRideIdForReport(ridePublicId: number | null) {
-		if (!ridePublicId) {
-			reportActionError = 'Ride public ID unavailable.';
-			return;
-		}
-
-		quickReportRidePublicId = String(ridePublicId);
-		reportActionError = '';
-		reportActionMessage = '';
-
-		if (browser) {
-			window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-		}
-	}
 </script>
 
 {#if loading}
@@ -991,7 +907,7 @@
 								{:else}
 									<p class="text-xs text-gray-400">{new Date(ride.ride_date).toLocaleString()}</p>
 									<h3 class="text-base font-semibold text-gray-900 mt-1">{ride.departure} → {ride.arrival}</h3>
-									<p class="mt-1 text-xs text-gray-500">Ride ID: {ride.public_id ?? '-'}</p>
+									<p class="mt-1 text-sm font-semibold text-red-700">Ride ID: #{ride.public_id ?? '-'}</p>
 									<p class="mt-2 text-sm text-gray-600">
 										{ride.seats} seat{ride.seats !== 1 ? 's' : ''} · ${ride.price}
 										{#if ride.girls_only}
@@ -1008,10 +924,10 @@
 										</button>
 											<button
 												type="button"
-												on:click={() => useRideIdForReport(ride.public_id)}
-												class="px-3 py-2 rounded-md border border-red-300 text-red-700 text-sm font-medium hover:bg-red-50"
+												on:click={() => goto(resolve(`/ride/${ride.id}`))}
+												class="px-3 py-2 rounded-md border border-emerald-300 text-emerald-700 text-sm font-medium hover:bg-emerald-50"
 											>
-												Use to report ride
+												Voir details
 											</button>
 										{#if deletingRideId === ride.id}
 											<button
@@ -1072,7 +988,7 @@
 											: request.ride.departure}
 									</h3>
 									<p class="text-sm text-gray-500 mt-1">{formatRideDate(request.ride.ride_date)}</p>
-									<p class="text-xs text-gray-500 mt-1">Ride ID: {request.ride.public_id ?? '-'}</p>
+									<p class="text-sm font-semibold text-red-700 mt-1">Ride ID: #{request.ride.public_id ?? '-'}</p>
 									<div class="mt-1 flex flex-wrap items-center gap-2 text-sm text-gray-600">
 										<span>Passenger:</span>
 										<a
@@ -1130,10 +1046,10 @@
 									{/if}
 									<button
 										type="button"
-										on:click={() => useRideIdForReport(request.ride.public_id)}
-										class="px-3 py-2 rounded-md border border-red-300 text-red-700 text-sm font-medium hover:bg-red-50"
+										on:click={() => goto(resolve(`/ride/${request.ride.id}`))}
+										class="px-3 py-2 rounded-md border border-emerald-300 text-emerald-700 text-sm font-medium hover:bg-emerald-50"
 									>
-										Use to report ride
+										Voir details
 									</button>
 								</div>
 								{#if request.status === 'Confirmed' && hasRideEnded(request.ride.ride_date) && openReviewFormId === `active-request:${request.id}`}
@@ -1180,7 +1096,7 @@
 											: booking.ride.departure}
 									</h3>
 									<p class="text-sm text-gray-500 mt-1">{formatRideDate(booking.ride.ride_date)}</p>
-									<p class="text-xs text-gray-500 mt-1">Ride ID: {booking.ride_public_id ?? '-'}</p>
+									<p class="text-sm font-semibold text-red-700 mt-1">Ride ID: #{booking.ride_public_id ?? '-'}</p>
 									<p class="text-sm text-gray-600 mt-1">
 										{booking.seat_booked} seat{booking.seat_booked !== 1 ? 's' : ''}
 										· {booking.ride.price > 0 ? `$${booking.ride.price}` : 'Price unavailable'}
@@ -1246,13 +1162,13 @@
 										{reportingTargetId === `ride:${booking.ride_id}` ? 'Sending...' : 'Report ride'}
 									</button>
 								{/if}
-								{#if booking.ride_public_id}
+								{#if booking.ride_id}
 									<button
 										type="button"
-										on:click={() => useRideIdForReport(booking.ride_public_id)}
-										class="px-3 py-2 rounded-md border border-red-300 text-red-700 text-sm font-medium hover:bg-red-50"
+										on:click={() => goto(resolve(`/ride/${booking.ride_id}`))}
+										class="px-3 py-2 rounded-md border border-emerald-300 text-emerald-700 text-sm font-medium hover:bg-emerald-50"
 									>
-										Use to report ride
+										Voir details
 									</button>
 								{/if}
 							</div>
@@ -1449,42 +1365,6 @@
 			{/if}
 		</section>
 		{/if}
-
-		<section class="dashboard-card p-6">
-			<h2 class="text-xl font-semibold text-gray-900 mb-2">Report a ride</h2>
-										<p class="text-sm text-gray-600 mb-4">Report a ride directly from the dashboard. The text is only visible to admins.</p>
-			<div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-				<input
-					type="text"
-					bind:value={quickReportRidePublicId}
-					placeholder="Ride ID"
-					class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-				/>
-				<textarea
-					bind:value={quickReportDescription}
-					rows="2"
-					maxlength="2000"
-										placeholder="Describe the issue..."
-					class="md:col-span-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-				></textarea>
-			</div>
-			<div class="mt-3">
-				<button
-					type="button"
-					on:click={submitQuickRideReport}
-					disabled={quickReportingRide}
-					class="px-4 py-2 rounded-md border border-red-300 text-red-700 text-sm font-medium hover:bg-red-50 disabled:opacity-60"
-				>
-					{quickReportingRide ? 'Sending...' : 'Report ride'}
-				</button>
-			</div>
-			{#if reportActionError}
-				<p class="mt-3 text-sm text-red-600">{reportActionError}</p>
-			{/if}
-			{#if reportActionMessage}
-				<p class="mt-3 text-sm text-green-700">{reportActionMessage}</p>
-			{/if}
-		</section>
 
 		</div>
 	</div>

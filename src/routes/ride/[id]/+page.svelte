@@ -335,7 +335,10 @@ onMount(async () => {
 				return;
 			}
 
-			reportMessage = 'Report sent. Our admin team will review it.';
+			const reportId = payload?.reportId;
+			reportMessage = reportId
+				? `Report sent (ID: ${reportId}). Our admin team will review it.`
+				: 'Report sent. Our admin team will review it.';
 			reportDescription = '';
 		} catch {
 			reportError = 'Unexpected error while sending report.';

@@ -55,6 +55,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
 
 		const adminAllowed = await isRequesterAdmin(token);
 		if (!adminAllowed) {
+			console.warn('[ADMIN_REPORTS_GET] Admin check failed - access denied');
 			return json({ error: 'Forbidden' }, { status: 403 });
 		}
 
@@ -74,7 +75,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
 		let query = adminClient
 			.from('reports')
 			.select(
-				'id, user_id, reporter_id, ride_id, type, description, status, action_taken, admin_note, created_at, updated_at, profiles(first_name, last_name, email), rides(departure, arrival, ride_date)'
+				'id, user_id, reporter_id, ride_id, type, description, status, action_taken, admin_note, created_at, updated_at'
 			)
 			.order('created_at', { ascending: false });
 
@@ -87,46 +88,48 @@ export const GET: RequestHandler = async ({ request, url }) => {
 		const { data, error } = await query;
 
 		if (error) {
-			if (error.message.toLowerCase().includes('relation') && error.message.toLowerCase().includes('reports')) {
-				return json({ reports: [] });
-			}
+			console.error('[ADMIN_REPORTS_GET] Query error:', error);
 			return json({ error: error.message }, { status: 500 });
 		}
 
-		const normalizedReports = (data ?? []).map((report) => {
-			const ride = Array.isArray(report.rides) ? report.rides[0] : report.rides;
-			const reportedProfile = Array.isArray(report.profiles) ? report.profiles[0] : report.profiles;
+		type RawReport = {
+			id: string;
+			user_id: string | null;
+			reporter_id: string | null;
+			ride_id: string | null;
+			type: string;
+			description: string | null;
+			status: string;
+			action_taken: string | null;
+			admin_note: string | null;
+			created_at: string;
+			updated_at: string;
+		};
 
-			return {
-				...report,
-				profiles: reportedProfile ?? null,
-				reported_profile: reportedProfile ?? null,
-				rides: ride
-					? {
-						...ride,
-						city_from: ride.departure,
-						city_to: ride.arrival
-					}
-					: ride
-			};
-		});
+		const rawReports = (data ?? []) as RawReport[];
+		console.log('[ADMIN_REPORTS_GET] Retrieved reports count:', rawReports.length);
 
-		// Enrich with reporter profiles in one query
-		const reporterIds = Array.from(
-			new Set(normalizedReports.map((r) => r.reporter_id).filter(Boolean))
-		) as string[];
+		const allProfileIds = Array.from(
+			new Set(
+				rawReports
+					.flatMap((r) => [r.user_id, r.reporter_id])
+					.filter((id): id is string => Boolean(id))
+			)
+		);
+		const rideIds = Array.from(
+			new Set(rawReports.map((r) => r.ride_id).filter((id): id is string => Boolean(id)))
+		);
 
-		const reporterProfileMap: Record<string, { first_name: string | null; last_name: string | null; email: string | null }> = {};
-
-		if (reporterIds.length > 0) {
-			const { data: reporterProfiles } = await adminClient
+		const profileMap: Record<string, { first_name: string | null; last_name: string | null; email: string | null }> = {};
+		if (allProfileIds.length > 0) {
+			const { data: profilesData } = await adminClient
 				.from('profiles')
 				.select('id, first_name, last_name, email')
-				.in('id', reporterIds);
+				.in('id', allProfileIds);
 
-			if (reporterProfiles) {
-				for (const p of reporterProfiles) {
-					reporterProfileMap[p.id] = {
+			if (profilesData) {
+				for (const p of profilesData) {
+					profileMap[p.id] = {
 						first_name: p.first_name ?? null,
 						last_name: p.last_name ?? null,
 						email: p.email ?? null
@@ -135,9 +138,30 @@ export const GET: RequestHandler = async ({ request, url }) => {
 			}
 		}
 
-		const enriched = normalizedReports.map((r) => ({
+		const rideMap: Record<string, { city_from: string | null; city_to: string | null; ride_date: string | null }> = {};
+		if (rideIds.length > 0) {
+			const { data: ridesData } = await adminClient
+				.from('rides')
+				.select('id, departure, arrival, ride_date')
+				.in('id', rideIds);
+
+			if (ridesData) {
+				for (const ride of ridesData) {
+					rideMap[ride.id] = {
+						city_from: ride.departure ?? null,
+						city_to: ride.arrival ?? null,
+						ride_date: ride.ride_date ?? null
+					};
+				}
+			}
+		}
+
+		const enriched = rawReports.map((r) => ({
 			...r,
-			reporter_profile: r.reporter_id ? (reporterProfileMap[r.reporter_id] ?? null) : null
+			profiles: r.user_id ? (profileMap[r.user_id] ?? null) : null,
+			reported_profile: r.user_id ? (profileMap[r.user_id] ?? null) : null,
+			reporter_profile: r.reporter_id ? (profileMap[r.reporter_id] ?? null) : null,
+			rides: r.ride_id ? (rideMap[r.ride_id] ?? null) : null
 		}));
 
 		return json({ reports: enriched });

@@ -1068,6 +1068,9 @@
 		if (tab === 'rides') {
 			void loadRides();
 		}
+		if (tab === 'reports') {
+			void loadReports();
+		}
 	}
 
 	async function openProfileModal(user: AdminUser) {
