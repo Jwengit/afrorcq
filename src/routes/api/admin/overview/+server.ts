@@ -254,7 +254,18 @@ export const GET: RequestHandler = async ({ request, url }) => {
 		if (!reportsError) {
 			reportsCount = pendingReportsCount ?? 0;
 		}
-		const alertsCount = reportsCount + accountsToVerify;
+
+		let supportTicketsToHandle = 0;
+		const { count: supportTicketsCount, error: supportTicketsError } = await adminClient
+			.from('support_tickets')
+			.select('id', { count: 'exact', head: true })
+			.in('status', ['open', 'in_progress']);
+
+		if (!supportTicketsError) {
+			supportTicketsToHandle = supportTicketsCount ?? 0;
+		}
+
+		const alertsCount = reportsCount + accountsToVerify + supportTicketsToHandle;
 
 		return json({
 			stats: {
@@ -269,7 +280,8 @@ export const GET: RequestHandler = async ({ request, url }) => {
 				alerts: {
 					total: alertsCount,
 					reports: reportsCount,
-					accountsToVerify
+					accountsToVerify,
+					supportTickets: supportTicketsToHandle
 				}
 			},
 			period,

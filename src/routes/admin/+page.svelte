@@ -497,7 +497,8 @@
 		alerts: {
 			total: 0,
 			reports: 0,
-			accountsToVerify: 0
+			accountsToVerify: 0,
+			supportTickets: 0
 		}
 	};
 
@@ -3438,23 +3439,30 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 					{#if activeTab === 'overview'}
 						<div class="space-y-6">
 							<!-- Section title -->
-							<div>
-								<h2 class="text-base font-semibold text-gray-900">Platform Overview</h2>
-								<p class="text-sm text-gray-500 mt-0.5">Key metrics in real time.</p>
+							<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-5 py-4 shadow-sm">
+								<div class="flex flex-wrap items-center justify-between gap-2">
+									<div>
+										<h2 class="text-base font-semibold text-gray-900">Platform Overview</h2>
+										<p class="text-sm text-gray-600 mt-0.5">Key metrics in real time.</p>
+									</div>
+									<span class="inline-flex items-center rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-xs font-medium text-emerald-700">
+										Auto refresh: 30s
+									</span>
+								</div>
 							</div>
 
 							<!-- Rides -->
-							<div>
-								<h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Rides</h3>
-								<div class="grid md:grid-cols-2 gap-4">
-									<div class="rounded-xl border border-green-200 bg-green-50 p-5">
+							<div class="rounded-2xl border border-gray-200 bg-white/90 p-4 shadow-sm">
+								<h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 px-1">Rides</h3>
+								<div class="grid md:grid-cols-2 gap-4 items-stretch">
+									<div class="rounded-xl border border-green-200 bg-green-50 p-5 h-full flex flex-col shadow-sm">
 										<div class="flex items-center justify-between mb-2">
 											<p class="text-sm font-semibold text-green-800">Active rides</p>
 											<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-700">{stats.activeRides}</span>
 										</div>
 										<p class="text-xs text-green-700 mb-3">Upcoming departure date, available for booking.</p>
 										{#if stats.activeRides + stats.completedRides > 0}
-											<div>
+											<div class="mt-auto">
 												<div class="flex justify-between text-xs text-green-700 mb-1">
 													<span>Active share</span>
 													<span>{Math.round(stats.activeRides / (stats.activeRides + stats.completedRides) * 100)} %</span>
@@ -3465,7 +3473,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 											</div>
 										{/if}
 									</div>
-									<div class="rounded-xl border border-gray-200 bg-gray-50 p-5">
+									<div class="rounded-xl border border-gray-200 bg-gray-50 p-5 h-full flex flex-col justify-between shadow-sm">
 										<div class="flex items-center justify-between mb-2">
 											<p class="text-sm font-semibold text-gray-700">Completed rides</p>
 											<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-gray-200 text-gray-600">{stats.completedRides}</span>
@@ -3479,15 +3487,15 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 							</div>
 
 							<!-- Bookings + Revenue -->
-							<div class="grid md:grid-cols-2 gap-4">
-								<div class="rounded-xl border border-purple-200 bg-purple-50 p-5">
+							<div class="grid md:grid-cols-2 gap-4 items-stretch">
+								<div class="rounded-xl border border-sky-200 bg-sky-50 p-5 h-full flex flex-col justify-between shadow-sm">
 									<div class="flex items-center justify-between mb-2">
-										<p class="text-sm font-semibold text-purple-800">Active bookings</p>
-										<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-700">{stats.reservationsInProgress}</span>
+										<p class="text-sm font-semibold text-sky-800">Active bookings</p>
+										<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-sky-100 text-sky-700">{stats.reservationsInProgress}</span>
 									</div>
-									<p class="text-xs text-purple-700">Status <strong>Pending</strong> or <strong>Confirmed</strong>, not departed yet.</p>
+									<p class="text-xs text-sky-700">Status <strong>Pending</strong> or <strong>Confirmed</strong>, not departed yet.</p>
 								</div>
-								<div class="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
+								<div class="rounded-xl border border-emerald-200 bg-emerald-50 p-5 h-full flex flex-col justify-between shadow-sm">
 									<div class="flex items-center justify-between mb-2">
 										<p class="text-sm font-semibold text-emerald-800">Estimated revenue</p>
 										{#if stats.revenue.hasPaymentIntegration}
@@ -3506,10 +3514,10 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 							</div>
 
 							<!-- Alerts -->
-							<div>
-								<h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Alerts</h3>
-								<div class="grid md:grid-cols-2 gap-4">
-									<div class="rounded-xl border p-5 {stats.alerts.reports > 0 ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-gray-50'}">
+							<div class="rounded-2xl border border-gray-200 bg-white/90 p-4 shadow-sm">
+								<h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 px-1">Alerts</h3>
+								<div class="grid md:grid-cols-3 gap-4">
+									<div class="rounded-xl border p-5 h-full flex flex-col justify-between shadow-sm {stats.alerts.reports > 0 ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-gray-50'}">
 										<div class="flex items-center justify-between mb-2">
 											<p class="text-sm font-semibold {stats.alerts.reports > 0 ? 'text-red-800' : 'text-gray-600'}">Reports</p>
 											<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold {stats.alerts.reports > 0 ? 'bg-red-100 text-red-700' : 'bg-gray-200 text-gray-600'}">{stats.alerts.reports}</span>
@@ -3523,7 +3531,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 											</button>
 										{/if}
 									</div>
-									<div class="rounded-xl border p-5 {stats.alerts.accountsToVerify > 0 ? 'border-orange-200 bg-orange-50' : 'border-gray-200 bg-gray-50'}">
+									<div class="rounded-xl border p-5 h-full flex flex-col justify-between shadow-sm {stats.alerts.accountsToVerify > 0 ? 'border-orange-200 bg-orange-50' : 'border-gray-200 bg-gray-50'}">
 										<div class="flex items-center justify-between mb-2">
 											<p class="text-sm font-semibold {stats.alerts.accountsToVerify > 0 ? 'text-orange-800' : 'text-gray-600'}">Accounts to verify</p>
 											<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold {stats.alerts.accountsToVerify > 0 ? 'bg-orange-100 text-orange-700' : 'bg-gray-200 text-gray-600'}">{stats.alerts.accountsToVerify}</span>
@@ -3534,6 +3542,20 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 											<p class="text-xs text-orange-700 mb-2">Unverified profiles or missing entries in profiles table.</p>
 											<button type="button" on:click={() => setTab('users')} class="text-xs font-medium text-orange-700 underline hover:text-orange-900 cursor-pointer">
 												View users ->
+											</button>
+										{/if}
+									</div>
+									<div class="rounded-xl border p-5 h-full flex flex-col justify-between shadow-sm {stats.alerts.supportTickets > 0 ? 'border-indigo-200 bg-indigo-50' : 'border-gray-200 bg-gray-50'}">
+										<div class="flex items-center justify-between mb-2">
+											<p class="text-sm font-semibold {stats.alerts.supportTickets > 0 ? 'text-indigo-800' : 'text-gray-600'}">Support tickets</p>
+											<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold {stats.alerts.supportTickets > 0 ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-200 text-gray-600'}">{stats.alerts.supportTickets}</span>
+										</div>
+										{#if stats.alerts.supportTickets === 0}
+											<p class="text-xs text-gray-500">No open support tickets.</p>
+										{:else}
+											<p class="text-xs text-indigo-700 mb-2">New or active support requests need attention.</p>
+											<button type="button" on:click={() => setTab('support')} class="text-xs font-medium text-indigo-700 underline hover:text-indigo-900 cursor-pointer">
+												View support ->
 											</button>
 										{/if}
 									</div>
@@ -3705,8 +3727,8 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 										<option value="">All statuses</option>
 										<option value="Actif">Active</option>
 										<option value="Complet">Full</option>
-										<option value="Annul+�">Cancelled</option>
-										<option value="Termin+�">Completed</option>
+										<option value="Annulé">Cancelled</option>
+										<option value="Terminé">Completed</option>
 									</select>
 									<button
 										on:click={loadRides}
@@ -3773,7 +3795,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 														<div class="text-xs text-gray-500">{ride.profiles?.email}</div>
 													</td>
 													<td class="px-4 py-3">
-														<div class="text-sm text-gray-900">{ride.city_from} ��� {ride.city_to}</div>
+														<div class="text-sm text-gray-900">{ride.city_from} -> {ride.city_to}</div>
 													</td>
 													<td class="px-4 py-3">
 														<div class="text-sm text-gray-600">
@@ -3803,11 +3825,11 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 																? 'bg-green-100 text-green-800'
 																: ride.status === 'Complet'
 																	? 'bg-yellow-100 text-yellow-800'
-																	: ride.status === 'Annul+�'
+																	: ride.status === 'Annulé'
 																		? 'bg-red-100 text-red-800'
 																		: 'bg-gray-100 text-gray-800'
 														}`}>
-															{ride.status === 'Actif' ? 'Active' : ride.status === 'Complet' ? 'Full' : ride.status === 'Annul+�' ? 'Cancelled' : ride.status === 'Termin+�' ? 'Completed' : ride.status}
+																	{ride.status === 'Actif' ? 'Active' : ride.status === 'Complet' ? 'Full' : ride.status === 'Annulé' ? 'Cancelled' : ride.status === 'Terminé' ? 'Completed' : ride.status}
 														</span>
 													</td>
 													<td class="px-4 py-3">
@@ -3920,7 +3942,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 														<div class="text-xs text-gray-500">{booking.profiles?.email}</div>
 													</td>
 													<td class="px-4 py-3">
-														<div class="text-sm text-gray-900">{booking.rides?.city_from} ��� {booking.rides?.city_to}</div>
+														<div class="text-sm text-gray-900">{booking.rides?.city_from} -> {booking.rides?.city_to}</div>
 														<div class="text-xs text-gray-500">
 															{new Date(booking.rides?.ride_date).toLocaleDateString('en-US', {
 																day: '2-digit',
@@ -4956,6 +4978,20 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 										</div>
 									{/if}
 								</div>
+								<div class="rounded-xl border p-5 {stats.alerts.supportTickets > 0 ? 'border-indigo-200 bg-indigo-50' : 'border-gray-200 bg-gray-50'}">
+									<div class="flex items-center justify-between mb-2">
+										<p class="text-sm font-semibold {stats.alerts.supportTickets > 0 ? 'text-indigo-800' : 'text-gray-600'}">Support tickets</p>
+										<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold {stats.alerts.supportTickets > 0 ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-200 text-gray-600'}">{stats.alerts.supportTickets}</span>
+									</div>
+									{#if stats.alerts.supportTickets === 0}
+										<p class="text-xs text-gray-500">No open support tickets.</p>
+									{:else}
+										<p class="text-xs text-indigo-700 mb-2">New or active support requests need attention.</p>
+										<button type="button" on:click={() => setTab('support')} class="text-xs font-medium text-indigo-700 underline hover:text-indigo-900 cursor-pointer">
+											View support ->
+										</button>
+									{/if}
+								</div>
 							</div>
 						</div>
 					{/if}
@@ -4971,7 +5007,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 				<div class="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white">
 					<div>
 						<h2 class="text-lg font-bold text-gray-900">Bookings</h2>
-						<p class="text-sm text-gray-500">{selectedRideForBookings.city_from} ��� {selectedRideForBookings.city_to}</p>
+						<p class="text-sm text-gray-500">{selectedRideForBookings.city_from} -> {selectedRideForBookings.city_to}</p>
 					</div>
 					<button
 						on:click={closeRideBookingsModal}
@@ -4979,7 +5015,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 						aria-label="Close"
 						title="Close modal"
 					>
-						+�
+						X
 					</button>
 				</div>
 
@@ -5042,7 +5078,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 						aria-label="Close"
 						title="Close modal"
 					>
-						+�
+						X
 					</button>
 				</div>
 
@@ -5060,7 +5096,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 										? 'bg-yellow-100 text-yellow-800'
 										: 'bg-red-100 text-red-800'
 							}`}>
-								{selectedBooking.status === 'Confirmed' ? 'ԣ� Confirmed' : selectedBooking.status === 'Pending' ? '�Ŧ Pending' : 'ԣ� Cancelled'}
+								{selectedBooking.status === 'Confirmed' ? 'Confirmed' : selectedBooking.status === 'Pending' ? 'Pending' : 'Cancelled'}
 							</span>
 						</div>
 						<p class="text-xs text-gray-500 mt-2">Booked on {new Date(selectedBooking.created_at).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
@@ -5082,7 +5118,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 							<div class="space-y-3">
 								<div class="grid grid-cols-2 gap-4">
 									<div>
-										<p class="text-xs text-gray-500">Nom</p>
+										<p class="text-xs text-gray-500">Name</p>
 										<p class="text-sm font-medium text-gray-900">{selectedBookingRider.first_name} {selectedBookingRider.last_name}</p>
 									</div>
 									<div>
@@ -5094,8 +5130,8 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 										<p class="text-sm font-medium text-gray-900">{selectedBookingRider.phone_number || 'Not provided'}</p>
 									</div>
 									<div>
-										<p class="text-xs text-gray-500">Note moyenne</p>
-										<p class="text-sm font-medium text-gray-900">{selectedBookingRider.average_rating ? `${selectedBookingRider.average_rating}/5 ԡ�` : 'No reviews'}</p>
+										<p class="text-xs text-gray-500">Average rating</p>
+										<p class="text-sm font-medium text-gray-900">{selectedBookingRider.average_rating ? `${selectedBookingRider.average_rating}/5` : 'No reviews'}</p>
 									</div>
 								</div>
 								<div class="pt-2">
@@ -5121,7 +5157,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 							<div class="grid grid-cols-2 gap-4">
 								<div>
 									<p class="text-xs text-gray-500">Route</p>
-									<p class="text-sm font-medium text-gray-900">{selectedBooking.rides?.city_from} ��� {selectedBooking.rides?.city_to}</p>
+									<p class="text-sm font-medium text-gray-900">{selectedBooking.rides?.city_from} -> {selectedBooking.rides?.city_to}</p>
 								</div>
 								<div>
 									<p class="text-xs text-gray-500">Ride date</p>
@@ -5134,7 +5170,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 									<p class="text-sm font-medium text-gray-900">{selectedBooking.seats_booked}</p>
 								</div>
 								<div>
-									<p class="text-xs text-gray-500">Prix par place</p>
+									<p class="text-xs text-gray-500">Price per seat</p>
 									<p class="text-sm font-medium text-gray-900">
 										{new Intl.NumberFormat('en-US', {
 											style: 'currency',
@@ -5180,7 +5216,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 						aria-label="Close"
 						title="Close modal"
 					>
-						+�
+						X
 					</button>
 				</div>
 				<div class="p-6 space-y-4 text-sm">
@@ -5360,7 +5396,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 							</div>
 							<div>
 								<p class="text-gray-500">Average rating</p>
-								<p class="font-medium text-gray-900">{selectedProfile.average_rating ? selectedProfile.average_rating.toFixed(1) + ' ԡ�' : '-'}</p>
+								<p class="font-medium text-gray-900">{selectedProfile.average_rating ? selectedProfile.average_rating.toFixed(1) + '/5' : '-'}</p>
 							</div>
 							<div>
 								<p class="text-gray-500">Created</p>

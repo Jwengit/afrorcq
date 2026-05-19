@@ -7,6 +7,14 @@
 	import { supabase } from '$lib/supabaseClient';
 	import type { User } from '@supabase/supabase-js';
 
+	// Support form state
+	let showSupportModal = false;
+	let supportSubject = '';
+	let supportMessage = '';
+	let supportSending = false;
+	let supportSendError = '';
+	let supportSendSuccess = '';
+
 	type DriverProfile = {
 		gender?: string | null;
 	};
@@ -89,6 +97,7 @@
 		ticketId: string;
 		subject: string;
 		status: string;
+		senderRole: 'user' | 'admin';
 		message: string;
 		createdAt: string;
 	};
@@ -133,6 +142,10 @@
 	let adminInboxError = '';
 	let adminInboxMessages: AdminInboxMessage[] = [];
 	let deletingAdminMessageId: string | null = null;
+	let supportReplyDrafts: Record<string, string> = {};
+	let supportReplySendingTicketId: string | null = null;
+	let supportReplyError = '';
+	let supportReplySuccess = '';
 
 	let editRideForm = {
 		departure: '',
@@ -229,12 +242,13 @@
 			adminInboxMessages = ticketConversations
 				.flatMap(({ ticket, messages }) =>
 					messages
-						.filter((msg) => msg.sender_role === 'admin' && (msg.message ?? '').trim().length > 0)
+						.filter((msg) => (msg.message ?? '').trim().length > 0)
 						.map((msg) => ({
 							id: msg.id,
 							ticketId: ticket.id,
 							subject: ticket.subject,
 							status: ticket.status,
+							senderRole: msg.sender_role,
 							message: msg.message,
 							createdAt: msg.created_at
 						}))
@@ -280,6 +294,100 @@
 			adminInboxError = error instanceof Error ? error.message : 'Unable to delete this message.';
 		} finally {
 			deletingAdminMessageId = null;
+		}
+	}
+
+	async function sendSupportTicket() {
+		supportSendError = '';
+		supportSendSuccess = '';
+		supportSending = true;
+
+		try {
+			const token = await getSessionAccessToken();
+			if (!token) {
+				supportSendError = 'Session expired. Please sign in again.';
+				return;
+			}
+
+			const res = await fetch('/api/support/tickets', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`
+				},
+				body: JSON.stringify({ subject: supportSubject.trim(), message: supportMessage.trim() })
+			});
+
+			const data = await res.json();
+			if (!res.ok) {
+				supportSendError = data?.error || 'Unable to send support ticket.';
+				return;
+			}
+
+			supportSendSuccess = 'Your message has been sent to support.';
+			supportSubject = '';
+			supportMessage = '';
+			void loadAdminInboxMessages();
+			setTimeout(() => {
+				showSupportModal = false;
+				supportSendSuccess = '';
+			}, 1200);
+		} catch (error) {
+			supportSendError = error instanceof Error ? error.message : 'Network error.';
+		} finally {
+			supportSending = false;
+		}
+	}
+
+	function isReplyBlocked(status: string) {
+		return status === 'resolved' || status === 'closed';
+	}
+
+	async function sendSupportReply(ticketId: string, ticketStatus: string) {
+		supportReplyError = '';
+		supportReplySuccess = '';
+
+		if (isReplyBlocked(ticketStatus)) {
+			supportReplyError = 'This ticket is closed. You cannot reply to resolved or closed tickets.';
+			return;
+		}
+
+		const message = (supportReplyDrafts[ticketId] ?? '').trim();
+		if (!message) {
+			supportReplyError = 'Please enter a message before sending.';
+			return;
+		}
+
+		supportReplySendingTicketId = ticketId;
+		try {
+			const token = await getSessionAccessToken();
+			if (!token) {
+				supportReplyError = 'Session expired. Please sign in again.';
+				return;
+			}
+
+			const response = await fetch('/api/support/tickets', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`
+				},
+				body: JSON.stringify({ ticketId, message })
+			});
+
+			const payload = await response.json();
+			if (!response.ok) {
+				supportReplyError = payload?.error || 'Unable to send your reply.';
+				return;
+			}
+
+			supportReplyDrafts = { ...supportReplyDrafts, [ticketId]: '' };
+			supportReplySuccess = 'Your reply has been sent.';
+			await loadAdminInboxMessages();
+		} catch (error) {
+			supportReplyError = error instanceof Error ? error.message : 'Network error.';
+		} finally {
+			supportReplySendingTicketId = null;
 		}
 	}
 
@@ -1015,6 +1123,11 @@
 								My bookings
 							</a>
 						</li>
+					<li>
+						<button type="button" class="inline-flex items-center px-4 py-2 rounded-full bg-white/90 text-indigo-700 text-sm font-semibold hover:bg-white transition-colors" on:click={() => showSupportModal = true}>
+							Contact Support
+						</button>
+					</li>
 					</ul>
 					<button type="button" on:click={showArchive ? closeArchive : openArchive} class="mt-3 inline-flex items-center gap-1.5 text-xs text-emerald-50/90 hover:text-white">
 						<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
@@ -1023,6 +1136,39 @@
 							: `View archive (${myArchivedRides.length + myArchivedBookings.length + archivedRequests.length})${pendingArchiveReviewsCount > 0 ? ` · ${pendingArchiveReviewsCount} review${pendingArchiveReviewsCount > 1 ? 's' : ''} left` : ''}`}
 					</button>
 				</nav>
+
+		<!-- Contact Support modal -->
+		{#if showSupportModal}
+		<div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+			<div class="bg-white text-gray-900 rounded-lg shadow-lg p-6 w-full max-w-md">
+				<h2 class="text-lg font-bold mb-2">Contact Support</h2>
+				<form on:submit|preventDefault={sendSupportTicket}>
+					<label class="block mb-2">
+						<span class="text-sm font-medium">Subject</span>
+						<input type="text" class="mt-1 w-full border rounded px-3 py-2 bg-white text-gray-900 placeholder-gray-500 caret-gray-900" bind:value={supportSubject} placeholder="Subject" required />
+					</label>
+					<label class="block mb-2">
+						<span class="text-sm font-medium">Message</span>
+						<textarea class="mt-1 w-full border rounded px-3 py-2 bg-white text-gray-900 placeholder-gray-500 caret-gray-900" rows="4" bind:value={supportMessage} placeholder="Describe the issue" required></textarea>
+					</label>
+					{#if supportSendError}
+						<p class="text-red-600 text-sm mb-2">{supportSendError}</p>
+					{/if}
+					{#if supportSendSuccess}
+						<p class="text-green-600 text-sm mb-2">{supportSendSuccess}</p>
+					{/if}
+					<div class="flex justify-end gap-2 mt-4">
+						<button type="button" class="px-3 py-2 rounded border text-sm" on:click={() => { showSupportModal = false; supportSendError = ''; supportSendSuccess = ''; supportSubject = ''; supportMessage = ''; }}>
+							Cancel
+						</button>
+						<button type="submit" class="px-3 py-2 rounded bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-60" disabled={supportSending}>
+							{supportSending ? 'Sending...' : 'Send'}
+						</button>
+					</div>
+				</form>
+			</div>
+		</div>
+		{/if}
 			</section>
 
 			{#if !showArchive}
@@ -1044,7 +1190,14 @@
 
 				{#if adminInboxError}
 					<p class="text-sm text-red-600">{adminInboxError}</p>
-				{:else if adminInboxLoading}
+				{/if}
+				{#if supportReplyError}
+					<p class="text-sm text-red-600">{supportReplyError}</p>
+				{/if}
+				{#if supportReplySuccess}
+					<p class="text-sm text-green-700">{supportReplySuccess}</p>
+				{/if}
+				{#if adminInboxLoading}
 					<p class="text-sm text-gray-500">Loading messages...</p>
 				{:else if adminInboxMessages.length === 0}
 					<p class="text-sm text-gray-500">No admin messages for now.</p>
@@ -1053,7 +1206,12 @@
 						{#each adminInboxMessages as msg (msg.id)}
 							<article class="surface-card p-4">
 								<div class="flex flex-wrap items-center justify-between gap-2">
-									<p class="text-sm font-semibold text-gray-900">{msg.subject}</p>
+									<div class="flex items-center gap-2">
+										<p class="text-sm font-semibold text-gray-900">{msg.subject}</p>
+										<span class={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${msg.senderRole === 'admin' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-700'}`}>
+											{msg.senderRole === 'admin' ? 'Admin' : 'You'}
+										</span>
+									</div>
 									<span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
 										msg.status === 'open'
 											? 'bg-yellow-100 text-yellow-700'
@@ -1067,15 +1225,41 @@
 								<p class="text-sm text-gray-700 mt-2 whitespace-pre-line">{msg.message}</p>
 								<div class="mt-2 flex items-center justify-between gap-2">
 									<p class="text-xs text-gray-400">{new Date(msg.createdAt).toLocaleString()}</p>
-									<button
-										type="button"
-										on:click={() => deleteAdminInboxMessage(msg.id)}
-										disabled={deletingAdminMessageId === msg.id}
-										class="px-2 py-1 rounded-md border border-gray-300 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
-									>
-										{deletingAdminMessageId === msg.id ? 'Deleting...' : 'Delete'}
-									</button>
+									{#if msg.senderRole === 'admin'}
+										<button
+											type="button"
+											on:click={() => deleteAdminInboxMessage(msg.id)}
+											disabled={deletingAdminMessageId === msg.id}
+											class="px-2 py-1 rounded-md border border-gray-300 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+										>
+											{deletingAdminMessageId === msg.id ? 'Deleting...' : 'Delete'}
+										</button>
+									{/if}
 								</div>
+								{#if isReplyBlocked(msg.status)}
+									<p class="mt-2 text-xs text-gray-500">Replies are disabled because this ticket is {msg.status}.</p>
+								{:else}
+									<div class="mt-3 space-y-2">
+										<label class="text-xs font-medium text-gray-600" for={`reply-${msg.id}`}>Reply</label>
+										<textarea
+											id={`reply-${msg.id}`}
+											rows="3"
+											class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-500"
+											placeholder="Write your reply"
+											bind:value={supportReplyDrafts[msg.ticketId]}
+										></textarea>
+										<div class="flex justify-end">
+											<button
+												type="button"
+												on:click={() => sendSupportReply(msg.ticketId, msg.status)}
+												disabled={supportReplySendingTicketId === msg.ticketId}
+												class="px-3 py-1.5 rounded-md bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 disabled:opacity-60"
+											>
+												{supportReplySendingTicketId === msg.ticketId ? 'Sending...' : 'Send reply'}
+											</button>
+										</div>
+									</div>
+								{/if}
 							</article>
 						{/each}
 					</div>
@@ -1186,7 +1370,7 @@
 												on:click={() => goto(resolve(`/ride/${ride.id}`))}
 												class="px-3 py-2 rounded-md border border-emerald-300 text-emerald-700 text-sm font-medium hover:bg-emerald-50"
 											>
-												Voir details
+												View details
 											</button>
 										{#if deletingRideId === ride.id}
 											<button
@@ -1300,7 +1484,7 @@
 											disabled={reportingTargetId === `user:${request.passenger_id}`}
 											class="px-3 py-2 rounded-md border border-red-300 text-red-700 text-sm font-medium hover:bg-red-50 disabled:opacity-60"
 										>
-											{reportingTargetId === `user:${request.passenger_id}` ? 'Envoi...' : 'Signaler utilisateur'}
+											{reportingTargetId === `user:${request.passenger_id}` ? 'Sending...' : 'Report user'}
 										</button>
 									{/if}
 									<button
@@ -1308,7 +1492,7 @@
 										on:click={() => goto(resolve(`/ride/${request.ride.id}`))}
 										class="px-3 py-2 rounded-md border border-emerald-300 text-emerald-700 text-sm font-medium hover:bg-emerald-50"
 									>
-										Voir details
+										View details
 									</button>
 								</div>
 								{#if request.status === 'Confirmed' && hasRideEnded(request.ride.ride_date) && openReviewFormId === `active-request:${request.id}`}
@@ -1408,7 +1592,7 @@
 										disabled={reportingTargetId === `user:${booking.ride.driver_id}`}
 										class="px-3 py-2 rounded-md border border-red-300 text-red-700 text-sm font-medium hover:bg-red-50 disabled:opacity-60"
 									>
-										{reportingTargetId === `user:${booking.ride.driver_id}` ? 'Envoi...' : 'Signaler utilisateur'}
+										{reportingTargetId === `user:${booking.ride.driver_id}` ? 'Sending...' : 'Report user'}
 									</button>
 								{/if}
 								{#if booking.ride_id}
@@ -1427,7 +1611,7 @@
 										on:click={() => goto(resolve(`/ride/${booking.ride_id}`))}
 										class="px-3 py-2 rounded-md border border-emerald-300 text-emerald-700 text-sm font-medium hover:bg-emerald-50"
 									>
-										Voir details
+										View details
 									</button>
 								{/if}
 							</div>

@@ -5,26 +5,26 @@ import type { User } from '@supabase/supabase-js';
 
 export const user: Writable<User | null> = writable(null);
 
-// Configuration de l'inactivité (15 minutes en millisecondes)
+// Inactivity timeout configuration (15 minutes in milliseconds)
 const INACTIVITY_TIMEOUT = 15 * 60 * 1000;
 let inactivityTimer: NodeJS.Timeout | null = null;
 
-// Fonction pour réinitialiser le timer d'inactivité
+// Reset inactivity timer
 function resetInactivityTimer() {
 	// Effacer le timer existant
 	if (inactivityTimer) {
 		clearTimeout(inactivityTimer);
 	}
 
-	// Créer un nouveau timer
+	// Create a new timer
 	inactivityTimer = setTimeout(async () => {
-		console.log('Déconnexion pour inactivité');
+		console.log('Auto sign-out due to inactivity');
 		await supabase.auth.signOut();
 		user.set(null);
 	}, INACTIVITY_TIMEOUT);
 }
 
-// Fonction pour configurer les écouteurs d'activité
+// Setup activity listeners
 function setupActivityListeners() {
 	if (!browser) return;
 
@@ -40,14 +40,14 @@ function setupActivityListeners() {
 		);
 	});
 
-	// Démarrer le timer initial
+	// Start initial timer
 	resetInactivityTimer();
 }
 
 if (browser) {
 	supabase.auth.getUser().then(({ data: { user: currentUser } }) => {
 		user.set(currentUser);
-		// Configurer les écouteurs d'activité si l'utilisateur est connecté
+		// Setup activity listeners when user is already authenticated
 		if (currentUser) {
 			setupActivityListeners();
 		}
@@ -56,11 +56,11 @@ if (browser) {
 	supabase.auth.onAuthStateChange((event, session) => {
 		user.set(session?.user ?? null);
 		
-		// Configurer les écouteurs d'activité si l'utilisateur se connecte
+		// Setup activity listeners when user signs in
 		if (session?.user) {
 			setupActivityListeners();
 		} else {
-			// Arrêter le timer si l'utilisateur se déconnecte
+			// Stop timer when user signs out
 			if (inactivityTimer) {
 				clearTimeout(inactivityTimer);
 				inactivityTimer = null;
