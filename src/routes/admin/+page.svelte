@@ -505,6 +505,35 @@
 		const unsubscribe = user.subscribe((u) => {
 			currentUser = u;
 		});
+		const reportRefreshChannel =
+			typeof window !== 'undefined' && 'BroadcastChannel' in window
+				? new BroadcastChannel('admin-reports')
+				: null;
+		const refreshInterval = window.setInterval(() => {
+			if (!loading && isAdmin) {
+				void loadStats();
+				if (activeTab === 'reports') {
+					void loadReports();
+				}
+			}
+		}, 30000);
+		const handleReportsRefreshSignal = () => {
+			if (!loading && isAdmin) {
+				void loadStats();
+				if (activeTab === 'reports') {
+					void loadReports();
+				}
+			}
+		};
+
+		const handleStorageRefreshSignal = (event: StorageEvent) => {
+			if (event.key === 'admin-reports-refresh') {
+				handleReportsRefreshSignal();
+			}
+		};
+
+		reportRefreshChannel?.addEventListener('message', handleReportsRefreshSignal);
+		window.addEventListener('storage', handleStorageRefreshSignal);
 
 		async function initializeAdminPage() {
 			// Wait for auth to resolve
@@ -589,7 +618,13 @@
 
 		initializeAdminPage();
 
-		return () => unsubscribe();
+		return () => {
+			unsubscribe();
+			reportRefreshChannel?.removeEventListener('message', handleReportsRefreshSignal);
+			reportRefreshChannel?.close();
+			window.removeEventListener('storage', handleStorageRefreshSignal);
+			window.clearInterval(refreshInterval);
+		};
 	});
 
 	async function loadStats() {
@@ -609,9 +644,11 @@
 			url += '&startDate=' + encodeURIComponent(customStartDate);
 			url += '&endDate=' + encodeURIComponent(customEndDate);
 		}
+		url += '&_ts=' + Date.now();
 
 		const response = await fetch(url, {
 			method: 'GET',
+			cache: 'no-store',
 			headers: {
 				Authorization: `Bearer ${session.access_token}`
 			}
@@ -1947,15 +1984,22 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 		const params = new URLSearchParams();
 		if (reportFilterType) params.append('type', reportFilterType);
 		if (reportFilterStatus) params.append('status', reportFilterStatus);
+		params.append('_ts', Date.now().toString());
 
-		const response = await fetch(`/api/admin/reports?${params.toString()}`, {
-			method: 'GET',
-			headers: {
-				Authorization: `Bearer ${session.access_token}`
-			}
-		});
+		const fetchReportsPayload = async (query: URLSearchParams) => {
+			const response = await fetch(`/api/admin/reports?${query.toString()}`, {
+				method: 'GET',
+				cache: 'no-store',
+				headers: {
+					Authorization: `Bearer ${session.access_token}`
+				}
+			});
 
-		const payload = await response.json();
+			const payload = await response.json();
+			return { response, payload };
+		};
+
+		let { response, payload } = await fetchReportsPayload(params);
 		if (!response.ok) {
 			reportsError = payload?.error || 'Unable to load reports.';
 			reports = [];
@@ -1963,7 +2007,34 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 			return;
 		}
 
-		reports = (payload?.reports ?? []) as AdminReport[];
+		let fetchedReports = (payload?.reports ?? []) as AdminReport[];
+		if (fetchedReports.length === 0 && (reportFilterType || reportFilterStatus)) {
+			const fallbackParams = new URLSearchParams();
+			fallbackParams.append('_ts', Date.now().toString());
+			({ response, payload } = await fetchReportsPayload(fallbackParams));
+			if (response.ok) {
+				fetchedReports = (payload?.reports ?? []) as AdminReport[];
+			}
+		}
+
+		if (fetchedReports.length === 0) {
+			const { data: clientRows, error: clientError } = await supabase
+				.from('reports')
+				.select('id, user_id, reporter_id, ride_id, type, description, status, action_taken, admin_note, created_at, updated_at')
+				.order('created_at', { ascending: false });
+
+			if (!clientError && clientRows && clientRows.length > 0) {
+				fetchedReports = (clientRows as AdminReport[]).map((row) => ({
+					...row,
+					profiles: null,
+					reported_profile: null,
+					reporter_profile: null,
+					rides: null
+				}));
+			}
+		}
+
+		reports = fetchedReports;
 		applyReportFilters();
 		reportsLoading = false;
 	}
@@ -3968,7 +4039,11 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 							{:else if reportsError}
 								<p class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{reportsError}</p>
 							{:else if filteredReports.length === 0}
-								<p class="text-sm text-gray-500">No reports right now.</p>
+								<p class="text-sm text-gray-500">
+									{reportSearch.trim() || reportFilterType || reportFilterStatus
+										? 'No reports match the current search/filters.'
+										: 'No reports right now.'}
+								</p>
 							{:else}
 								<div class="overflow-x-auto border border-gray-100 rounded-xl">
 									<table class="w-full text-sm">

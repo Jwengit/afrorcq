@@ -67,6 +67,32 @@
 		};
 	};
 
+	type SupportTicket = {
+		id: string;
+		subject: string;
+		status: 'open' | 'in_progress' | 'resolved' | 'closed';
+		priority: 'low' | 'normal' | 'high' | 'urgent';
+		created_at: string;
+		updated_at: string;
+	};
+
+	type SupportMessage = {
+		id: string;
+		ticket_id: string;
+		sender_role: 'user' | 'admin';
+		message: string;
+		created_at: string;
+	};
+
+	type AdminInboxMessage = {
+		id: string;
+		ticketId: string;
+		subject: string;
+		status: string;
+		message: string;
+		createdAt: string;
+	};
+
 	let currentUser: User | null = null;
 	let isFemaleDriver = false;
 	let loading = true;
@@ -90,12 +116,23 @@
 	let reportActionError = '';
 	let reportingTargetId: string | null = null;
 
+	// Report modal state
+	let showReportModal = false;
+	let reportModalTargetType: 'user' | 'ride' = 'user';
+	let reportModalTargetId = '';
+	let reportModalDescription = '';
+	let reportModalSubmitting = false;
+
 	let myArchivedRides: Ride[] = [];
 	let myArchivedBookings: Booking[] = [];
 	let archivedRequests: DriverBookingRequest[] = [];
 	let showArchive = false;
 	let openReviewFormId: string | null = null;
 	let pendingArchiveReviewsCount = 0;
+	let adminInboxLoading = false;
+	let adminInboxError = '';
+	let adminInboxMessages: AdminInboxMessage[] = [];
+	let deletingAdminMessageId: string | null = null;
 
 	let editRideForm = {
 		departure: '',
@@ -130,8 +167,121 @@
 		await loadMyBookings(user!.id);
 		await loadIncomingBookingRequests(user!.id);
 		await refreshPendingArchiveReviewsCount();
+		await loadAdminInboxMessages();
 		loading = false;
 	});
+
+	async function loadAdminInboxMessages() {
+		if (!currentUser) {
+			adminInboxMessages = [];
+			return;
+		}
+
+		adminInboxLoading = true;
+		adminInboxError = '';
+
+		try {
+			const token = await getSessionAccessToken();
+			if (!token) {
+				adminInboxMessages = [];
+				return;
+			}
+
+			const ticketsResponse = await fetch('/api/support/tickets', {
+				headers: {
+					Authorization: `Bearer ${token}`
+				}
+			});
+
+			const ticketsPayload = await ticketsResponse.json();
+			if (!ticketsResponse.ok) {
+				adminInboxError = ticketsPayload?.error || 'Unable to load admin messages.';
+				adminInboxMessages = [];
+				return;
+			}
+
+			const tickets = ((ticketsPayload?.tickets ?? []) as SupportTicket[]).slice(0, 10);
+			if (tickets.length === 0) {
+				adminInboxMessages = [];
+				return;
+			}
+
+			const ticketConversations = await Promise.all(
+				tickets.map(async (ticket) => {
+					const response = await fetch(`/api/support/tickets?ticketId=${ticket.id}`, {
+						headers: {
+							Authorization: `Bearer ${token}`
+						}
+					});
+
+					if (!response.ok) {
+						return { ticket, messages: [] as SupportMessage[] };
+					}
+
+					const payload = await response.json();
+					return {
+						ticket,
+						messages: (payload?.messages ?? []) as SupportMessage[]
+					};
+				})
+			);
+
+			adminInboxMessages = ticketConversations
+				.flatMap(({ ticket, messages }) =>
+					messages
+						.filter((msg) => msg.sender_role === 'admin' && (msg.message ?? '').trim().length > 0)
+						.map((msg) => ({
+							id: msg.id,
+							ticketId: ticket.id,
+							subject: ticket.subject,
+							status: ticket.status,
+							message: msg.message,
+							createdAt: msg.created_at
+						}))
+				)
+				.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+				.slice(0, 20);
+		} catch (error) {
+			adminInboxError = error instanceof Error ? error.message : 'Unable to load admin messages.';
+			adminInboxMessages = [];
+		} finally {
+			adminInboxLoading = false;
+		}
+	}
+
+	async function deleteAdminInboxMessage(messageId: string) {
+		if (!messageId) return;
+
+		deletingAdminMessageId = messageId;
+		adminInboxError = '';
+
+		try {
+			const token = await getSessionAccessToken();
+			if (!token) {
+				adminInboxError = 'Session expired. Please sign in again.';
+				return;
+			}
+
+			const response = await fetch(`/api/support/tickets?messageId=${encodeURIComponent(messageId)}`, {
+				method: 'DELETE',
+				headers: {
+					Authorization: `Bearer ${token}`
+				}
+			});
+
+			const payload = await response.json();
+			if (!response.ok) {
+				adminInboxError = payload?.error || 'Unable to delete this message.';
+				return;
+			}
+
+			adminInboxMessages = adminInboxMessages.filter((msg) => msg.id !== messageId);
+		} catch (error) {
+			adminInboxError = error instanceof Error ? error.message : 'Unable to delete this message.';
+		} finally {
+			deletingAdminMessageId = null;
+		}
+	}
 
 	function getArchiveReviewTargets() {
 		if (!currentUser) return [] as Array<{ rideId: string; revieweeId: string }>;
@@ -716,31 +866,72 @@
 	}
 
 	async function getSessionAccessToken(): Promise<string | null> {
+		// Use existing token if it won't expire within 60 seconds
 		const {
 			data: { session }
 		} = await supabase.auth.getSession();
 
-		return session?.access_token ?? null;
+		if (session?.access_token) {
+			const expiresAt = session.expires_at ?? 0;
+			const nowSec = Math.floor(Date.now() / 1000);
+			if (expiresAt - nowSec > 60) {
+				return session.access_token;
+			}
+		}
+
+		// Token missing or about to expire — force a refresh
+		const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+		if (refreshError || !refreshed.session?.access_token) return null;
+		return refreshed.session.access_token;
 	}
 
-	async function submitReport(targetType: 'user' | 'ride', targetId: string) {
-		if (!targetId) return;
+	function notifyAdminReportsUpdated() {
+		if (typeof window === 'undefined') return;
 
+		try {
+			if ('BroadcastChannel' in window) {
+				const channel = new BroadcastChannel('admin-reports');
+				channel.postMessage({ type: 'reports-updated', timestamp: Date.now() });
+				channel.close();
+			}
+
+			const storageKey = 'admin-reports-refresh';
+			window.localStorage.setItem(storageKey, String(Date.now()));
+			window.localStorage.removeItem(storageKey);
+		} catch {
+			// No-op: refresh is best-effort.
+		}
+	}
+
+	function submitReport(targetType: 'user' | 'ride', targetId: string) {
+		if (!targetId) return;
 		reportActionMessage = '';
 		reportActionError = '';
+		reportModalTargetType = targetType;
+		reportModalTargetId = targetId;
+		reportModalDescription = '';
+		showReportModal = true;
+	}
 
-		const description = prompt('Describe the issue. This text is only visible to admins.')?.trim();
+	async function submitReportFromModal() {
+		const description = reportModalDescription.trim();
 		if (!description) {
+			reportActionError = 'Please provide a description.';
 			return;
 		}
+
+		const targetType = reportModalTargetType;
+		const targetId = reportModalTargetId;
 
 		const token = await getSessionAccessToken();
 		if (!token) {
 			reportActionError = 'Session expired. Please sign in again.';
+			showReportModal = false;
 			goto(resolve('/auth/login'));
 			return;
 		}
 
+		reportModalSubmitting = true;
 		reportingTargetId = `${targetType}:${targetId}`;
 		try {
 			const body =
@@ -757,20 +948,32 @@
 				body: JSON.stringify(body)
 			});
 
-			const payload = await response.json();
-			if (!response.ok) {
-				reportActionError = payload?.error || 'Unable to send report right now.';
+			const rawPayload = await response.text();
+			let payload: { reportId?: string; error?: string } | null = null;
+			if (rawPayload) {
+				try {
+					payload = JSON.parse(rawPayload);
+				} catch {
+					payload = null;
+				}
+			}
+
+			if (response.ok) {
+				const reportId = payload?.reportId;
+				reportActionMessage = reportId
+					? `Report submitted (ID: ${reportId}). Our admin team will review it.`
+					: 'Report submitted. Our admin team will review it.';
+				showReportModal = false;
+				notifyAdminReportsUpdated();
 				return;
 			}
 
-			const reportId = payload?.reportId;
-			reportActionMessage = reportId
-				? `Signalement envoye (ID: ${reportId}). Notre equipe admin va le traiter.`
-				: 'Signalement envoye. Notre equipe admin va le traiter.';
-		} catch {
-			reportActionError = 'Erreur inattendue lors de l envoi du signalement.';
+			reportActionError = `Error (${response.status}): ${payload?.error || 'Unable to send the report right now.'}`;
+		} catch (err) {
+			reportActionError = `Unexpected error: ${err instanceof Error ? err.message : String(err)}`;
 		} finally {
 			reportingTargetId = null;
+			reportModalSubmitting = false;
 		}
 	}
 
@@ -823,6 +1026,62 @@
 			</section>
 
 			{#if !showArchive}
+			<section class="dashboard-card p-6">
+				<div class="flex items-center justify-between gap-3 mb-3">
+					<div>
+						<h2 class="text-xl font-semibold text-gray-900">Admin messages</h2>
+						<p class="text-sm text-gray-500">Private moderation and support messages visible only to your account.</p>
+					</div>
+					<button
+						type="button"
+						on:click={loadAdminInboxMessages}
+						disabled={adminInboxLoading}
+						class="px-3 py-2 rounded-md border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+					>
+						{adminInboxLoading ? 'Refreshing...' : 'Refresh'}
+					</button>
+				</div>
+
+				{#if adminInboxError}
+					<p class="text-sm text-red-600">{adminInboxError}</p>
+				{:else if adminInboxLoading}
+					<p class="text-sm text-gray-500">Loading messages...</p>
+				{:else if adminInboxMessages.length === 0}
+					<p class="text-sm text-gray-500">No admin messages for now.</p>
+				{:else}
+					<div class="space-y-3">
+						{#each adminInboxMessages as msg (msg.id)}
+							<article class="surface-card p-4">
+								<div class="flex flex-wrap items-center justify-between gap-2">
+									<p class="text-sm font-semibold text-gray-900">{msg.subject}</p>
+									<span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+										msg.status === 'open'
+											? 'bg-yellow-100 text-yellow-700'
+											: msg.status === 'in_progress'
+												? 'bg-blue-100 text-blue-700'
+												: msg.status === 'resolved'
+													? 'bg-green-100 text-green-700'
+													: 'bg-gray-100 text-gray-700'
+									}`}>{msg.status}</span>
+								</div>
+								<p class="text-sm text-gray-700 mt-2 whitespace-pre-line">{msg.message}</p>
+								<div class="mt-2 flex items-center justify-between gap-2">
+									<p class="text-xs text-gray-400">{new Date(msg.createdAt).toLocaleString()}</p>
+									<button
+										type="button"
+										on:click={() => deleteAdminInboxMessage(msg.id)}
+										disabled={deletingAdminMessageId === msg.id}
+										class="px-2 py-1 rounded-md border border-gray-300 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+									>
+										{deletingAdminMessageId === msg.id ? 'Deleting...' : 'Delete'}
+									</button>
+								</div>
+							</article>
+						{/each}
+					</div>
+				{/if}
+			</section>
+
 			<section id="my-rides" class="dashboard-card p-6 scroll-mt-28">
 				<h2 class="text-xl font-semibold text-gray-900 mb-4">My rides</h2>
 				{#if rideActionError}
@@ -1366,6 +1625,53 @@
 		</section>
 		{/if}
 
+		</div>
+	</div>
+{/if}
+
+<!-- Report modal -->
+{#if showReportModal}
+	<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+		on:click|self={() => { if (!reportModalSubmitting) showReportModal = false; }}
+	>
+		<div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+			<h2 class="text-lg font-semibold text-gray-800 mb-1">
+				{reportModalTargetType === 'user' ? 'Report a user' : 'Report a ride'}
+			</h2>
+			<p class="text-sm text-gray-500 mb-4">Your report will be reviewed by the admin team and kept confidential.</p>
+
+			<textarea
+				bind:value={reportModalDescription}
+				placeholder="Describe the issue..."
+				rows="4"
+				disabled={reportModalSubmitting}
+				class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-red-400 resize-none disabled:bg-gray-50"
+			></textarea>
+
+			{#if reportActionError}
+				<p class="mt-2 text-sm text-red-600">{reportActionError}</p>
+			{/if}
+
+			<div class="mt-4 flex justify-end gap-3">
+				<button
+					type="button"
+					disabled={reportModalSubmitting}
+					on:click={() => { showReportModal = false; reportActionError = ''; }}
+					class="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+				>
+					Cancel
+				</button>
+				<button
+					type="button"
+					disabled={reportModalSubmitting || !reportModalDescription.trim()}
+					on:click={submitReportFromModal}
+					class="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-50"
+				>
+					{reportModalSubmitting ? 'Sending...' : 'Submit report'}
+				</button>
+			</div>
 		</div>
 	</div>
 {/if}

@@ -108,6 +108,9 @@ export const GET: RequestHandler = async ({ request, url }) => {
 
 		const rawReports = (data ?? []) as RawReport[];
 		console.log('[ADMIN_REPORTS_GET] Retrieved reports count:', rawReports.length);
+		if (rawReports.length === 0) {
+			console.warn('[ADMIN_REPORTS_GET] No reports returned. Check whether reports are being inserted into the same Supabase project/environment.');
+		}
 
 		const allProfileIds = Array.from(
 			new Set(
@@ -233,6 +236,41 @@ export const PATCH: RequestHandler = async ({ request }) => {
 				.eq('id', userId);
 			if (suspendError) {
 				return json({ error: suspendError.message }, { status: 500 });
+			}
+		}
+
+		if (action === 'warn' && userId) {
+			const warningMessage =
+				(note ?? '').trim() ||
+				'Your account has received a warning from the admin team. Please review platform rules and avoid repeating the reported behavior.';
+
+			const { data: createdTicket, error: createTicketError } = await adminClient
+				.from('support_tickets')
+				.insert({
+					user_id: userId,
+					subject: 'Account warning from admin',
+					status: 'open',
+					priority: 'high'
+				})
+				.select('id')
+				.single();
+
+			if (createTicketError || !createdTicket?.id) {
+				return json(
+					{ error: createTicketError?.message || 'Unable to create warning ticket.' },
+					{ status: 500 }
+				);
+			}
+
+			const { error: insertMessageError } = await adminClient.from('support_messages').insert({
+				ticket_id: createdTicket.id,
+				sender_id: null,
+				sender_role: 'admin',
+				message: warningMessage
+			});
+
+			if (insertMessageError) {
+				return json({ error: insertMessageError.message }, { status: 500 });
 			}
 		}
 

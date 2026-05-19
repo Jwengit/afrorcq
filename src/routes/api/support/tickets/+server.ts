@@ -163,3 +163,58 @@ export const POST: RequestHandler = async ({ request }) => {
 		return json({ error: message }, { status: 500 });
 	}
 };
+
+export const DELETE: RequestHandler = async ({ request, url }) => {
+	try {
+		const token = getBearerToken(request);
+		if (!token) return json({ error: 'Unauthorized' }, { status: 401 });
+
+		const userId = await getUserIdFromToken(token);
+		if (!userId) return json({ error: 'Unauthorized' }, { status: 401 });
+
+		const adminClient = getAdminClient();
+		if (!adminClient) {
+			return json({ error: 'Server configuration error' }, { status: 500 });
+		}
+
+		const messageId = url.searchParams.get('messageId');
+		if (!messageId) {
+			return json({ error: 'messageId is required' }, { status: 400 });
+		}
+
+		const { data: targetMessage, error: targetError } = await adminClient
+			.from('support_messages')
+			.select('id, ticket_id, sender_role')
+			.eq('id', messageId)
+			.maybeSingle();
+
+		if (targetError) return json({ error: targetError.message }, { status: 500 });
+		if (!targetMessage) return json({ error: 'Message not found' }, { status: 404 });
+		if (targetMessage.sender_role !== 'admin') {
+			return json({ error: 'Only admin messages can be deleted here' }, { status: 400 });
+		}
+
+		const { data: ownedTicket, error: ticketError } = await adminClient
+			.from('support_tickets')
+			.select('id')
+			.eq('id', targetMessage.ticket_id)
+			.eq('user_id', userId)
+			.maybeSingle();
+
+		if (ticketError) return json({ error: ticketError.message }, { status: 500 });
+		if (!ownedTicket) return json({ error: 'Forbidden' }, { status: 403 });
+
+		const { error: deleteError } = await adminClient
+			.from('support_messages')
+			.delete()
+			.eq('id', messageId)
+			.eq('sender_role', 'admin');
+
+		if (deleteError) return json({ error: deleteError.message }, { status: 500 });
+
+		return json({ success: true });
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Internal server error';
+		return json({ error: message }, { status: 500 });
+	}
+};

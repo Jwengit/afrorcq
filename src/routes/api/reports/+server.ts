@@ -13,16 +13,6 @@ function getBearerToken(request: Request): string | null {
 	return authHeader.slice(7);
 }
 
-function getAuthedClient(token: string) {
-	return createClient(supabaseUrl, supabaseKey, {
-		global: {
-			headers: {
-				authorization: `Bearer ${token}`
-			}
-		}
-	});
-}
-
 type ReportPayload = {
 	targetType?: 'user' | 'ride';
 	targetUserId?: string;
@@ -45,11 +35,12 @@ export const POST: RequestHandler = async ({ request }) => {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
-	const supabase = getAuthedClient(token);
+	// Use service role client to verify the JWT — avoids anon-key permission issues
+	const adminClient = createClient(supabaseUrl, serviceRoleKey);
 	const {
 		data: { user },
 		error: userError
-	} = await supabase.auth.getUser(token);
+	} = await adminClient.auth.getUser(token);
 
 	if (userError || !user) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
@@ -88,7 +79,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			return json({ error: 'targetRideId is required for ride reports' }, { status: 400 });
 		}
 
-		const { data: ride, error: rideError } = await supabase
+		const { data: ride, error: rideError } = await adminClient
 			.from('rides')
 			.select('id, driver_id')
 			.eq('id', targetRideId)
@@ -104,8 +95,6 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		targetUserId = ride.driver_id ?? null;
 	}
-
-	const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
 	const profileIdsToCheck = Array.from(
 		new Set([user.id, targetUserId].filter((id): id is string => Boolean(id)))
@@ -126,8 +115,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		user_id: targetUserId && existingProfileIds.has(targetUserId) ? targetUserId : null,
 		ride_id: targetRideId,
 		type: targetType,
-		description,
-		status: 'pending'
+		description
 	};
 
 	const { data: insertedRows, error: insertError } = await adminClient
@@ -137,10 +125,45 @@ export const POST: RequestHandler = async ({ request }) => {
 		.limit(1);
 	if (insertError) {
 		console.error('[REPORTS_POST] Insert error:', insertError);
+		const isConstraintViolation =
+			insertError.code === '23514' ||
+			insertError.code === '23502' ||
+			insertError.code === '22P02' ||
+			/constraint/i.test(insertError.message ?? '');
+
+		if (isConstraintViolation) {
+			return json(
+				{ error: 'Reports table configuration error. Please contact support.' },
+				{ status: 500 }
+			);
+		}
+
 		return json({ error: insertError.message }, { status: 400 });
 	}
 
 	const reportId = insertedRows?.[0]?.id ?? null;
+	if (!reportId) {
+		console.error('[REPORTS_POST] Insert returned no id:', { insertPayload, insertedRows });
+		return json(
+			{ error: 'Report creation returned no id. Please try again.' },
+			{ status: 500 }
+		);
+	}
+
+	const { data: persistedRow, error: verifyError } = await adminClient
+		.from('reports')
+		.select('id')
+		.eq('id', reportId)
+		.maybeSingle();
+
+	if (verifyError || !persistedRow) {
+		console.error('[REPORTS_POST] Insert verification failed:', { verifyError, reportId, insertPayload });
+		return json(
+			{ error: 'Report was not persisted. Please try again.' },
+			{ status: 500 }
+		);
+	}
+
 	console.log('[REPORTS_POST] Report created successfully:', { reportId, insertPayload });
 
 	return json({ success: true, reportId });
