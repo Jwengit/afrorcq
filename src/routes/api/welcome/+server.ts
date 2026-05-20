@@ -1,91 +1,118 @@
 import { json } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
+const WELCOME_TICKET_SUBJECT = 'Welcome to Hizli Carpooling';
+
+function escapeHtml(value: string): string {
+	return value
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;')
+		.replace(/'/g, '&#39;');
+}
+
+function getFirstName(value: string): string {
+	const trimmed = value.trim();
+	if (!trimmed) return '';
+	return trimmed.split(/\s+/)[0] ?? '';
+}
+
+function getAdminClient() {
+	if (!supabaseUrl) return null;
+	const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
+	if (!serviceRoleKey) return null;
+	return createClient(supabaseUrl, serviceRoleKey);
+}
 
 export async function POST({ request }) {
-	const { email, name } = await request.json();
+	const { name, userId } = await request.json();
 
 	try {
-		if (!env.RESEND_API_KEY) {
-			console.warn('RESEND_API_KEY is not set. Skipping welcome email.');
-			return json({ success: true, skipped: true });
+		if (!userId) {
+			return json({ error: 'userId is required' }, { status: 400 });
 		}
 
-		const response = await fetch('https://api.resend.com/emails', {
-			method: 'POST',
-			headers: {
-				Authorization: `Bearer ${env.RESEND_API_KEY}`,
-				'Content-Type': 'application/json'
-			},
-			body: JSON.stringify({
-				from: 'support@hizli-carpooling.com',
-				to: email,
-				subject: 'Welcome to Hizli Carpooling! 🚗 Complete Your Profile',
-				html: `
-					<!DOCTYPE html>
-					<html>
-					<head>
-						<meta charset="UTF-8">
-						<meta name="viewport" content="width=device-width, initial-scale=1.0">
-					</head>
-					<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333;">
-						<div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-							<!-- Header -->
-							<div style="text-align: center; margin-bottom: 30px;">
-								<h1 style="color: #16a34a; margin: 0; font-size: 28px;">Welcome to Hizli Carpooling! 🚗</h1>
-							</div>
+		const adminClient = getAdminClient();
+		if (!adminClient) {
+			return json({ error: 'Server configuration error' }, { status: 500 });
+		}
 
-							<!-- Main Content -->
-							<div style="background-color: #f9fafb; padding: 30px; border-radius: 8px; border: 1px solid #e5e7eb;">
-								<p style="margin-top: 0; font-size: 16px;">Hi ${name || 'there'},</p>
-								
-								<p style="font-size: 16px;">Thank you for joining our community! We're thrilled to have you as part of Hizli Carpooling.</p>
+		const { data: userData, error: userError } = await adminClient.auth.admin.getUserById(userId);
+		if (userError || !userData?.user) {
+			return json({ error: userError?.message || 'User not found' }, { status: 400 });
+		}
 
-								<p style="font-size: 16px;"><strong>Your next step:</strong> Complete your profile to unlock all features and build trust with our community members.</p>
+		const user = userData.user;
+		const existingMetadata = (user.user_metadata ?? {}) as Record<string, unknown>;
+		if (existingMetadata.welcome_message_sent_at || existingMetadata.welcome_email_sent_at) {
+			return json({ success: true, skipped: true, reason: 'already_sent' });
+		}
 
-								<!-- Benefits Section -->
-								<div style="background-color: #ecfdf5; padding: 20px; border-radius: 6px; border-left: 4px solid #16a34a; margin: 20px 0;">
-									<p style="margin: 0 0 15px 0; font-weight: 600; color: #065f46;">Why complete your profile?</p>
-									<ul style="margin: 0; padding-left: 20px;">
-										<li style="margin-bottom: 8px;">✓ Get verified and build trust with other users</li>
-										<li style="margin-bottom: 8px;">✓ Increase your chances of finding the right carpool match</li>
-										<li style="margin-bottom: 8px;">✓ Share your preferences and travel habits</li>
-										<li>✓ Access all community features</li>
-									</ul>
-								</div>
+		const displayName =
+			(user.user_metadata?.full_name as string | undefined) ||
+			(user.user_metadata?.name as string | undefined) ||
+			(name as string | undefined) ||
+			(user.email?.split('@')[0] as string | undefined) ||
+			'';
+		const firstName = getFirstName(displayName);
+		const safeFirstName = escapeHtml(firstName || 'there');
+		const welcomeInboxMessage =
+			`<p>Welcome to <strong>Hizli Carpooling</strong>, ${safeFirstName}! 🚗</p>` +
+			`<p>We're thrilled to have you join our carpooling community. Here are the essential steps to get started:</p>` +
+			`<ol>` +
+			`<li><strong>Complete Your Profile</strong> - Add a professional photo and personalize your information</li>` +
+			`<li><strong>Upload Your Documents</strong> - Verify your identity to build trust with the community</li>` +
+			`<li><strong>Become a Driver (Optional)</strong> - Add your car details to offer rides to passengers</li>` +
+			`</ol>` +
+			`<p><em>💡 Verified profiles receive 2x more requests and better engagement!</em></p>` +
+			`<p>Need help? Reply directly to this message and our team will assist you.</p>` +
+			`<br/>` +
+			`<p><strong>The Hizli Carpooling Team</strong></p>` +
+			`<p style="color: #888; font-size: 0.9em;">Community-driven, accessible, and responsible carpooling 🌍</p>`;
 
-								<!-- CTA Button -->
-								<div style="text-align: center; margin: 30px 0;">
-									<a href="https://afrorcq.vercel.app/profile" style="display: inline-block; background-color: #16a34a; color: white; padding: 12px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">
-										Complete Your Profile Now
-									</a>
-								</div>
+		const { data: existingWelcomeTicket } = await adminClient
+			.from('support_tickets')
+			.select('id')
+			.eq('user_id', userId)
+			.eq('subject', WELCOME_TICKET_SUBJECT)
+			.limit(1)
+			.maybeSingle();
 
-								<!-- Additional Info -->
-								<p style="font-size: 14px; color: #666; margin-top: 30px; margin-bottom: 0;">
-									Questions? Our support team is here to help. Simply reply to this email.
-								</p>
-							</div>
+		if (!existingWelcomeTicket?.id) {
+			const { data: createdTicket, error: createTicketError } = await adminClient
+				.from('support_tickets')
+				.insert({
+					user_id: userId,
+					subject: WELCOME_TICKET_SUBJECT,
+					status: 'open',
+					priority: 'normal'
+				})
+				.select('id')
+				.single();
 
-							<!-- Footer -->
-							<div style="text-align: center; margin-top: 20px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
-								<p style="font-size: 12px; color: #999; margin: 0;">
-									Hizli Carpooling | Building communities through shared journeys
-								</p>
-								<p style="font-size: 12px; color: #999; margin: 5px 0 0 0;">
-									© 2026 Hizli Carpooling. All rights reserved.
-								</p>
-							</div>
-						</div>
-					</body>
-					</html>
-				`
-			})
+			if (!createTicketError && createdTicket?.id) {
+				await adminClient.from('support_messages').insert({
+					ticket_id: createdTicket.id,
+					sender_id: null,
+					sender_role: 'admin',
+					message: welcomeInboxMessage
+				});
+			}
+		}
+
+		const { error: metadataUpdateError } = await adminClient.auth.admin.updateUserById(userId, {
+			user_metadata: {
+				...existingMetadata,
+				welcome_message_sent_at: new Date().toISOString(),
+				welcome_email_sent_at: new Date().toISOString()
+			}
 		});
 
-		if (!response.ok) {
-			const error = await response.text();
-			console.error('Error sending welcome email:', error);
-			return json({ error: 'Failed to send email' }, { status: 500 });
+		if (metadataUpdateError) {
+			console.error('Welcome metadata update error:', metadataUpdateError);
 		}
 
 		return json({ success: true });

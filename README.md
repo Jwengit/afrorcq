@@ -19,11 +19,15 @@ VITE_PUBLIC_PAYPAL_CLIENT_ID=your_paypal_client_id_for_frontend_sdk
 PAYPAL_CLIENT_ID=your_paypal_client_id
 PAYPAL_CLIENT_SECRET=your_paypal_client_secret
 PAYPAL_MODE=sandbox
+RESEND_API_KEY=your_resend_api_key
+PUBLIC_SITE_URL=https://www.hizli-carpooling.com
 ```
 
 Note: `SUPABASE_SERVICE_ROLE_KEY` is required for admin APIs (`/api/admin/users` and `/api/admin/overview`).
 Do not expose this key in client code.
 `PAYPAL_CLIENT_SECRET` must never be exposed in client code.
+`RESEND_API_KEY` is required for sending welcome emails.
+`PUBLIC_SITE_URL` is used for building links included in emails.
 `VITE_SUPABASE_PERSIST_SESSION` controls whether auth survives a full browser restart.
 Set it to `true` to keep users logged in across browser restarts via `localStorage`.
 Set it to `false` to keep users logged in only for the current browser session via `sessionStorage`.

@@ -4948,7 +4948,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 															<p class="text-[11px] opacity-60 mb-1">
 																{msg.sender_role === 'admin' ? 'Admin' : (msg.profiles ? `${msg.profiles.first_name ?? ''} ${msg.profiles.last_name ?? ''}`.trim() || 'User' : 'User')} · {new Date(msg.created_at).toLocaleString('en-US')}
 															</p>
-															<p class="whitespace-pre-wrap">{msg.message}</p>
+															<div class="whitespace-pre-wrap">{@html msg.message}</div>
 														</div>
 													</div>
 												{/each}

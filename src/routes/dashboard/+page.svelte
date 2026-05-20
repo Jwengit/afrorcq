@@ -1222,7 +1222,7 @@
 													: 'bg-gray-100 text-gray-700'
 									}`}>{msg.status}</span>
 								</div>
-								<p class="text-sm text-gray-700 mt-2 whitespace-pre-line">{msg.message}</p>
+								<div class="text-sm text-gray-700 mt-2">{@html msg.message}</div>
 								<div class="mt-2 flex items-center justify-between gap-2">
 									<p class="text-xs text-gray-400">{new Date(msg.createdAt).toLocaleString()}</p>
 									{#if msg.senderRole === 'admin'}

@@ -113,8 +113,9 @@
 			if (signUpError) {
 				error = signUpError.message;
 			} else {
-				let welcomeEmailError = false;
-				const welcomeEmailPayload = JSON.stringify({
+				let welcomeMessageError = false;
+				const welcomePayload = JSON.stringify({
+					userId: data.user?.id,
 					email: data.user?.email ?? email,
 					name:
 						(data.user?.user_metadata?.full_name as string | undefined) ||
@@ -126,16 +127,16 @@
 					const welcomeResponse = await fetch('/api/welcome', {
 						method: 'POST',
 						headers: { 'Content-Type': 'application/json' },
-						body: welcomeEmailPayload
+						body: welcomePayload
 					});
 
 					if (!welcomeResponse.ok) {
-						welcomeEmailError = true;
-						console.error('Welcome email request failed with status:', welcomeResponse.status);
+						welcomeMessageError = true;
+						console.error('Welcome message request failed with status:', welcomeResponse.status);
 					}
-				} catch (emailErr) {
-					welcomeEmailError = true;
-					console.error('Error sending welcome email:', emailErr);
+				} catch (welcomeErr) {
+					welcomeMessageError = true;
+					console.error('Error creating welcome message:', welcomeErr);
 				}
 
 				if (data.session) {
@@ -144,8 +145,8 @@
 				}
 
 				successMessage = 'Account created. Please check your inbox to confirm your email before signing in.';
-				if (welcomeEmailError) {
-					successMessage += ' Welcome email could not be sent right now.';
+				if (welcomeMessageError) {
+					successMessage += ' Welcome dashboard message could not be created right now.';
 				}
 			}
 		} catch (err) {

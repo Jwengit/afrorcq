@@ -40,21 +40,22 @@
 				}
 			}
 
-			const createdAt = new Date(user.created_at);
-			const now = new Date();
-			const diffMinutes = (now.getTime() - createdAt.getTime()) / (1000 * 60);
 			const provider = user.app_metadata?.provider;
 
-			if (diffMinutes < 5 && provider === 'google') {
-				// Send welcome email for new user
+			if (provider === 'google') {
+				// Backend endpoint is idempotent and creates the internal welcome message only once.
 				try {
 					await fetch('/api/welcome', {
 						method: 'POST',
 						headers: { 'Content-Type': 'application/json' },
-						body: JSON.stringify({ email: user.email, name: user.user_metadata?.full_name || '' })
+						body: JSON.stringify({
+							userId: user.id,
+							email: user.email,
+							name: user.user_metadata?.full_name || ''
+						})
 					});
-				} catch (emailErr) {
-					console.error('Error sending welcome email:', emailErr);
+				} catch (welcomeErr) {
+					console.error('Error creating welcome message:', welcomeErr);
 				}
 			}
 			goto(resolve('/profile'));
