@@ -13,6 +13,7 @@
 	let showBanner = false;
 	let dismissed = false;
 	let showIOSInstructions = false;
+	let showFallbackInstructions = false;
 	let isMember = false;
 	let currentUserId: string | null = null;
 
@@ -20,9 +21,15 @@
 	const INSTALLED_KEY_PREFIX = 'pwa-prompt-installed';
 	const REMIND_LATER_DAYS = 30;
 	const REMIND_LATER_MS = REMIND_LATER_DAYS * 24 * 60 * 60 * 1000;
+	const GUEST_STORAGE_SCOPE = 'guest';
+	const FALLBACK_BANNER_DELAY_MS = 2500;
 
 	function userScopedKey(prefix: string, userId: string) {
 		return `${prefix}:${userId}`;
+	}
+
+	function getStorageScope(): string {
+		return currentUserId ?? GUEST_STORAGE_SCOPE;
 	}
 
 	function getStoredFlag(prefix: string, userId: string): boolean {
@@ -70,8 +77,8 @@
 	}
 
 	function isDoneForCurrentUser() {
-		if (!currentUserId) return true;
-		return getStoredFlag(INSTALLED_KEY_PREFIX, currentUserId) || isRemindLaterActive(currentUserId);
+		const scope = getStorageScope();
+		return getStoredFlag(INSTALLED_KEY_PREFIX, scope) || isRemindLaterActive(scope);
 	}
 
 	function isStandaloneMode() {
@@ -84,13 +91,10 @@
 	function updatePromptVisibility() {
 		if (!browser) return;
 
-		if (!isMember || !currentUserId) {
-			showBanner = false;
-			return;
-		}
+		const scope = getStorageScope();
 
 		if (isStandaloneMode()) {
-			setStoredFlag(INSTALLED_KEY_PREFIX, currentUserId);
+			setStoredFlag(INSTALLED_KEY_PREFIX, scope);
 			showBanner = false;
 			return;
 		}
@@ -105,7 +109,7 @@
 			return;
 		}
 
-		showBanner = Boolean(deferredPrompt);
+		showBanner = Boolean(deferredPrompt) || showFallbackInstructions;
 	}
 
 	function setAuthUser(user: User | null) {
@@ -125,6 +129,7 @@
 
 	onMount(() => {
 		if (!browser) return;
+		let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
 		supabase.auth.getUser().then(({ data: { user } }) => {
 			setAuthUser(user);
@@ -139,18 +144,24 @@
 		if (isIOSDevice()) {
 			showIOSInstructions = true;
 			updatePromptVisibility();
+		} else {
+			fallbackTimer = setTimeout(() => {
+				if (isStandaloneMode() || isDoneForCurrentUser() || deferredPrompt) return;
+				showFallbackInstructions = true;
+				updatePromptVisibility();
+			}, FALLBACK_BANNER_DELAY_MS);
 		}
 
 		const onBeforeInstallPrompt = (e: Event) => {
 			e.preventDefault();
 			deferredPrompt = e as BeforeInstallPromptEvent;
+			showFallbackInstructions = false;
 			updatePromptVisibility();
 		};
 
 		const onAppInstalled = () => {
-			if (currentUserId) {
-				setStoredFlag(INSTALLED_KEY_PREFIX, currentUserId);
-			}
+			setStoredFlag(INSTALLED_KEY_PREFIX, getStorageScope());
+			showFallbackInstructions = false;
 			deferredPrompt = null;
 			showBanner = false;
 		};
@@ -159,6 +170,9 @@
 		window.addEventListener('appinstalled', onAppInstalled);
 
 		return () => {
+			if (fallbackTimer) {
+				clearTimeout(fallbackTimer);
+			}
 			window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
 			window.removeEventListener('appinstalled', onAppInstalled);
 			subscription.unsubscribe();
@@ -166,29 +180,32 @@
 	});
 
 	async function install() {
-		if (!deferredPrompt) return;
+		if (!deferredPrompt) {
+			showFallbackInstructions = true;
+			updatePromptVisibility();
+			return;
+		}
 		deferredPrompt.prompt();
 		const { outcome } = await deferredPrompt.userChoice;
 		deferredPrompt = null;
 		showBanner = false;
-		if (currentUserId && outcome === 'accepted') {
-			setStoredFlag(INSTALLED_KEY_PREFIX, currentUserId);
+		if (outcome === 'accepted') {
+			setStoredFlag(INSTALLED_KEY_PREFIX, getStorageScope());
 		}
-		if (currentUserId && outcome === 'dismissed') {
-			setRemindLater(currentUserId);
+		if (outcome === 'dismissed') {
+			setRemindLater(getStorageScope());
 		}
 	}
 
 	function dismiss() {
 		showBanner = false;
 		dismissed = true;
-		if (currentUserId) {
-			setRemindLater(currentUserId);
-		}
+		showFallbackInstructions = false;
+		setRemindLater(getStorageScope());
 	}
 </script>
 
-{#if showBanner && !dismissed && isMember}
+{#if showBanner && !dismissed}
 	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
 		<div class="relative w-full max-w-md rounded-2xl border border-green-200 bg-white p-6 shadow-2xl ring-1 ring-black/5">
 			<button on:click={dismiss} class="absolute right-3 top-3 text-gray-400 hover:text-gray-600" aria-label="Close">
@@ -202,9 +219,7 @@
 				<div>
 					<p class="text-lg font-bold text-gray-900">Install Hizli Carpooling</p>
 					{#if showIOSInstructions}
-						<p class="text-sm text-gray-500">On iPhone/iPad, install from Safari.</p>
-					{:else}
-						<p class="text-sm text-gray-500">Add the app as a shortcut on your device.</p>
+						<p class="text-sm text-gray-500">Tap Install, then follow Safari steps to add the app.</p>
 					{/if}
 				</div>
 			</div>
@@ -215,6 +230,10 @@
 					<p class="mt-1">1. Tap Safari's Share button.</p>
 					<p>2. Choose Add to Home Screen.</p>
 				</div>
+			{:else if !deferredPrompt}
+				<div class="rounded-lg bg-green-50 p-3 text-sm text-green-900">
+					<p class="text-center">Click Install to add the app, or Later to be reminded.</p>
+				</div>
 			{:else}
 				<div class="rounded-lg bg-green-50 p-3 text-sm text-green-900">
 					Faster opening, full-screen experience, and quick access.
@@ -222,21 +241,12 @@
 			{/if}
 
 			<div class="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2">
-				{#if showIOSInstructions}
-					<button
-						on:click={dismiss}
-						class="rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-700"
-					>
-						Got it
-					</button>
-				{:else}
-					<button
-						on:click={install}
-						class="rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-700"
-					>
-						Install Now
-					</button>
-				{/if}
+				<button
+					on:click={install}
+					class="rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-700"
+				>
+					Install
+				</button>
 				<button
 					on:click={dismiss}
 					class="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"

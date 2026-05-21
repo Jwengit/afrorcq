@@ -20,6 +20,30 @@ function getFirstName(value: string): string {
 	return trimmed.split(/\s+/)[0] ?? '';
 }
 
+function buildWelcomeInboxMessage(safeFirstName: string): string {
+	return (
+		`<div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">` +
+		`<p style="margin: 0 0 12px;">Welcome to <strong>Hizli Carpooling</strong>, ${safeFirstName}! &#128663;</p>` +
+		`<p style="margin: 0 0 12px;">` +
+		`We're delighted to welcome you to our carpooling community. Here are the essential steps to get started:` +
+		`</p>` +
+		`<ol style="margin: 0 0 14px 20px; padding: 0;">` +
+		`<li style="margin: 0 0 8px;"><strong>Complete your profile</strong> - Add an appropriate photo and personalize your information.</li>` +
+		`<li style="margin: 0 0 8px;"><strong>Upload your documents</strong> - Verify your identity to build trust in the community.</li>` +
+		`<li style="margin: 0;"><strong>Become a driver (optional)</strong> - Add your car details to welcome passengers.</li>` +
+		`</ol>` +
+		`<p style="margin: 0 0 12px; padding: 10px 12px; background: #f3f4f6; border-left: 4px solid #16a34a;">` +
+		`&#128161; <strong>Tip:</strong> Verified profiles receive 2x more requests and interactions.` +
+		`</p>` +
+		`<p style="margin: 0 0 12px;">Need help? Reply directly to this message and our team will assist you.</p>` +
+		`<p style="margin: 0;"><strong>The Hizli Carpooling Team</strong></p>` +
+		`<p style="margin: 10px 0 0; color: #6b7280; font-size: 0.9em;">` +
+		`Community-driven, accessible, and responsible carpooling &#127757;` +
+		`</p>` +
+		`</div>`
+	);
+}
+
 function getAdminClient() {
 	if (!supabaseUrl) return null;
 	const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
@@ -59,19 +83,7 @@ export async function POST({ request }) {
 			'';
 		const firstName = getFirstName(displayName);
 		const safeFirstName = escapeHtml(firstName || 'there');
-		const welcomeInboxMessage =
-			`<p>Welcome to <strong>Hizli Carpooling</strong>, ${safeFirstName}! 🚗</p>` +
-			`<p>We're thrilled to have you join our carpooling community. Here are the essential steps to get started:</p>` +
-			`<ol>` +
-			`<li><strong>Complete Your Profile</strong> - Add a professional photo and personalize your information</li>` +
-			`<li><strong>Upload Your Documents</strong> - Verify your identity to build trust with the community</li>` +
-			`<li><strong>Become a Driver (Optional)</strong> - Add your car details to offer rides to passengers</li>` +
-			`</ol>` +
-			`<p><em>💡 Verified profiles receive 2x more requests and better engagement!</em></p>` +
-			`<p>Need help? Reply directly to this message and our team will assist you.</p>` +
-			`<br/>` +
-			`<p><strong>The Hizli Carpooling Team</strong></p>` +
-			`<p style="color: #888; font-size: 0.9em;">Community-driven, accessible, and responsible carpooling 🌍</p>`;
+		const welcomeInboxMessage = buildWelcomeInboxMessage(safeFirstName);
 
 		const { data: existingWelcomeTicket } = await adminClient
 			.from('support_tickets')
