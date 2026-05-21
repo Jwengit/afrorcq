@@ -184,14 +184,14 @@ export const DELETE: RequestHandler = async ({ request, url }) => {
 
 		const { data: targetMessage, error: targetError } = await adminClient
 			.from('support_messages')
-			.select('id, ticket_id, sender_role')
+			.select('id, ticket_id, sender_role, sender_id')
 			.eq('id', messageId)
 			.maybeSingle();
 
 		if (targetError) return json({ error: targetError.message }, { status: 500 });
 		if (!targetMessage) return json({ error: 'Message not found' }, { status: 404 });
-		if (targetMessage.sender_role !== 'admin') {
-			return json({ error: 'Only admin messages can be deleted here' }, { status: 400 });
+		if (targetMessage.sender_role === 'user' && targetMessage.sender_id !== userId) {
+			return json({ error: 'Forbidden' }, { status: 403 });
 		}
 
 		const { data: ownedTicket, error: ticketError } = await adminClient
@@ -207,8 +207,7 @@ export const DELETE: RequestHandler = async ({ request, url }) => {
 		const { error: deleteError } = await adminClient
 			.from('support_messages')
 			.delete()
-			.eq('id', messageId)
-			.eq('sender_role', 'admin');
+			.eq('id', messageId);
 
 		if (deleteError) return json({ error: deleteError.message }, { status: 500 });
 

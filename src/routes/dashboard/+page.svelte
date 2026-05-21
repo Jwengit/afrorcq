@@ -102,6 +102,15 @@
 		createdAt: string;
 	};
 
+	type ActivityItem = {
+		id: string;
+		title: string;
+		details: string;
+		createdAtIso: string;
+		sectionHref: string;
+		type: 'booking' | 'request' | 'admin';
+	};
+
 	let currentUser: User | null = null;
 	let isFemaleDriver = false;
 	let loading = true;
@@ -146,6 +155,11 @@
 	let supportReplySendingTicketId: string | null = null;
 	let supportReplyError = '';
 	let supportReplySuccess = '';
+	let activityFeed: ActivityItem[] = [];
+	let activitySeenAt = 0;
+	let newActivityCount = 0;
+
+	const ACTIVITY_SEEN_KEY_PREFIX = 'dashboard-activity-seen-at';
 
 	let editRideForm = {
 		departure: '',
@@ -164,6 +178,7 @@
 		} = await supabase.auth.getUser();
 
 		currentUser = user;
+		loadActivitySeenAt();
 
 		// Get and store access token for child components
 		currentAccessToken = await getSessionAccessToken();
@@ -183,6 +198,99 @@
 		await loadAdminInboxMessages();
 		loading = false;
 	});
+
+	$: activityFeed = [
+		...myBookings
+			.filter((booking) => booking.status !== 'Pending')
+			.map((booking) => ({
+				id: `booking:${booking.id}`,
+				title:
+					booking.status === 'Confirmed'
+						? 'Booking confirmed'
+						: booking.status === 'Rejected'
+							? 'Booking request rejected'
+							: 'Booking status updated',
+				details: `${booking.ride.departure} -> ${booking.ride.arrival}`,
+				createdAtIso: booking.updated_at,
+				sectionHref: '#my-bookings',
+				type: 'booking' as const
+			})),
+		...incomingRequests
+			.filter((request) => request.status !== 'Pending')
+			.map((request) => ({
+				id: `request:${request.id}`,
+				title:
+					request.status === 'Confirmed'
+						? 'Passenger confirmed on your ride'
+						: request.status === 'Rejected'
+							? 'Passenger request rejected'
+							: 'Request status updated',
+				details: `${request.ride.departure} -> ${request.ride.arrival}`,
+				createdAtIso: request.updated_at,
+				sectionHref: '#ride-requests',
+				type: 'request' as const
+			})),
+		...adminInboxMessages
+			.filter((msg) => msg.senderRole === 'admin')
+			.map((msg) => ({
+				id: `admin:${msg.id}`,
+				title: 'New admin message',
+				details: msg.subject,
+				createdAtIso: msg.createdAt,
+				sectionHref: '#admin-messages',
+				type: 'admin' as const
+			}))
+	]
+		.sort((a, b) => new Date(b.createdAtIso).getTime() - new Date(a.createdAtIso).getTime())
+		.slice(0, 20);
+
+	$: newActivityCount = activityFeed.filter((item) => {
+		const timestamp = Date.parse(item.createdAtIso);
+		if (Number.isNaN(timestamp)) return false;
+		return timestamp > activitySeenAt;
+	}).length;
+
+	function activitySeenStorageKey() {
+		return currentUser ? `${ACTIVITY_SEEN_KEY_PREFIX}:${currentUser.id}` : ACTIVITY_SEEN_KEY_PREFIX;
+	}
+
+	function loadActivitySeenAt() {
+		if (!browser) return;
+		try {
+			const raw = localStorage.getItem(activitySeenStorageKey());
+			activitySeenAt = raw ? Number(raw) || 0 : 0;
+		} catch {
+			activitySeenAt = 0;
+		}
+	}
+
+	function markActivityAsSeen() {
+		const latestTimestamp = activityFeed
+			.map((item) => Date.parse(item.createdAtIso))
+			.filter((value) => Number.isFinite(value))
+			.reduce((maxValue, currentValue) => Math.max(maxValue, currentValue), 0);
+
+		activitySeenAt = Math.max(activitySeenAt, latestTimestamp, Date.now());
+
+		if (!browser) return;
+		try {
+			localStorage.setItem(activitySeenStorageKey(), String(activitySeenAt));
+		} catch {
+			// Ignore storage errors.
+		}
+	}
+
+	function activityBadgeClass(type: ActivityItem['type']) {
+		if (type === 'booking') return 'bg-sky-100 text-sky-700';
+		if (type === 'request') return 'bg-amber-100 text-amber-700';
+		return 'bg-indigo-100 text-indigo-700';
+	}
+
+	function activityTypeLabel(type: ActivityItem['type']) {
+		if (type === 'booking') return 'Booking';
+		if (type === 'request') return 'Request';
+		return 'Admin';
+	}
 
 	async function loadAdminInboxMessages() {
 		if (!currentUser) {
@@ -1109,6 +1217,16 @@
 				<nav class="mt-6 border-t border-white/30 pt-4" aria-label="User dashboard navigation">
 					<ul class="flex flex-wrap gap-2">
 						<li>
+							<a href="#activity-center" class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/90 text-violet-700 text-sm font-semibold hover:bg-white transition-colors">
+								Activity
+								{#if newActivityCount > 0}
+									<span class="inline-flex min-w-5 items-center justify-center rounded-full bg-violet-600 px-1.5 py-0.5 text-[11px] font-bold text-white">
+										{newActivityCount}
+									</span>
+								{/if}
+							</a>
+						</li>
+						<li>
 							<a href="#my-rides" class="inline-flex items-center px-4 py-2 rounded-full bg-white/90 text-emerald-700 text-sm font-semibold hover:bg-white transition-colors">
 								My rides
 							</a>
@@ -1172,7 +1290,54 @@
 			</section>
 
 			{#if !showArchive}
-			<section class="dashboard-card p-6">
+			<section id="activity-center" class="dashboard-card p-6 scroll-mt-28">
+				<div class="flex items-center justify-between gap-3 mb-3">
+					<div>
+						<h2 class="text-xl font-semibold text-gray-900">Activity center</h2>
+						<p class="text-sm text-gray-500">Everything stays in-app. Check here to follow recent activity.</p>
+					</div>
+					<button
+						type="button"
+						on:click={markActivityAsSeen}
+						disabled={activityFeed.length === 0 || newActivityCount === 0}
+						class="px-3 py-2 rounded-md border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+					>
+						Mark as seen
+					</button>
+				</div>
+
+				{#if newActivityCount > 0}
+					<p class="mb-3 inline-flex items-center rounded-full bg-violet-100 px-3 py-1 text-xs font-semibold text-violet-700">
+						You have {newActivityCount} new activity update{newActivityCount > 1 ? 's' : ''}. Click an item to review details.
+					</p>
+				{/if}
+
+				{#if activityFeed.length === 0}
+					<p class="text-sm text-gray-500">No activity yet.</p>
+				{:else}
+					<div class="space-y-2">
+						{#each activityFeed as item (item.id)}
+							<a href={item.sectionHref} class="surface-card flex items-start justify-between gap-3 p-3 hover:border-emerald-300 transition-colors">
+								<div>
+									<div class="flex items-center gap-2">
+										<p class="text-sm font-semibold text-gray-900">{item.title}</p>
+										<span class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${activityBadgeClass(item.type)}`}>
+											{activityTypeLabel(item.type)}
+										</span>
+										{#if Date.parse(item.createdAtIso) > activitySeenAt}
+											<span class="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">New</span>
+										{/if}
+									</div>
+									<p class="text-sm text-gray-600 mt-1">{item.details}</p>
+								</div>
+								<p class="text-xs text-gray-400 whitespace-nowrap">{new Date(item.createdAtIso).toLocaleString()}</p>
+							</a>
+						{/each}
+					</div>
+				{/if}
+			</section>
+
+			<section id="admin-messages" class="dashboard-card p-6 scroll-mt-28">
 				<div class="flex items-center justify-between gap-3 mb-3">
 					<div>
 						<h2 class="text-xl font-semibold text-gray-900">Admin messages</h2>
@@ -1225,16 +1390,14 @@
 								<div class="text-sm text-gray-700 mt-2">{@html msg.message}</div>
 								<div class="mt-2 flex items-center justify-between gap-2">
 									<p class="text-xs text-gray-400">{new Date(msg.createdAt).toLocaleString()}</p>
-									{#if msg.senderRole === 'admin'}
-										<button
-											type="button"
-											on:click={() => deleteAdminInboxMessage(msg.id)}
-											disabled={deletingAdminMessageId === msg.id}
-											class="px-2 py-1 rounded-md border border-gray-300 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
-										>
-											{deletingAdminMessageId === msg.id ? 'Deleting...' : 'Delete'}
-										</button>
-									{/if}
+									<button
+										type="button"
+										on:click={() => deleteAdminInboxMessage(msg.id)}
+										disabled={deletingAdminMessageId === msg.id}
+										class="px-2 py-1 rounded-md border border-gray-300 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+									>
+										{deletingAdminMessageId === msg.id ? 'Deleting...' : 'Delete'}
+									</button>
 								</div>
 								{#if isReplyBlocked(msg.status)}
 									<p class="mt-2 text-xs text-gray-500">Replies are disabled because this ticket is {msg.status}.</p>
