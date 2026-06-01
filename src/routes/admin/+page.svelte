@@ -465,6 +465,9 @@
 	let footerPrivacyPolicyUrl = '/privacy';
 	let footerTermsOfServiceLabel = 'Terms of Service';
 	let footerTermsOfServiceUrl = '/terms';
+	let socialFacebookUrl = 'https://www.facebook.com';
+	let socialInstagramUrl = 'https://www.instagram.com';
+	let socialYoutubeUrl = 'https://www.youtube.com';
 	let aboutPageTitle = 'About Us';
 	let aboutPageContent =
 		'Hizli Carpooling is a community-first carpooling platform focused on safety, simplicity, and fair prices.';
@@ -3115,6 +3118,9 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 			footerPrivacyPolicyUrl = String(s.footer_privacy_policy_url ?? '/privacy');
 			footerTermsOfServiceLabel = String(s.footer_terms_of_service_label ?? 'Terms of Service');
 			footerTermsOfServiceUrl = String(s.footer_terms_of_service_url ?? '/terms');
+			socialFacebookUrl = String(s.social_facebook_url ?? 'https://www.facebook.com');
+			socialInstagramUrl = String(s.social_instagram_url ?? 'https://www.instagram.com');
+			socialYoutubeUrl = String(s.social_youtube_url ?? 'https://www.youtube.com');
 			aboutPageTitle = String(s.about_page_title ?? 'About Us');
 			aboutPageContent = String(
 				s.about_page_content ??
@@ -3188,6 +3194,9 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 				footer_privacy_policy_url: footerPrivacyPolicyUrl,
 				footer_terms_of_service_label: footerTermsOfServiceLabel,
 				footer_terms_of_service_url: footerTermsOfServiceUrl,
+				social_facebook_url: socialFacebookUrl,
+				social_instagram_url: socialInstagramUrl,
+				social_youtube_url: socialYoutubeUrl,
 				about_page_title: aboutPageTitle,
 				about_page_content: aboutPageContent,
 				how_it_works_page_title: howItWorksPageTitle,
@@ -4691,6 +4700,14 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 											<div>
 												<p class="text-xs font-medium text-gray-600 mb-1">Terms label</p>
 												<input bind:value={footerTermsOfServiceLabel} class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+											</div>
+											<div class="md:col-span-2 lg:col-span-3">
+												<p class="text-xs font-medium text-gray-600 mb-1">Social links shown on landing footer</p>
+												<div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+													<input bind:value={socialFacebookUrl} placeholder="https://facebook.com/your-page" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+													<input bind:value={socialInstagramUrl} placeholder="https://instagram.com/your-handle" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+													<input bind:value={socialYoutubeUrl} placeholder="https://youtube.com/@your-channel" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+												</div>
 											</div>
 										</div>
 									</div>

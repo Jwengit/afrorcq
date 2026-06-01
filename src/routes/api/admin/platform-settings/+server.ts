@@ -19,6 +19,9 @@ const DEFAULT_LANDING_SETTINGS = {
 	footer_privacy_policy_url: '/privacy',
 	footer_terms_of_service_label: 'Terms of Service',
 	footer_terms_of_service_url: '/terms',
+	social_facebook_url: 'https://www.facebook.com',
+	social_instagram_url: 'https://www.instagram.com',
+	social_youtube_url: 'https://www.youtube.com',
 	about_page_title: 'About Us',
 	about_page_content:
 		'Hizli Carpooling is a community-first carpooling platform focused on safety, simplicity, and fair prices.',
@@ -92,6 +95,18 @@ function normalizeFooterSettings(payload: Record<string, unknown>) {
 		footer_terms_of_service_url: normalizeText(
 			payload.footer_terms_of_service_url,
 			DEFAULT_LANDING_SETTINGS.footer_terms_of_service_url
+		),
+		social_facebook_url: normalizeText(
+			payload.social_facebook_url,
+			DEFAULT_LANDING_SETTINGS.social_facebook_url
+		),
+		social_instagram_url: normalizeText(
+			payload.social_instagram_url,
+			DEFAULT_LANDING_SETTINGS.social_instagram_url
+		),
+		social_youtube_url: normalizeText(
+			payload.social_youtube_url,
+			DEFAULT_LANDING_SETTINGS.social_youtube_url
 		),
 		about_page_title: normalizeText(payload.about_page_title, DEFAULT_LANDING_SETTINGS.about_page_title),
 		about_page_content: normalizeText(payload.about_page_content, DEFAULT_LANDING_SETTINGS.about_page_content),
@@ -181,13 +196,13 @@ export const GET: RequestHandler = async ({ request }) => {
 		const { data, error } = await adminClient
 			.from('platform_settings')
 			.select(
-				'commission_percent, max_seats, max_price, updated_at, footer_brand_description, footer_about_us_label, footer_about_us_url, footer_how_it_works_label, footer_how_it_works_url, footer_faq_label, footer_faq_url, footer_help_center_label, footer_help_center_url, footer_privacy_policy_label, footer_privacy_policy_url, footer_terms_of_service_label, footer_terms_of_service_url, about_page_title, about_page_content, how_it_works_page_title, how_it_works_page_content, faq_page_title, faq_page_content, help_page_title, help_page_content, privacy_page_title, privacy_page_content, terms_page_title, terms_page_content'
+				'commission_percent, max_seats, max_price, updated_at, footer_brand_description, footer_about_us_label, footer_about_us_url, footer_how_it_works_label, footer_how_it_works_url, footer_faq_label, footer_faq_url, footer_help_center_label, footer_help_center_url, footer_privacy_policy_label, footer_privacy_policy_url, footer_terms_of_service_label, footer_terms_of_service_url, social_facebook_url, social_instagram_url, social_youtube_url, about_page_title, about_page_content, how_it_works_page_title, how_it_works_page_content, faq_page_title, faq_page_content, help_page_title, help_page_content, privacy_page_title, privacy_page_content, terms_page_title, terms_page_content'
 			)
 			.eq('id', 1)
 			.maybeSingle();
 
 		if (error) {
-			if (error.message.toLowerCase().includes('footer_') || error.message.toLowerCase().includes('_page_')) {
+			if (error.message.toLowerCase().includes('footer_') || error.message.toLowerCase().includes('_page_') || error.message.toLowerCase().includes('social_')) {
 				const fallback = await adminClient
 					.from('platform_settings')
 					.select('commission_percent, max_seats, max_price, updated_at')
@@ -297,11 +312,11 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		);
 
 		if (error) {
-			if (error.message.toLowerCase().includes('footer_') || error.message.toLowerCase().includes('_page_')) {
+			if (error.message.toLowerCase().includes('footer_') || error.message.toLowerCase().includes('_page_') || error.message.toLowerCase().includes('social_')) {
 				return json(
 					{
 						error:
-							'Landing content columns are missing. Run add_footer_content_to_platform_settings.sql, then retry.'
+							'Landing content columns are missing. Run add_footer_content_to_platform_settings.sql and add_social_links_to_platform_settings.sql, then retry.'
 					},
 					{ status: 500 }
 				);
