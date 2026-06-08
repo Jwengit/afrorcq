@@ -414,6 +414,8 @@ onMount(async () => {
 								<p>Hizli service fee ({commissionPercent.toFixed(0)}%): <strong>${bookingCommissionAmount.toFixed(2)}</strong> USD</p>
 								{#if paypalMode === 'sandbox'}
 									<p class="text-amber-700">Sandbox checkout mode (test payment)</p>
+								{:else}
+									<p class="text-emerald-700">Live checkout mode. Payments go to the company PayPal account; Venmo appears for eligible customers/accounts.</p>
 								{/if}
 								<p class="text-gray-900">Total to pay: <strong>${bookingTotalAmount.toFixed(2)}</strong> USD</p>
 							</div>
