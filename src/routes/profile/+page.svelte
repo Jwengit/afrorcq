@@ -170,7 +170,7 @@
 			.filter((documentType) => isRequiredVerificationDocumentType(documentType))
 	);
 
-	$: missingRequiredDocumentTypes = (requiredVerificationDocumentTypes as readonly string[]).filter(
+	$: missingRequiredDocumentTypes = requiredVerificationDocumentTypes.filter(
 		(documentType) => !approvedRequiredDocumentTypes.has(documentType)
 	);
 
@@ -185,7 +185,7 @@
 			? 'Pending review'
 			: 'Unverified';
 
-	$: approvedRequiredCount = (requiredVerificationDocumentTypes as readonly string[]).length - missingRequiredDocumentTypes.length;
+	$: approvedRequiredCount = requiredVerificationDocumentTypes.length - missingRequiredDocumentTypes.length;
 
 	// Available options
 	const genderOptions = [

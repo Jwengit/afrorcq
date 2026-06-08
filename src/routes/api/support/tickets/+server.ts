@@ -4,6 +4,7 @@ import { env } from '$env/dynamic/private';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
+const SUPPORT_RETENTION_DAYS = 30;
 
 function getBearerToken(request: Request): string | null {
 	const authHeader = request.headers.get('authorization');
@@ -31,6 +32,12 @@ function getAdminClient() {
 	return createClient(supabaseUrl, serviceRoleKey);
 }
 
+async function purgeExpiredSupportConversations(adminClient: any) {
+	const cutoffIso = new Date(Date.now() - SUPPORT_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+	await adminClient.from('support_tickets').delete().eq('status', 'resolved').lt('updated_at', cutoffIso);
+}
+
 export const GET: RequestHandler = async ({ request, url }) => {
 	try {
 		const token = getBearerToken(request);
@@ -43,6 +50,8 @@ export const GET: RequestHandler = async ({ request, url }) => {
 		if (!adminClient) {
 			return json({ error: 'Server configuration error' }, { status: 500 });
 		}
+
+		await purgeExpiredSupportConversations(adminClient);
 
 		const ticketId = url.searchParams.get('ticketId');
 		if (ticketId) {
@@ -100,6 +109,8 @@ export const POST: RequestHandler = async ({ request }) => {
 		if (!adminClient) {
 			return json({ error: 'Server configuration error' }, { status: 500 });
 		}
+
+		await purgeExpiredSupportConversations(adminClient);
 
 		const body = await request.json();
 		const ticketId = body?.ticketId as string | undefined;
@@ -176,6 +187,8 @@ export const DELETE: RequestHandler = async ({ request, url }) => {
 		if (!adminClient) {
 			return json({ error: 'Server configuration error' }, { status: 500 });
 		}
+
+		await purgeExpiredSupportConversations(adminClient);
 
 		const messageId = url.searchParams.get('messageId');
 		if (!messageId) {

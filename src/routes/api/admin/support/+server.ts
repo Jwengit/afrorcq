@@ -4,6 +4,7 @@ import { env } from '$env/dynamic/private';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
+const SUPPORT_RETENTION_DAYS = 30;
 
 type AdminAuth = { ok: boolean; userId?: string };
 
@@ -63,6 +64,12 @@ function adminClientOrError() {
 	return { client: createClient(supabaseUrl, serviceRoleKey) };
 }
 
+async function purgeExpiredSupportConversations(adminClient: any) {
+	const cutoffIso = new Date(Date.now() - SUPPORT_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+	await adminClient.from('support_tickets').delete().eq('status', 'resolved').lt('updated_at', cutoffIso);
+}
+
 export const GET: RequestHandler = async ({ request, url }) => {
 	try {
 		const token = getBearerToken(request);
@@ -74,6 +81,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
 		const result = adminClientOrError();
 		if (result.error) return result.error;
 		const adminClient = result.client;
+		await purgeExpiredSupportConversations(adminClient);
 
 		const ticketId = url.searchParams.get('ticketId');
 		const status = url.searchParams.get('status');
@@ -147,6 +155,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		const result = adminClientOrError();
 		if (result.error) return result.error;
 		const adminClient = result.client;
+		await purgeExpiredSupportConversations(adminClient);
 
 		const { error: insertError } = await adminClient.from('support_messages').insert({
 			ticket_id: ticketId,
@@ -190,6 +199,7 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		const result = adminClientOrError();
 		if (result.error) return result.error;
 		const adminClient = result.client;
+		await purgeExpiredSupportConversations(adminClient);
 
 		if (action === 'update_priority') {
 			if (!priority) return json({ error: 'priority is required' }, { status: 400 });
@@ -232,6 +242,7 @@ export const DELETE: RequestHandler = async ({ request, url }) => {
 		const result = adminClientOrError();
 		if (result.error) return result.error;
 		const adminClient = result.client;
+		await purgeExpiredSupportConversations(adminClient);
 
 		const { error: msgError } = await adminClient
 			.from('support_messages')
