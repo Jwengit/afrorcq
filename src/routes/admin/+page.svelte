@@ -476,7 +476,7 @@
 		'1. Search your route.\n2. Pick a ride that matches your needs.\n3. Book and travel together.';
 	let faqPageTitle = 'FAQ';
 	let faqPageContent =
-		'Q: How do I book a ride?\nA: Search your route, open ride details, and book your seat.\n\nQ: Is payment secure?\nA: Yes, payments are processed through secure providers.';
+		'Q: How do I book a ride?\nA: Search your route, open ride details, and send your booking request.\n\nQ: How is payment handled?\nA: Payments are arranged directly between members; the platform does not process payments.';
 	let helpPageTitle = 'Help Center';
 	let helpPageContent =
 		'Need help? Contact our support team and include your ride ID and account email for faster resolution.';
@@ -560,7 +560,6 @@
 				await loadReports();
 				await loadReviews();
 				await loadSupportTickets();
-				await loadTransactions();
 				await loadPlatformSettings();
 				loading = false;
 				return;
@@ -615,7 +614,6 @@
 			await loadReports();
 			await loadReviews();
 			await loadSupportTickets();
-			await loadTransactions();
 			await loadPlatformSettings();
 			loading = false;
 		}
@@ -3427,7 +3425,6 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 						{ id: 'rides', label: 'Rides' },
 						{ id: 'bookings', label: 'Bookings' },
 						{ id: 'reviews', label: 'Reviews' },
-						{ id: 'transactions', label: 'Transactions' },
 						{ id: 'settings', label: 'Settings' },
 						{ id: 'reports', label: 'Reports' },
 						{ id: 'support', label: 'Support' }

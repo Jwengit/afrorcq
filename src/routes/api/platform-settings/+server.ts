@@ -31,7 +31,7 @@ const DEFAULT_PUBLIC_SETTINGS = {
     '1. Search your route.\n2. Pick a ride that matches your needs.\n3. Book and travel together.',
   faq_page_title: 'FAQ',
   faq_page_content:
-    'Q: How do I book a ride?\nA: Search your route, open ride details, and book your seat.\n\nQ: Is payment secure?\nA: Yes, payments are processed through secure providers.',
+    'Q: How do I book a ride?\nA: Search your route, open ride details, and send your booking request.\n\nQ: How is payment handled?\nA: Payments are arranged directly between members; the platform does not process payments.',
   help_page_title: 'Help Center',
   help_page_content:
     'Need help? Contact our support team and include your ride ID and account email for faster resolution.',
