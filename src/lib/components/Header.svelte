@@ -49,6 +49,11 @@
 		goto('/publish-ride');
 	}
 
+	function handleAdminClick() {
+		isMenuOpen = false;
+		goto('/admin');
+	}
+
 	async function signOut() {
 		await supabase.auth.signOut();
 		goto('/');
@@ -99,9 +104,13 @@
 						<span class="sr-only">Profile</span>
 					</a>
 					{#if hasAdminAccess}
-						<a href="/admin" class="text-gray-600 hover:text-gray-900 transition-colors">
+						<button
+							type="button"
+							on:click={handleAdminClick}
+							class="text-gray-600 hover:text-gray-900 transition-colors cursor-pointer"
+						>
 							Acces admin
-						</a>
+						</button>
 					{/if}
 					<button
 						on:click={signOut}
@@ -181,11 +190,13 @@
 					</a
 					>
 					{#if hasAdminAccess}
-						<a
-							href="/admin"
-							class="block px-3 py-2 text-gray-600 hover:text-primary hover:bg-gray-50 rounded-md"
-							>Acces admin</a
+						<button
+							type="button"
+							on:click={handleAdminClick}
+							class="block w-full text-left px-3 py-2 text-gray-600 hover:text-primary hover:bg-gray-50 rounded-md cursor-pointer"
 						>
+							Acces admin
+						</button>
 					{/if}
 					<button
 						on:click={signOut}

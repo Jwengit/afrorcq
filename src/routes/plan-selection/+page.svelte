@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { user as userStore, loading as loadingStore } from '$lib/authStore';
+	import { user as userStore } from '$lib/authStore';
 	import { supabase } from '$lib/supabaseClient';
 
 	interface Plan {
@@ -105,7 +105,7 @@
 	}
 </script>
 
-<div class="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 py-12 px-4 sm:px-6 lg:px-8">
+<div class="min-h-screen bg-linear-to-b from-slate-50 to-slate-100 py-12 px-4 sm:px-6 lg:px-8">
 	<div class="max-w-6xl mx-auto">
 		<!-- Header -->
 		<div class="text-center mb-12">
@@ -170,7 +170,7 @@
 									{#each plan.features as feature (feature)}
 										<li class="flex items-start gap-3">
 											<svg
-												class="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5"
+												class="w-5 h-5 text-emerald-600 shrink-0 mt-0.5"
 												fill="currentColor"
 												viewBox="0 0 20 20"
 											>
@@ -204,7 +204,7 @@
 			<!-- Info Box -->
 			<div class="bg-blue-50 border border-blue-200 rounded-lg p-6">
 				<div class="flex gap-4">
-					<svg class="w-6 h-6 text-blue-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+					<svg class="w-6 h-6 text-blue-600 shrink-0" fill="currentColor" viewBox="0 0 20 20">
 						<path
 							fill-rule="evenodd"
 							d="M18 5v8a2 2 0 01-2 2h-5l-5 4v-4H4a2 2 0 01-2-2V5a2 2 0 012-2h12a2 2 0 012 2zm-11-1a1 1 0 100 2h3a1 1 0 100-2H7zm3 4a1 1 0 100 2H7a1 1 0 100-2h3z"

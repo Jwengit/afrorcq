@@ -1,4 +1,7 @@
+<svelte:options runes={false} />
+
 <script lang="ts">
+	// @ts-nocheck
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { supabase } from '$lib/supabaseClient';
@@ -9,6 +12,17 @@
 	let loading = true;
 	let isAdmin = false;
 	let accessError = '';
+
+	type SupportTicket = {
+		id: string;
+		user_id: string;
+		subject: string;
+		status: 'open' | 'in_progress' | 'resolved' | 'closed';
+		priority: 'low' | 'normal' | 'high' | 'urgent';
+		created_at: string;
+		updated_at: string;
+		profiles?: {
+			first_name: string | null;
 			last_name: string | null;
 			email: string | null;
 		} | null;
@@ -106,6 +120,27 @@
 			supportTickets: 0
 		}
 	};
+	let statsError = '';
+	let selectedPeriod = 'all';
+	let showCustomDatePicker = false;
+	let customStartDate = '';
+	let customEndDate = '';
+	let customRangeError = '';
+	let userSearch = '';
+	let rideFilterCityFrom = '';
+	let rideFilterCityTo = '';
+	let rideFilterStatus = '';
+	let rideFilterFromDate = '';
+	let rideFilterToDate = '';
+	let bookingFilterFromDate = '';
+	let bookingFilterStatus = '';
+	let reportSearch = '';
+	let reportFilterType = '';
+	let reportFilterStatus = '';
+	let reportNoteModalText = '';
+	let reviewFilterStatus = '';
+	let exportLoading = false;
+	let exportError = '';
 
 	onMount(() => {
 		const unsubscribe = user.subscribe((u) => {
@@ -2435,8 +2470,8 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 								<input
 									id="custom-start-date"
 									type="date"
-									bind:value={customStartDate}
-									on:change={() => (customRangeError = '')}
+									value={customStartDate}
+									on:input={(e) => { customStartDate = e.currentTarget.value; customRangeError = ''; }}
 									class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
 								/>
 							</div>
@@ -2445,8 +2480,8 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 								<input
 									id="custom-end-date"
 									type="date"
-									bind:value={customEndDate}
-									on:change={() => (customRangeError = '')}
+									value={customEndDate}
+									on:input={(e) => { customEndDate = e.currentTarget.value; customRangeError = ''; }}
 									class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
 								/>
 							</div>

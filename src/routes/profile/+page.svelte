@@ -102,6 +102,7 @@
 
 	const documentTypeOptions = [
 		{ value: 'identity_card', label: 'Identity card' },
+		{ value: 'student_id', label: 'Student ID' },
 		{ value: 'driver_license', label: 'Driver license' },
 		{ value: 'proof_of_address', label: 'Proof of address' },
 		{ value: 'insurance', label: 'Insurance proof' },
@@ -111,6 +112,7 @@
 
 	const documentTypeLabelMap: Record<string, string> = {
 		identity_card: 'Identity card',
+		student_id: 'Student ID',
 		driver_license: 'Driver license',
 		proof_of_address: 'Proof of address',
 		insurance: 'Insurance proof',
@@ -139,6 +141,7 @@
 		if (normalized === 'license' || normalized === 'driving_license') return 'driver_license';
 		if (normalized === 'insurance_proof') return 'insurance';
 		if (normalized === 'registration' || normalized === 'vehicle_papers') return 'vehicle_registration';
+		if (normalized === 'student_card' || normalized === 'student_card_id') return 'student_id';
 		return normalized;
 	}
 
@@ -383,6 +386,7 @@
 	async function loadProfile() {
 		loading = true;
 		profileError = '';
+		let profileRow: Record<string, unknown> | null = null;
 		try {
 			let { data, error } = await supabase
 				.from('profiles')
@@ -427,6 +431,7 @@
 			}
 
 			if (data) {
+				profileRow = data as Record<string, unknown>;
 				profile = normalizeProfile(data);
 				formData = { ...profile };
 				previewUrl = profile.profile_photo_url || '';
@@ -438,7 +443,7 @@
 			await loadVerificationDocuments();
 			
 			// Check if user needs to select a plan
-			if (data?.needs_plan_selection === true && data?.is_verified === true && browser) {
+			if (profileRow?.needs_plan_selection === true && profileRow?.is_verified === true && browser) {
 				await goto(resolve('/plan-selection'));
 				return;
 			}
@@ -1438,7 +1443,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 			<div class="profile-card p-7 mt-6">
 				{#if !profile.is_verified && !showVerificationDocuments}
 					<!-- CTA: Become Verified -->
-					<div class="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-lg p-8 text-center">
+					<div class="bg-linear-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-lg p-8 text-center">
 						<svg class="w-12 h-12 text-emerald-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
 						</svg>
@@ -1452,7 +1457,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 								showVerificationDocuments = true;
 								loadVerificationDocuments();
 							}}
-							class="px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-500 text-white font-semibold rounded-lg hover:from-emerald-700 hover:to-teal-600 transition-all shadow-md cursor-pointer"
+							class="px-6 py-3 bg-linear-to-r from-emerald-600 to-teal-500 text-white font-semibold rounded-lg hover:from-emerald-700 hover:to-teal-600 transition-all shadow-md cursor-pointer"
 						>
 							Start Verification Process
 						</button>

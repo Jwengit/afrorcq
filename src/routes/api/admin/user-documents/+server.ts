@@ -31,6 +31,7 @@ function normalizeDocumentType(value: string | null | undefined): string {
   if (normalized === 'license' || normalized === 'driving_license') return 'driver_license';
   if (normalized === 'insurance_proof') return 'insurance';
   if (normalized === 'registration' || normalized === 'vehicle_papers') return 'vehicle_registration';
+  if (normalized === 'student_card' || normalized === 'student_card_id') return 'student_id';
 
   return normalized;
 }

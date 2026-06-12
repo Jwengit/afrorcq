@@ -39,7 +39,7 @@ export function loadRecaptchaScript() {
 				return;
 			}
 
-			if (attempt >= 100) {
+			if (attempt >= 40) {
 				window.__recaptchaScriptPromise = undefined;
 				reject(new Error('Timed out waiting for reCAPTCHA to become available'));
 				return;

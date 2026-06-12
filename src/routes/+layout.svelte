@@ -20,7 +20,6 @@
 	<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
 	<link rel="preconnect" href="https://www.google.com" />
 	<link rel="preconnect" href="https://www.gstatic.com" crossorigin="anonymous" />
-	<script src="https://www.google.com/recaptcha/api.js?render=explicit" async defer></script>
 </svelte:head>
 
 <Header />
