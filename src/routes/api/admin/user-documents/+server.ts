@@ -385,11 +385,13 @@ export const PATCH: RequestHandler = async ({ request }) => {
       .update({
         is_verified: isVerified,
         status: resolveVerificationLabel(isVerified),
+        verification_status: isVerified ? 'verified' : 'rejected',
+        needs_plan_selection: isVerified ? true : false,
         updated_at: new Date().toISOString()
       })
       .eq('id', existingDoc.user_id);
 
-    return json({ success: true });
+    return json({ success: true, isVerified, userId: existingDoc.user_id });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal server error';
     return json({ error: message }, { status: 500 });
