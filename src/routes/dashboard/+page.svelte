@@ -174,14 +174,17 @@
 
 	onMount(async () => {
 		const {
-			data: { user }
-		} = await supabase.auth.getUser();
+			data: { session }
+		} = await supabase.auth.getSession();
+		const user = session?.user ?? null;
 
 		currentUser = user;
 		loadActivitySeenAt();
 
-		// Get and store access token for child components
-		currentAccessToken = await getSessionAccessToken();
+		// Avoid blocking first paint; token can be refreshed in background.
+		void getSessionAccessToken().then((token) => {
+			currentAccessToken = token;
+		});
 
 		if (!user && browser) {
 			goto(resolve('/auth/login'));
@@ -189,14 +192,16 @@
 			return;
 		}
 
-		await loadDriverEligibility(user!.id);
-
-		await loadMyRides(user!.id);
-		await loadMyBookings(user!.id);
-		await loadIncomingBookingRequests(user!.id);
-		await refreshPendingArchiveReviewsCount();
-		await loadAdminInboxMessages();
+		const userId = user!.id;
 		loading = false;
+		void Promise.allSettled([
+			loadDriverEligibility(userId),
+			loadMyRides(userId),
+			loadMyBookings(userId),
+			loadIncomingBookingRequests(userId),
+			refreshPendingArchiveReviewsCount(),
+			loadAdminInboxMessages()
+		]);
 	});
 
 	$: activityFeed = [

@@ -33,7 +33,7 @@
 
 <Header />
 
-<main class="flex-1">
+<main class="relative z-0 flex-1 pt-24">
 	{@render children()}
 </main>
 

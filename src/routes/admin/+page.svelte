@@ -142,6 +142,107 @@
 	let exportLoading = false;
 	let exportError = '';
 
+	// Admin runtime state (kept explicit to prevent ReferenceError crashes in template/functions)
+	let activeTab = 'overview';
+	let usersLoading = false;
+	let usersError = '';
+	let usersActionMessage = '';
+	let users: any[] = [];
+	let filteredUsers: any[] = [];
+	let normalizedSearch = '';
+	let actionUserId: string | null = null;
+
+	let showProfileModal = false;
+	let selectedProfile: any | null = null;
+	let profileRides: any[] = [];
+	let profileBookings: any[] = [];
+	let ridesLoading = false;
+	let profileDocuments: any[] = [];
+	let profileDocumentsLoading = false;
+	let profileDocumentsError = '';
+	let profileDocumentsMessage = '';
+	let profileDocumentActionId: string | null = null;
+	let privateProfile: Record<string, unknown> | null = null;
+	let privateProfileError = '';
+	let privateProfileLoading = false;
+	let privateProfileOpenInProgress = false;
+
+	let statusActionLoading = false;
+	let statusActionMessage = '';
+	let statusActionIsError = false;
+
+	let ridesManagementLoading = false;
+	let ridesManagementError = '';
+	let rides: any[] = [];
+	let filteredRides: any[] = [];
+	let rideActionLoading = false;
+	let rideActionMessage = '';
+	let showRideBookingsModal = false;
+	let selectedRideForBookings: any | null = null;
+	let rideBookings: any[] = [];
+	let rideBookingsLoading = false;
+
+	let bookingsLoading = false;
+	let bookingsError = '';
+	let bookingsActionMessage = '';
+	let bookings: any[] = [];
+	let filteredBookings: any[] = [];
+	let selectedBooking: any | null = null;
+	let showBookingDetailsModal = false;
+	let selectedBookingRider: any | null = null;
+	let riderDetailsLoading = false;
+	let bookingStatusActionLoading = false;
+
+	let reportsLoading = false;
+	let reportsError = '';
+	let reportActionLoading = false;
+	let reportActionMessage = '';
+	let reportActionIsError = false;
+	let reports: any[] = [];
+	let filteredReports: any[] = [];
+	let showReportNoteModal = false;
+	let reportActionPending: { report: any; action: 'ignore' | 'warn' | 'suspend' | 'resolve' } | null = null;
+	let selectedReportHistory: any | null = null;
+	let showReportHistoryModal = false;
+
+	let reviewsLoading = false;
+	let reviewsError = '';
+	let reviewActionLoading = false;
+	let reviewActionMessage = '';
+	let reviews: any[] = [];
+	let filteredReviews: any[] = [];
+
+	function parseRating(value: unknown): number | null {
+		if (value === null || value === undefined || value === '') {
+			return null;
+		}
+
+		const numericValue = typeof value === 'number' ? value : Number(value);
+		return Number.isFinite(numericValue) ? numericValue : null;
+	}
+
+	function formatRating(value: unknown, suffix = ''): string {
+		const rating = parseRating(value);
+		if (rating === null) {
+			return '-';
+		}
+
+		return `${rating.toFixed(1)}${suffix}`;
+	}
+
+	async function loadAdminDataResiliently() {
+		await Promise.allSettled([
+			loadStats(),
+			loadUsers(),
+			loadRides(),
+			loadBookings(),
+			loadReports(),
+			loadReviews(),
+			loadSupportTickets(),
+			loadPlatformSettings()
+		]);
+	}
+
 	onMount(() => {
 		const unsubscribe = user.subscribe((u) => {
 			currentUser = u;
@@ -178,10 +279,11 @@
 
 		async function initializeAdminPage() {
 			try {
-				// Wait for auth to resolve
+				// Use local session first to avoid transient network auth hiccups.
 				const {
-					data: { user: authUser }
-				} = await supabase.auth.getUser();
+					data: { session }
+				} = await supabase.auth.getSession();
+				const authUser = session?.user ?? currentUser;
 				if (!authUser) {
 					goto('/auth/login');
 					return;
@@ -191,14 +293,8 @@
 					(authUser.email ?? '').toLowerCase() === 'hizli.carpooling@gmail.com';
 				if (isHizliAccount) {
 					isAdmin = true;
-					await loadStats();
-					await loadUsers();
-					await loadRides();
-					await loadBookings();
-					await loadReports();
-					await loadReviews();
-					await loadSupportTickets();
-					await loadPlatformSettings();
+					loading = false;
+					void loadAdminDataResiliently();
 					return;
 				}
 
@@ -242,14 +338,8 @@
 				}
 
 				isAdmin = true;
-				await loadStats();
-				await loadUsers();
-				await loadRides();
-				await loadBookings();
-				await loadReports();
-				await loadReviews();
-				await loadSupportTickets();
-				await loadPlatformSettings();
+				loading = false;
+				void loadAdminDataResiliently();
 			} catch (error) {
 				accessError = error instanceof Error
 					? error.message
@@ -259,7 +349,7 @@
 			}
 		}
 
-		initializeAdminPage();
+		void initializeAdminPage();
 
 		return () => {
 			unsubscribe();
@@ -2809,11 +2899,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 														</span>
 													</td>
 													<td class="px-4 py-3 align-top text-gray-600">
-														{#if adminUser.average_rating}
-															<span class="text-sm font-medium">{adminUser.average_rating.toFixed(1)} *</span>
-														{:else}
-															<span class="text-xs text-gray-400">-</span>
-														{/if}
+														<span class="text-sm font-medium">{formatRating(adminUser.average_rating, ' *')}</span>
 													</td>
 													<td class="px-4 py-3 align-top text-gray-500">
 														{#if adminUser.created_at}
@@ -4018,7 +4104,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 									</div>
 									<div>
 										<p class="text-xs text-gray-500">Average rating</p>
-										<p class="text-sm font-medium text-gray-900">{selectedBookingRider.average_rating ? `${selectedBookingRider.average_rating}/5` : 'No reviews'}</p>
+										<p class="text-sm font-medium text-gray-900">{parseRating(selectedBookingRider.average_rating) === null ? 'No reviews' : formatRating(selectedBookingRider.average_rating, '/5')}</p>
 									</div>
 								</div>
 								<div class="pt-2">
@@ -4283,7 +4369,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 							</div>
 							<div>
 								<p class="text-gray-500">Average rating</p>
-								<p class="font-medium text-gray-900">{selectedProfile.average_rating ? selectedProfile.average_rating.toFixed(1) + '/5' : '-'}</p>
+								<p class="font-medium text-gray-900">{formatRating(selectedProfile.average_rating, '/5')}</p>
 							</div>
 							<div>
 								<p class="text-gray-500">Created</p>

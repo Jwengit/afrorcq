@@ -238,10 +238,13 @@
 	onMount(async () => {
 		if (authChecked) return;
 
-		const { data } = await supabase.auth.getUser();
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+		const authUser = session?.user ?? null;
 		authChecked = true;
 
-		if (!data.user && browser) {
+		if (!authUser && browser) {
 			loading = false;
 			goto(resolve('/auth/login'));
 		}
@@ -440,15 +443,14 @@
 			console.error('Error loading profile:', error);
 			profileError = error instanceof Error ? error.message : 'Unable to load profile.';
 		} finally {
-			await loadVerificationDocuments();
-			
 			// Check if user needs to select a plan
 			if (profileRow?.needs_plan_selection === true && profileRow?.is_verified === true && browser) {
 				await goto(resolve('/plan-selection'));
 				return;
 			}
-			
+
 			loading = false;
+			void loadVerificationDocuments();
 		}
 	}
 
