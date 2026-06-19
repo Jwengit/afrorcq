@@ -177,18 +177,70 @@
 		window.addEventListener('storage', handleStorageRefreshSignal);
 
 		async function initializeAdminPage() {
-			// Wait for auth to resolve
-			const {
-				data: { user: authUser }
-			} = await supabase.auth.getUser();
-			if (!authUser) {
-				goto('/auth/login');
-				return;
-			}
+			try {
+				// Wait for auth to resolve
+				const {
+					data: { user: authUser }
+				} = await supabase.auth.getUser();
+				if (!authUser) {
+					goto('/auth/login');
+					return;
+				}
 
-			const isHizliAccount =
-				(authUser.email ?? '').toLowerCase() === 'hizli.carpooling@gmail.com';
-			if (isHizliAccount) {
+				const isHizliAccount =
+					(authUser.email ?? '').toLowerCase() === 'hizli.carpooling@gmail.com';
+				if (isHizliAccount) {
+					isAdmin = true;
+					await loadStats();
+					await loadUsers();
+					await loadRides();
+					await loadBookings();
+					await loadReports();
+					await loadReviews();
+					await loadSupportTickets();
+					await loadPlatformSettings();
+					return;
+				}
+
+				const { data: profile, error } = await supabase
+					.from('profiles')
+					.select('is_admin')
+					.eq('id', authUser.id)
+					.maybeSingle();
+
+				if (error) {
+					accessError =
+						"Unable to verify admin access. Your profile may not exist yet in the profiles table.";
+					return;
+				}
+
+				let checkedProfile = profile;
+				if (!checkedProfile) {
+					const fallbackFirstName =
+						authUser.user_metadata?.full_name?.toString()?.split(' ')[0] ||
+						authUser.user_metadata?.name?.toString()?.split(' ')[0] ||
+						authUser.email?.split('@')[0] ||
+						'User';
+
+					await supabase.from('profiles').insert({
+						id: authUser.id,
+						first_name: fallbackFirstName
+					});
+
+					const { data: retryProfile } = await supabase
+						.from('profiles')
+						.select('is_admin')
+						.eq('id', authUser.id)
+						.maybeSingle();
+
+					checkedProfile = retryProfile;
+				}
+
+				if (!checkedProfile?.is_admin) {
+					accessError = "Your account is signed in, but it does not have the admin role yet.";
+					return;
+				}
+
 				isAdmin = true;
 				await loadStats();
 				await loadUsers();
@@ -198,61 +250,13 @@
 				await loadReviews();
 				await loadSupportTickets();
 				await loadPlatformSettings();
+			} catch (error) {
+				accessError = error instanceof Error
+					? error.message
+					: 'Unable to open admin dashboard. Please try again.';
+			} finally {
 				loading = false;
-				return;
 			}
-
-			const { data: profile, error } = await supabase
-				.from('profiles')
-				.select('is_admin')
-				.eq('id', authUser.id)
-				.maybeSingle();
-
-			if (error) {
-				accessError =
-					"Unable to verify admin access. Your profile may not exist yet in the profiles table.";
-				loading = false;
-				return;
-			}
-
-			let checkedProfile = profile;
-			if (!checkedProfile) {
-				const fallbackFirstName =
-					authUser.user_metadata?.full_name?.toString()?.split(' ')[0] ||
-					authUser.user_metadata?.name?.toString()?.split(' ')[0] ||
-					authUser.email?.split('@')[0] ||
-					'User';
-
-				await supabase.from('profiles').insert({
-					id: authUser.id,
-					first_name: fallbackFirstName
-				});
-
-				const { data: retryProfile } = await supabase
-					.from('profiles')
-					.select('is_admin')
-					.eq('id', authUser.id)
-					.maybeSingle();
-
-				checkedProfile = retryProfile;
-			}
-
-			if (!checkedProfile?.is_admin) {
-				accessError = "Your account is signed in, but it does not have the admin role yet.";
-				loading = false;
-				return;
-			}
-
-			isAdmin = true;
-			await loadStats();
-			await loadUsers();
-			await loadRides();
-			await loadBookings();
-			await loadReports();
-			await loadReviews();
-			await loadSupportTickets();
-			await loadPlatformSettings();
-			loading = false;
 		}
 
 		initializeAdminPage();

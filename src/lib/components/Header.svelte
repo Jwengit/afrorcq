@@ -2,6 +2,7 @@
 	import { user } from '$lib/authStore';
 	import { supabase } from '$lib/supabaseClient';
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 
 	let isMenuOpen = false;
 	let currentUser: any = null;
@@ -47,11 +48,6 @@
 			return;
 		}
 		goto('/publish-ride');
-	}
-
-	function handleAdminClick() {
-		isMenuOpen = false;
-		goto('/admin');
 	}
 
 	async function signOut() {
@@ -104,13 +100,12 @@
 						<span class="sr-only">Profile</span>
 					</a>
 					{#if hasAdminAccess}
-						<button
-							type="button"
-							on:click={handleAdminClick}
-							class="text-gray-600 hover:text-gray-900 transition-colors cursor-pointer"
+						<a
+							href={resolve('/admin')}
+							class="text-gray-600 hover:text-gray-900 transition-colors"
 						>
 							Acces admin
-						</button>
+						</a>
 					{/if}
 					<button
 						on:click={signOut}
@@ -190,13 +185,12 @@
 					</a
 					>
 					{#if hasAdminAccess}
-						<button
-							type="button"
-							on:click={handleAdminClick}
-							class="block w-full text-left px-3 py-2 text-gray-600 hover:text-primary hover:bg-gray-50 rounded-md cursor-pointer"
+						<a
+							href={resolve('/admin')}
+							class="block w-full text-left px-3 py-2 text-gray-600 hover:text-primary hover:bg-gray-50 rounded-md"
 						>
 							Acces admin
-						</button>
+						</a>
 					{/if}
 					<button
 						on:click={signOut}
