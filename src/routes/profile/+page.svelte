@@ -98,11 +98,9 @@
 	let selectedDocumentFile: File | null = null;
 	let documentFileName = 'Choose a file';
 	let documentFileInput: HTMLInputElement;
-	let showVerificationDocuments = false;
 
 	const documentTypeOptions = [
 		{ value: 'identity_card', label: 'Identity card' },
-		{ value: 'student_id', label: 'Student ID' },
 		{ value: 'driver_license', label: 'Driver license' },
 		{ value: 'proof_of_address', label: 'Proof of address' },
 		{ value: 'insurance', label: 'Insurance proof' },
@@ -112,7 +110,6 @@
 
 	const documentTypeLabelMap: Record<string, string> = {
 		identity_card: 'Identity card',
-		student_id: 'Student ID',
 		driver_license: 'Driver license',
 		proof_of_address: 'Proof of address',
 		insurance: 'Insurance proof',
@@ -141,7 +138,6 @@
 		if (normalized === 'license' || normalized === 'driving_license') return 'driver_license';
 		if (normalized === 'insurance_proof') return 'insurance';
 		if (normalized === 'registration' || normalized === 'vehicle_papers') return 'vehicle_registration';
-		if (normalized === 'student_card' || normalized === 'student_card_id') return 'student_id';
 		return normalized;
 	}
 
@@ -238,13 +234,10 @@
 	onMount(async () => {
 		if (authChecked) return;
 
-		const {
-			data: { session }
-		} = await supabase.auth.getSession();
-		const authUser = session?.user ?? null;
+		const { data } = await supabase.auth.getUser();
 		authChecked = true;
 
-		if (!authUser && browser) {
+		if (!data.user && browser) {
 			loading = false;
 			goto(resolve('/auth/login'));
 		}
@@ -389,7 +382,6 @@
 	async function loadProfile() {
 		loading = true;
 		profileError = '';
-		let profileRow: Record<string, unknown> | null = null;
 		try {
 			let { data, error } = await supabase
 				.from('profiles')
@@ -434,7 +426,6 @@
 			}
 
 			if (data) {
-				profileRow = data as Record<string, unknown>;
 				profile = normalizeProfile(data);
 				formData = { ...profile };
 				previewUrl = profile.profile_photo_url || '';
@@ -443,14 +434,8 @@
 			console.error('Error loading profile:', error);
 			profileError = error instanceof Error ? error.message : 'Unable to load profile.';
 		} finally {
-			// Check if user needs to select a plan
-			if (profileRow?.needs_plan_selection === true && profileRow?.is_verified === true && browser) {
-				await goto(resolve('/plan-selection'));
-				return;
-			}
-
+			await loadVerificationDocuments();
 			loading = false;
-			void loadVerificationDocuments();
 		}
 	}
 
@@ -1443,146 +1428,122 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 
 			<!-- Verification Documents -->
 			<div class="profile-card p-7 mt-6">
-				{#if !profile.is_verified && !showVerificationDocuments}
-					<!-- CTA: Become Verified -->
-					<div class="bg-linear-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-lg p-8 text-center">
-						<svg class="w-12 h-12 text-emerald-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-						</svg>
-						<h2 class="text-2xl font-bold text-slate-900 mb-2">Become a Verified Member</h2>
-						<p class="text-slate-600 mb-6">
-							Get a verified badge, unlock premium features, and gain access to priority support.
+				<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+					<div>
+						<h2 class="text-xl font-semibold text-slate-900">Verification Documents</h2>
+						<p class="text-sm text-slate-600 mt-1">Upload required documents so admins can verify your account.</p>
+						<p class="text-xs text-slate-500 mt-1">
+							{#if isDriver}
+								As a driver: Driver's license, Car insurance, Vehicle registration, Identity card, Proof of address.
+							{:else}
+								As a passenger: Identity card, Proof of address.
+								Add your car info to register as a driver.
+							{/if}
 						</p>
-						<button
-							type="button"
-							on:click={() => {
-								showVerificationDocuments = true;
-								loadVerificationDocuments();
-							}}
-							class="px-6 py-3 bg-linear-to-r from-emerald-600 to-teal-500 text-white font-semibold rounded-lg hover:from-emerald-700 hover:to-teal-600 transition-all shadow-md cursor-pointer"
-						>
-							Start Verification Process
-						</button>
 					</div>
-				{:else}
-					<!-- Verification Documents Form -->
-					<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-						<div>
-							<h2 class="text-xl font-semibold text-slate-900">Verification Documents</h2>
-							<p class="text-sm text-slate-600 mt-1">Upload required documents so admins can verify your account.</p>
-							<p class="text-xs text-slate-500 mt-1">
-								{#if isDriver}
-									As a driver: Driver's license, Car insurance, Vehicle registration, Identity card, Proof of address.
-								{:else}
-									As a passenger: Identity card, Proof of address.
-									Add your car info to register as a driver.
-								{/if}
-							</p>
-						</div>
-						<div class="text-sm text-slate-500">
-							Accepted: PDF, PNG, JPG, JPEG, WEBP (max 10MB)
-						</div>
+					<div class="text-sm text-slate-500">
+						Accepted: PDF, PNG, JPG, JPEG, WEBP (max 10MB)
 					</div>
+				</div>
 
-					{#if !profile.is_verified && missingRequiredDocumentTypes.length > 0}
-						<div class="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-							Missing required documents: {missingRequiredDocumentTypes.map((docType) => documentTypeLabel(docType)).join(', ')}
-						</div>
-					{/if}
-
-					<div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-						<select
-							bind:value={selectedDocumentType}
-							class="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
-						>
-							{#each documentTypeOptions as option (option.value)}
-								<option value={option.value}>{option.label}</option>
-							{/each}
-						</select>
-						<div class="relative">
-							<label class="block px-3 py-2 text-sm text-emerald-700 bg-emerald-100 rounded-md font-semibold cursor-pointer hover:bg-emerald-200 text-center">
-								{documentFileName}
-								<input
-									bind:this={documentFileInput}
-									type="file"
-									accept=".pdf,.png,.jpg,.jpeg,.webp"
-									on:change={handleVerificationDocumentSelect}
-									class="hidden"
-								/>
-							</label>
-						</div>
-						<button
-							type="button"
-							on:click={uploadVerificationDocument}
-							disabled={!selectedDocumentFile || uploadingDocument}
-							class="px-4 py-2 rounded-md bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
-						>
-							{uploadingDocument ? 'Uploading...' : 'Upload document'}
-						</button>
-					</div>
-
-					{#if documentsError}
-						<p class="mt-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">{documentsError}</p>
-					{/if}
-					{#if documentsMessage}
-						<p class="mt-3 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2">{documentsMessage}</p>
-					{/if}
-
-					<div class="mt-4 border border-slate-200 rounded-xl overflow-hidden">
-						{#if documentsLoading}
-							<p class="px-4 py-3 text-sm text-slate-500">Loading documents...</p>
-						{:else if verificationDocuments.length === 0}
-							<p class="px-4 py-3 text-sm text-slate-500">No documents uploaded yet.</p>
-						{:else}
-							<table class="w-full text-sm">
-								<thead class="bg-slate-50 text-slate-600 text-left">
-									<tr>
-										<th class="px-4 py-3 font-medium">Type</th>
-										<th class="px-4 py-3 font-medium">File</th>
-										<th class="px-4 py-3 font-medium">Status</th>
-										<th class="px-4 py-3 font-medium">Uploaded</th>
-										<th class="px-4 py-3 font-medium">Actions</th>
-									</tr>
-								</thead>
-								<tbody class="divide-y divide-slate-100">
-									{#each verificationDocuments as doc (doc.id)}
-										<tr>
-											<td class="px-4 py-3">{documentTypeLabel(doc.document_type)}</td>
-											<td class="px-4 py-3">
-												<p class="font-medium text-slate-900">{doc.file_name}</p>
-												<p class="text-xs text-slate-500">{formatFileSize(doc.file_size)}</p>
-												{#if doc.admin_note}
-													<p class="text-xs text-red-600 mt-1">Admin note: {doc.admin_note}</p>
-												{/if}
-											</td>
-											<td class="px-4 py-3">
-												<span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${documentStatusClass(doc.status)}`}>
-													{documentStatusLabel(doc.status)}
-												</span>
-											</td>
-											<td class="px-4 py-3 text-slate-600">{new Date(doc.created_at).toLocaleDateString('en-US')}</td>
-											<td class="px-4 py-3">
-												<div class="flex gap-2">
-													{#if doc.signed_url}
-														<a href={doc.signed_url} target="_blank" rel="noopener noreferrer" class="px-2 py-1 rounded border border-blue-200 text-blue-700 hover:bg-blue-50">Open</a>
-													{/if}
-													<button
-														type="button"
-														on:click={() => deleteVerificationDocument(doc)}
-														disabled={doc.status !== 'pending' || deletingDocumentId === doc.id}
-														class="px-2 py-1 rounded border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
-													>
-														{deletingDocumentId === doc.id ? 'Deleting...' : 'Delete'}
-													</button>
-												</div>
-											</td>
-										</tr>
-									{/each}
-								</tbody>
-							</table>
-						{/if}
+				{#if !profile.is_verified && missingRequiredDocumentTypes.length > 0}
+					<div class="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+						Missing required documents: {missingRequiredDocumentTypes.map((docType) => documentTypeLabel(docType)).join(', ')}
 					</div>
 				{/if}
+
+				<div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+					<select
+						bind:value={selectedDocumentType}
+						class="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+					>
+						{#each documentTypeOptions as option (option.value)}
+							<option value={option.value}>{option.label}</option>
+						{/each}
+					</select>
+					<div class="relative">
+						<label class="block px-3 py-2 text-sm text-emerald-700 bg-emerald-100 rounded-md font-semibold cursor-pointer hover:bg-emerald-200 text-center">
+							{documentFileName}
+							<input
+								bind:this={documentFileInput}
+								type="file"
+								accept=".pdf,.png,.jpg,.jpeg,.webp"
+								on:change={handleVerificationDocumentSelect}
+								class="hidden"
+							/>
+						</label>
+					</div>
+					<button
+						type="button"
+						on:click={uploadVerificationDocument}
+						disabled={!selectedDocumentFile || uploadingDocument}
+						class="px-4 py-2 rounded-md bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
+					>
+						{uploadingDocument ? 'Uploading...' : 'Upload document'}
+					</button>
+				</div>
+
+				{#if documentsError}
+					<p class="mt-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">{documentsError}</p>
+				{/if}
+				{#if documentsMessage}
+					<p class="mt-3 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2">{documentsMessage}</p>
+				{/if}
+
+				<div class="mt-4 border border-slate-200 rounded-xl overflow-hidden">
+					{#if documentsLoading}
+						<p class="px-4 py-3 text-sm text-slate-500">Loading documents...</p>
+					{:else if verificationDocuments.length === 0}
+						<p class="px-4 py-3 text-sm text-slate-500">No documents uploaded yet.</p>
+					{:else}
+						<table class="w-full text-sm">
+							<thead class="bg-slate-50 text-slate-600 text-left">
+								<tr>
+									<th class="px-4 py-3 font-medium">Type</th>
+									<th class="px-4 py-3 font-medium">File</th>
+									<th class="px-4 py-3 font-medium">Status</th>
+									<th class="px-4 py-3 font-medium">Uploaded</th>
+									<th class="px-4 py-3 font-medium">Actions</th>
+								</tr>
+							</thead>
+							<tbody class="divide-y divide-slate-100">
+								{#each verificationDocuments as doc (doc.id)}
+									<tr>
+										<td class="px-4 py-3">{documentTypeLabel(doc.document_type)}</td>
+										<td class="px-4 py-3">
+											<p class="font-medium text-slate-900">{doc.file_name}</p>
+											<p class="text-xs text-slate-500">{formatFileSize(doc.file_size)}</p>
+											{#if doc.admin_note}
+												<p class="text-xs text-red-600 mt-1">Admin note: {doc.admin_note}</p>
+											{/if}
+										</td>
+										<td class="px-4 py-3">
+											<span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${documentStatusClass(doc.status)}`}>
+												{documentStatusLabel(doc.status)}
+											</span>
+										</td>
+										<td class="px-4 py-3 text-slate-600">{new Date(doc.created_at).toLocaleDateString('en-US')}</td>
+										<td class="px-4 py-3">
+											<div class="flex gap-2">
+												{#if doc.signed_url}
+													<a href={doc.signed_url} target="_blank" rel="noopener noreferrer" class="px-2 py-1 rounded border border-blue-200 text-blue-700 hover:bg-blue-50">Open</a>
+												{/if}
+												<button
+													type="button"
+													on:click={() => deleteVerificationDocument(doc)}
+													disabled={doc.status !== 'pending' || deletingDocumentId === doc.id}
+													class="px-2 py-1 rounded border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
+												>
+													{deletingDocumentId === doc.id ? 'Deleting...' : 'Delete'}
+												</button>
+											</div>
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					{/if}
+				</div>
 			</div>
 		</div>
 	</div>

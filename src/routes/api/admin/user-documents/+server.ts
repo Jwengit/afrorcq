@@ -31,7 +31,6 @@ function normalizeDocumentType(value: string | null | undefined): string {
   if (normalized === 'license' || normalized === 'driving_license') return 'driver_license';
   if (normalized === 'insurance_proof') return 'insurance';
   if (normalized === 'registration' || normalized === 'vehicle_papers') return 'vehicle_registration';
-  if (normalized === 'student_card' || normalized === 'student_card_id') return 'student_id';
 
   return normalized;
 }
@@ -386,13 +385,11 @@ export const PATCH: RequestHandler = async ({ request }) => {
       .update({
         is_verified: isVerified,
         status: resolveVerificationLabel(isVerified),
-        verification_status: isVerified ? 'verified' : 'rejected',
-        needs_plan_selection: isVerified ? true : false,
         updated_at: new Date().toISOString()
       })
       .eq('id', existingDoc.user_id);
 
-    return json({ success: true, isVerified, userId: existingDoc.user_id });
+    return json({ success: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal server error';
     return json({ error: message }, { status: 500 });

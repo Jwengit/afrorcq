@@ -15,12 +15,21 @@ VITE_PUBLIC_SUPABASE_URL=your_supabase_url
 VITE_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 VITE_SUPABASE_PERSIST_SESSION=false
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+VITE_PUBLIC_PAYPAL_CLIENT_ID=your_paypal_client_id_for_frontend_sdk
+PAYPAL_CLIENT_ID=your_paypal_client_id
+PAYPAL_CLIENT_SECRET=your_paypal_client_secret
+PAYPAL_MODE=live
 RESEND_API_KEY=your_resend_api_key
 PUBLIC_SITE_URL=https://www.hizli-carpooling.com
 ```
 
+For real payments, use a live PayPal business app/client and live API secret, then keep `PAYPAL_MODE=live`. Venmo funding can appear in the PayPal checkout when the business account is eligible in the target region.
+
+Before switching live, follow the payment go-live checklist in [docs/payments-go-live.md](docs/payments-go-live.md).
+
 Note: `SUPABASE_SERVICE_ROLE_KEY` is required for admin APIs (`/api/admin/users` and `/api/admin/overview`).
 Do not expose this key in client code.
+`PAYPAL_CLIENT_SECRET` must never be exposed in client code.
 `RESEND_API_KEY` is required for sending welcome emails.
 `PUBLIC_SITE_URL` is used for building links included in emails.
 `VITE_SUPABASE_PERSIST_SESSION` controls whether auth survives a full browser restart.

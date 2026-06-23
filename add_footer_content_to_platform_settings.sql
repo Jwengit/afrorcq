@@ -48,7 +48,7 @@ SET
   how_it_works_page_title = COALESCE(NULLIF(TRIM(how_it_works_page_title), ''), 'How it works'),
   how_it_works_page_content = COALESCE(NULLIF(TRIM(how_it_works_page_content), ''), '1. Search your route.' || E'\n' || '2. Pick a ride that matches your needs.' || E'\n' || '3. Book and travel together.'),
   faq_page_title = COALESCE(NULLIF(TRIM(faq_page_title), ''), 'FAQ'),
-  faq_page_content = COALESCE(NULLIF(TRIM(faq_page_content), ''), 'Q: How do I book a ride?' || E'\n' || 'A: Search your route, open ride details, and send your booking request.' || E'\n\n' || 'Q: How is payment handled?' || E'\n' || 'A: Payments are arranged directly between members; the platform does not process payments.'),
+  faq_page_content = COALESCE(NULLIF(TRIM(faq_page_content), ''), 'Q: How do I book a ride?' || E'\n' || 'A: Search your route, open ride details, and book your seat.' || E'\n\n' || 'Q: Is payment secure?' || E'\n' || 'A: Yes, payments are processed through secure providers.'),
   help_page_title = COALESCE(NULLIF(TRIM(help_page_title), ''), 'Help Center'),
   help_page_content = COALESCE(NULLIF(TRIM(help_page_content), ''), 'Need help? Contact our support team and include your ride ID and account email for faster resolution.'),
   privacy_page_title = COALESCE(NULLIF(TRIM(privacy_page_title), ''), 'Privacy Policy'),

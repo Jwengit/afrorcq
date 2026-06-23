@@ -10,15 +10,6 @@
 	onMount(() => {
 		if (!browser || !('serviceWorker' in navigator)) return;
 
-		if (import.meta.env.DEV) {
-			navigator.serviceWorker.getRegistrations().then((registrations) => {
-				registrations.forEach((registration) => {
-					void registration.unregister();
-				});
-			});
-			return;
-		}
-
 		navigator.serviceWorker.register('/sw.js').catch((error) => {
 			console.error('Service worker registration failed:', error);
 		});
@@ -29,11 +20,12 @@
 	<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
 	<link rel="preconnect" href="https://www.google.com" />
 	<link rel="preconnect" href="https://www.gstatic.com" crossorigin="anonymous" />
+	<script src="https://www.google.com/recaptcha/api.js?render=explicit" async defer></script>
 </svelte:head>
 
 <Header />
 
-<main class="relative z-0 flex-1 pt-24">
+<main class="flex-1">
 	{@render children()}
 </main>
 

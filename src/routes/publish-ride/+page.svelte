@@ -100,10 +100,13 @@
 			return;
 		}
 
-		const {
-			data: { session }
-		} = await supabase.auth.getSession();
-		currentUser = session?.user ?? null;
+		const { data, error } = await supabase.auth.getUser();
+		if (error) {
+			console.error('Auth check error:', error);
+			return;
+		}
+
+		currentUser = data.user;
 	}
 
 	async function loadPublishingEligibility(userId: string) {

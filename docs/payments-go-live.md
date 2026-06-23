@@ -1,6 +1,6 @@
-# Payment Go-Live Checklist (Deprecated)
+# Payment Go-Live Checklist
 
-Online payment processing is disabled in this project. This document is kept only as historical reference.
+Use this checklist to prepare payments before switching from sandbox to live.
 
 ## Now: sandbox preparation
 

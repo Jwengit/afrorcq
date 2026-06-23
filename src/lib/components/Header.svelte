@@ -2,13 +2,11 @@
 	import { user } from '$lib/authStore';
 	import { supabase } from '$lib/supabaseClient';
 	import { goto } from '$app/navigation';
-	import { resolve } from '$app/paths';
 
 	let isMenuOpen = false;
 	let currentUser: any = null;
 	let hasAdminAccess = false;
 	let profilePhotoUrl: string | null = null;
-	type HeaderRoute = '/' | '/auth/login' | '/publish-ride' | '/dashboard' | '/profile' | '/admin';
 
 	async function updateAdminAccess(userId: string, email?: string | null) {
 		if (!userId) {
@@ -43,35 +41,30 @@
 		isMenuOpen = !isMenuOpen;
 	}
 
-	function navigateTo(path: HeaderRoute) {
-		isMenuOpen = false;
-		goto(resolve(path));
-	}
-
 	function handlePublishClick() {
 		if (!currentUser) {
-			navigateTo('/auth/login');
+			goto('/auth/login');
 			return;
 		}
-		navigateTo('/publish-ride');
+		goto('/publish-ride');
 	}
 
 	async function signOut() {
 		await supabase.auth.signOut();
-		navigateTo('/');
+		goto('/');
 	}
 
 </script>
 
 <!-- Navbar -->
-<nav class="fixed inset-x-0 top-0 bg-white shadow-sm" style="z-index: 2147483647; pointer-events: auto; isolation: isolate;">
+<nav class="bg-white shadow-sm sticky top-0 z-50">
 	<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 		<div class="flex items-center justify-between h-24">
 			<div class="flex items-center">
-				<button type="button" on:click={() => navigateTo('/')} class="flex items-center gap-3 font-bold cursor-pointer" style="color: #2BB573; margin-left: -1cm;">
+				<a href="/" class="flex items-center gap-3 font-bold" style="color: #2BB573; margin-left: -1cm;">
 					<!-- Logo: Assurez-vous d'avoir un fichier "Logo sans phrase.png" dans le dossier 'static' -->
 					<img src="/Logo sans phrase.png" alt="Hizli Logo" class="h-20 w-auto object-contain" />
-				</button>
+				</a>
 			</div>
 
 			<!-- Desktop Menu -->
@@ -87,10 +80,10 @@
 
 				{#if currentUser}
 					<!-- User is logged in -->
-					<button type="button" on:click={() => navigateTo('/dashboard')} class="text-gray-600 hover:text-gray-900 transition-colors cursor-pointer">
+					<a href="/dashboard" class="text-gray-600 hover:text-gray-900 transition-colors">
 						Dashboard
-					</button>
-					<button type="button" on:click={() => navigateTo('/profile')} class="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors cursor-pointer">
+					</a>
+					<a href="/profile" class="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors">
 						{#if profilePhotoUrl}
 							<img
 								src={profilePhotoUrl}
@@ -104,15 +97,11 @@
 							</svg>
 						{/if}
 						<span class="sr-only">Profile</span>
-					</button>
+					</a>
 					{#if hasAdminAccess}
-						<button
-							type="button"
-							on:click={() => navigateTo('/admin')}
-							class="text-gray-600 hover:text-gray-900 transition-colors cursor-pointer"
-						>
+						<a href="/admin" class="text-gray-600 hover:text-gray-900 transition-colors">
 							Acces admin
-						</button>
+						</a>
 					{/if}
 					<button
 						on:click={signOut}
@@ -122,13 +111,13 @@
 					</button>
 				{:else}
 					<!-- User is not logged in -->
-					<button type="button" on:click={() => navigateTo('/auth/login')} class="flex items-center gap-2 p-2 rounded-full hover:bg-gray-100 transition-colors cursor-pointer">
+					<a href="/auth/login" class="flex items-center gap-2 p-2 rounded-full hover:bg-gray-100 transition-colors">
 						<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-600">
 							<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/>
 							<circle cx="12" cy="7" r="4"/>
 						</svg>
 						Login
-					</button>
+					</a>
 				{/if}
 			</div>
 
@@ -172,17 +161,14 @@
 
 				{#if currentUser}
 					<!-- User is logged in -->
-					<button
-						type="button"
-						on:click={() => navigateTo('/dashboard')}
-						class="block w-full text-left px-3 py-2 text-gray-600 hover:text-primary hover:bg-gray-50 rounded-md cursor-pointer"
+					<a
+						href="/dashboard"
+						class="block px-3 py-2 text-gray-600 hover:text-primary hover:bg-gray-50 rounded-md"
+						>Dashboard</a
 					>
-						Dashboard
-					</button>
-					<button
-						type="button"
-						on:click={() => navigateTo('/profile')}
-						class="flex w-full items-center gap-2 px-3 py-2 text-gray-600 hover:text-primary hover:bg-gray-50 rounded-md cursor-pointer"
+					<a
+						href="/profile"
+						class="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-primary hover:bg-gray-50 rounded-md"
 					>
 						{#if profilePhotoUrl}
 							<img
@@ -192,15 +178,14 @@
 							/>
 						{/if}
 						<span>Profile</span>
-					</button>
+					</a
+					>
 					{#if hasAdminAccess}
-						<button
-							type="button"
-							on:click={() => navigateTo('/admin')}
-							class="block w-full text-left px-3 py-2 text-gray-600 hover:text-primary hover:bg-gray-50 rounded-md cursor-pointer"
+						<a
+							href="/admin"
+							class="block px-3 py-2 text-gray-600 hover:text-primary hover:bg-gray-50 rounded-md"
+							>Acces admin</a
 						>
-							Acces admin
-						</button>
 					{/if}
 					<button
 						on:click={signOut}
@@ -210,13 +195,11 @@
 					</button>
 				{:else}
 					<!-- User is not logged in -->
-					<button
-						type="button"
-						on:click={() => navigateTo('/auth/login')}
-						class="block w-full text-left px-3 py-2 text-gray-600 hover:text-primary hover:bg-gray-50 rounded-md cursor-pointer"
+					<a
+						href="/auth/login"
+						class="block px-3 py-2 text-gray-600 hover:text-primary hover:bg-gray-50 rounded-md"
+						>Login / Sign Up</a
 					>
-						Login / Sign Up
-					</button>
 				{/if}
 			</div>
 		</div>
