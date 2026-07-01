@@ -217,26 +217,21 @@
 			<div class="mb-4 flex items-center gap-3">
 				<img src="/Logo sans phrase.png" alt="Hizli Carpooling" class="h-12 w-12 rounded-xl border border-gray-100 object-contain p-1" />
 				<div>
-					<p class="text-lg font-bold text-gray-900">Install Hizli Carpooling</p>
-					{#if showIOSInstructions}
-						<p class="text-sm text-gray-500">Tap Install, then follow Safari steps to add the app.</p>
-					{/if}
+					<p class="text-lg font-bold text-gray-900">Install Hizli Carpooling web app for quick access and a smoother experience.</p>
 				</div>
 			</div>
 
 			{#if showIOSInstructions}
 				<div class="rounded-lg bg-green-50 p-3 text-sm text-green-900">
-					<p class="font-semibold">iPhone/iPad Steps:</p>
-					<p class="mt-1">1. Tap Safari's Share button.</p>
-					<p>2. Choose Add to Home Screen.</p>
+					<p>Tap Share, then Add to Home Screen.</p>
 				</div>
 			{:else if !deferredPrompt}
 				<div class="rounded-lg bg-green-50 p-3 text-sm text-green-900">
-					<p class="text-center">Click Install to add the app, or Later to be reminded.</p>
+					<p class="text-center">Install Hizli Carpooling web app for quick access and a smoother experience.</p>
 				</div>
 			{:else}
 				<div class="rounded-lg bg-green-50 p-3 text-sm text-green-900">
-					Faster opening, full-screen experience, and quick access.
+					Install Hizli Carpooling web app for quick access and a smoother experience.
 				</div>
 			{/if}
 
