@@ -355,13 +355,11 @@
 			first_name: string | null;
 			last_name: string | null;
 			email: string | null;
-			payment_method: string | null;
 		} | null;
 		driver_profile?: {
 			first_name: string | null;
 			last_name: string | null;
 			email: string | null;
-			payment_method: string | null;
 		} | null;
 		ride_info?: {
 			departure: string | null;
@@ -405,11 +403,9 @@
 	let txModalPassengerFirst = '';
 	let txModalPassengerLast = '';
 	let txModalPassengerEmail = '';
-	let txModalPassengerPayment = '';
 	let txModalDriverFirst = '';
 	let txModalDriverLast = '';
 	let txModalDriverEmail = '';
-	let txModalDriverPayment = '';
 	let txModalDeparture = '';
 	let txModalArrival = '';
 	let txModalRideDate = '';
@@ -2687,11 +2683,9 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 		txModalPassengerFirst = transaction.passenger_profile?.first_name ?? '';
 		txModalPassengerLast = transaction.passenger_profile?.last_name ?? '';
 		txModalPassengerEmail = transaction.passenger_profile?.email ?? '';
-		txModalPassengerPayment = transaction.passenger_profile?.payment_method ?? '';
 		txModalDriverFirst = transaction.driver_profile?.first_name ?? '';
 		txModalDriverLast = transaction.driver_profile?.last_name ?? '';
 		txModalDriverEmail = transaction.driver_profile?.email ?? '';
-		txModalDriverPayment = transaction.driver_profile?.payment_method ?? '';
 		txModalDeparture = transaction.ride_info?.departure ?? '';
 		txModalArrival = transaction.ride_info?.arrival ?? '';
 		txModalRideDate = transaction.ride_info?.ride_date ? transaction.ride_info.ride_date.slice(0, 10) : '';
@@ -2977,14 +2971,12 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 				passenger_profile: {
 					first_name: txModalPassengerFirst || null,
 					last_name: txModalPassengerLast || null,
-					email: txModalPassengerEmail || null,
-					payment_method: txModalPassengerPayment || null
+					email: txModalPassengerEmail || null
 				},
 				driver_profile: {
 					first_name: txModalDriverFirst || null,
 					last_name: txModalDriverLast || null,
-					email: txModalDriverEmail || null,
-					payment_method: txModalDriverPayment || null
+					email: txModalDriverEmail || null
 				},
 				ride_info: {
 					departure: txModalDeparture || null,
@@ -4486,7 +4478,6 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 													<div><label for="tx-passenger-first" class="text-xs text-gray-600 block mb-1">First name</label><input id="tx-passenger-first" type="text" bind:value={txModalPassengerFirst} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" /></div>
 													<div><label for="tx-passenger-last" class="text-xs text-gray-600 block mb-1">Last name</label><input id="tx-passenger-last" type="text" bind:value={txModalPassengerLast} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" /></div>
 													<div><label for="tx-passenger-email" class="text-xs text-gray-600 block mb-1">Email</label><input id="tx-passenger-email" type="email" bind:value={txModalPassengerEmail} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" /></div>
-													<div><label for="tx-passenger-method" class="text-xs text-gray-600 block mb-1">Payment method</label><input id="tx-passenger-method" type="text" bind:value={txModalPassengerPayment} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" /></div>
 												</div>
 											</div>
 
@@ -4496,7 +4487,6 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 													<div><label for="tx-driver-first" class="text-xs text-gray-600 block mb-1">First name</label><input id="tx-driver-first" type="text" bind:value={txModalDriverFirst} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" /></div>
 													<div><label for="tx-driver-last" class="text-xs text-gray-600 block mb-1">Last name</label><input id="tx-driver-last" type="text" bind:value={txModalDriverLast} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" /></div>
 													<div><label for="tx-driver-email" class="text-xs text-gray-600 block mb-1">Email</label><input id="tx-driver-email" type="email" bind:value={txModalDriverEmail} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" /></div>
-													<div><label for="tx-driver-method" class="text-xs text-gray-600 block mb-1">Payout method</label><input id="tx-driver-method" type="text" bind:value={txModalDriverPayment} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" /></div>
 												</div>
 											</div>
 
