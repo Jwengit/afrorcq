@@ -1,10 +1,10 @@
--- Add payment method fields to profiles.
+-- Remove payment method fields from profiles.
 -- Safe to run multiple times.
 
 ALTER TABLE public.profiles
-  ADD COLUMN IF NOT EXISTS payment_method TEXT CHECK (payment_method IN ('paypal', 'venmo')),
-  ADD COLUMN IF NOT EXISTS paypal_email TEXT,
-  ADD COLUMN IF NOT EXISTS venmo_handle TEXT;
+  DROP COLUMN IF EXISTS payment_method,
+  DROP COLUMN IF EXISTS paypal_email,
+  DROP COLUMN IF EXISTS venmo_handle;
 
 -- Remove old refund/payout columns if they exist
 ALTER TABLE public.profiles

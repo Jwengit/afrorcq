@@ -401,7 +401,7 @@
 	let txModalRefundStatus = '';
 	let txModalAmount = '0';
 	let txModalSeats = '1';
-	let txModalCommissionPercent = '20';
+	let txModalCommissionPercent = '0';
 	let txModalPassengerFirst = '';
 	let txModalPassengerLast = '';
 	let txModalPassengerEmail = '';
@@ -426,7 +426,7 @@
 	let createTxIsError = false;
 	let createTxAmount = '0';
 	let createTxSeats = '1';
-	let createTxCommissionPercent = '20';
+	let createTxCommissionPercent = '0';
 	let createTxBookingId = '';
 	let createTxRideId = '';
 	let createTxUserId = '';
@@ -1478,11 +1478,9 @@ pre{background:#f8fafc;border-top:1px solid #e2e8f0;padding:16px;font-size:12px;
 </div>
 
 <div class="card">
-  <div class="card-header"><span class="section-icon">💳</span><h2>Payment & Payout</h2></div>
+	<div class="card-header"><span class="section-icon">💳</span><h2>Transactions</h2></div>
   <table>
-    ${row('Method', p?.payment_method)}
-    ${row('PayPal email', p?.paypal_email)}
-    ${row('Venmo handle', p?.venmo_handle)}
+		${row('Status', 'Member payment details removed from profiles')}
   </table>
 </div>
 
@@ -2590,70 +2588,10 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 		transactionsError = '';
 		transactionsActionMessage = '';
 		transactionsActionIsError = false;
-
-		const {
-			data: { session }
-		} = await supabase.auth.getSession();
-
-		if (!session?.access_token) {
-			transactionsError = 'Session expired. Please sign in again.';
-			transactionsLoading = false;
-			return;
-		}
-
-		const params = new URLSearchParams();
-		if (transactionFilterStatus) {
-			params.append('status', transactionFilterStatus);
-		}
-		if (transactionFilterRefundStatus) {
-			params.append('refund_status', transactionFilterRefundStatus);
-		}
-		if (transactionFilterAdminStatus) {
-			params.append('admin_status', transactionFilterAdminStatus);
-		}
-		if (transactionFilterFromDate) {
-			params.append('from_date', transactionFilterFromDate);
-		}
-		if (transactionFilterToDate) {
-			params.append('to_date', transactionFilterToDate);
-		}
-
-		const response = await fetch(`/api/admin/transactions?${params.toString()}`, {
-			method: 'GET',
-			headers: {
-				Authorization: `Bearer ${session.access_token}`
-			}
-		});
-
-		const payload = await response.json();
-		if (!response.ok) {
-			transactionsError = payload?.error || 'Unable to load transactions.';
-			transactions = [];
-			transactionsLoading = false;
-			return;
-		}
-
-		const rows = (payload?.transactions ?? []) as AdminTransaction[];
-		const q = transactionSearch.trim().toLowerCase();
-		transactions = q
-			? rows.filter((tx) => {
-				const passengerName = `${tx.passenger_profile?.first_name ?? ''} ${tx.passenger_profile?.last_name ?? ''}`
-					.toLowerCase()
-					.trim();
-				const driverName = `${tx.driver_profile?.first_name ?? ''} ${tx.driver_profile?.last_name ?? ''}`
-					.toLowerCase()
-					.trim();
-				return (
-					tx.id.toLowerCase().includes(q) ||
-					(tx.booking_id ?? '').toLowerCase().includes(q) ||
-					(tx.external_reference ?? '').toLowerCase().includes(q) ||
-					(tx.passenger_profile?.email ?? '').toLowerCase().includes(q) ||
-					(tx.driver_profile?.email ?? '').toLowerCase().includes(q) ||
-					passengerName.includes(q) ||
-					driverName.includes(q)
-				);
-			})
-			: rows;
+		transactions = [];
+		transactionsActionMessage =
+			'Transaction records are intentionally hidden while member payment features are disabled.';
+		transactionsActionIsError = false;
 		transactionsLoading = false;
 	}
 
@@ -2745,7 +2683,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 		txModalRefundStatus = transaction.refund_status || 'none';
 		txModalAmount = String(transaction.amount ?? 0);
 		txModalSeats = String(transaction.seats_booked ?? 1);
-		txModalCommissionPercent = String(transaction.commission_percent ?? 20);
+		txModalCommissionPercent = String(transaction.commission_percent ?? 0);
 		txModalPassengerFirst = transaction.passenger_profile?.first_name ?? '';
 		txModalPassengerLast = transaction.passenger_profile?.last_name ?? '';
 		txModalPassengerEmail = transaction.passenger_profile?.email ?? '';
@@ -2774,7 +2712,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 	function openCreateTransactionModal() {
 		createTxAmount = '0';
 		createTxSeats = '1';
-		createTxCommissionPercent = '20';
+		createTxCommissionPercent = '0';
 		createTxBookingId = '';
 		createTxRideId = '';
 		createTxUserId = '';
@@ -2804,7 +2742,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 
 		const amount = Number(createTxAmount || 0);
 		const seatsBooked = Number(createTxSeats || 1);
-		const commissionPercent = Number(createTxCommissionPercent || 20);
+		const commissionPercent = Number(createTxCommissionPercent || 0);
 
 		const {
 			data: { session }
@@ -2996,7 +2934,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 
 		const amount = Number(txModalAmount || 0);
 		const seatsBooked = Number(txModalSeats || 1);
-		const commissionPercent = Number(txModalCommissionPercent || 20);
+		const commissionPercent = Number(txModalCommissionPercent || 0);
 		const commissionAmount = Math.round(amount * (commissionPercent / 100) * 100) / 100;
 		const driverPayoutAmount = Math.round((amount - commissionAmount) * 100) / 100;
 
@@ -3132,7 +3070,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 			faqPageTitle = String(s.faq_page_title ?? 'FAQ');
 			faqPageContent = String(
 				s.faq_page_content ??
-					'Q: How do I book a ride?\nA: Search your route, open ride details, and book your seat.\n\nQ: Is payment secure?\nA: Yes, payments are processed through secure providers.'
+					'Q: How do I book a ride?\nA: Search your route, open ride details, and send your booking request.\n\nQ: How is payment handled?\nA: Payment is arranged directly between members; the platform does not process payments.'
 			);
 			helpPageTitle = String(s.help_page_title ?? 'Help Center');
 			helpPageContent = String(
@@ -4341,7 +4279,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 									<button on:click={loadTransactions} class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 font-medium">Load transactions</button>
 								</div>
 								<div class="flex flex-wrap gap-2 mt-3">
-									<button on:click={openCreateTransactionModal} class="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 font-medium">+ New transaction</button>
+									<button on:click={loadTransactions} class="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 font-medium">Refresh list</button>
 								</div>
 								{#if transactionsActionMessage}
 									<p class={`text-sm border rounded-lg px-3 py-2 mt-3 ${transactionsActionIsError ? 'text-red-700 bg-red-50 border-red-200' : 'text-green-700 bg-green-50 border-green-200'}`}>
@@ -4390,7 +4328,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 							{:else if transactionsError}
 								<p class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{transactionsError}</p>
 							{:else if transactions.length === 0}
-								<p class="text-sm text-gray-500">No transactions.</p>
+								<p class="text-sm text-gray-500">No transactions to display. Member payment flows are disabled.</p>
 							{:else}
 								<div class="overflow-x-auto border border-gray-100 rounded-xl">
 									<table class="w-full text-sm">

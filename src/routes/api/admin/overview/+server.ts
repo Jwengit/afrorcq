@@ -274,8 +274,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
 				completedRides,
 				reservationsInProgress,
 				revenue: {
-					hasPaymentIntegration:
-						Boolean(env.PAYPAL_CLIENT_ID && env.PAYPAL_CLIENT_SECRET) && env.PAYPAL_MODE !== 'sandbox',
+					hasPaymentIntegration: false,
 					estimatedRevenue
 				},
 				alerts: {

@@ -82,7 +82,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
 				commission_percent, commission_amount, driver_payout_amount,
 				admin_status, payout_at, external_reference, admin_notes,
 				provider, paypal_order_id, created_at, updated_at,
-				profiles!transactions_user_id_fkey(first_name, last_name, email, payment_method)`
+				profiles!transactions_user_id_fkey(first_name, last_name, email)`
 			)
 			.order('created_at', { ascending: false });
 
@@ -125,7 +125,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
 		// Collect ride IDs to fetch driver info in one query
 		const rideIds = Array.from(new Set(txList.map((tx) => tx.ride_id).filter(Boolean)));
 		const rideDriverMap: Record<string, { driver_id: string; departure: string | null; arrival: string | null; ride_date: string | null }> = {};
-		const driverProfileMap: Record<string, { first_name: string | null; last_name: string | null; email: string | null; payment_method: string | null }> = {};
+		const driverProfileMap: Record<string, { first_name: string | null; last_name: string | null; email: string | null }> = {};
 
 		if (rideIds.length > 0) {
 			const { data: ridesData } = await adminClient
@@ -147,16 +147,15 @@ export const GET: RequestHandler = async ({ request, url }) => {
 				if (driverIds.length > 0) {
 					const { data: driverProfiles } = await adminClient
 						.from('profiles')
-						.select('id, first_name, last_name, email, payment_method')
-						.in('id', driverIds);
+							.select('id, first_name, last_name, email')
+							.in('id', driverIds);
 
-					if (driverProfiles) {
-						for (const p of driverProfiles) {
-							driverProfileMap[p.id] = {
-								first_name: p.first_name ?? null,
-								last_name: p.last_name ?? null,
-								email: p.email ?? null,
-								payment_method: p.payment_method ?? null
+						if (driverProfiles) {
+							for (const p of driverProfiles) {
+								driverProfileMap[p.id] = {
+									first_name: p.first_name ?? null,
+									last_name: p.last_name ?? null,
+									email: p.email ?? null
 							};
 						}
 					}
@@ -171,7 +170,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
 
 			// Compute commission amounts if not stored yet
 			const amount = Number(tx.amount || 0);
-			const commissionPct = Number(tx.commission_percent ?? 20);
+			const commissionPct = Number(tx.commission_percent ?? 0);
 			const commissionAmt = tx.commission_amount != null ? Number(tx.commission_amount) : Math.round(amount * commissionPct) / 100;
 			const payoutAmt = tx.driver_payout_amount != null ? Number(tx.driver_payout_amount) : Math.round(amount * (100 - commissionPct)) / 100;
 
@@ -181,11 +180,9 @@ export const GET: RequestHandler = async ({ request, url }) => {
 				passenger_first_name: passenger?.first_name ?? null,
 				passenger_last_name: passenger?.last_name ?? null,
 				passenger_email: passenger?.email ?? null,
-				passenger_payment_method: passenger?.payment_method ?? null,
 				driver_first_name: driverProfile?.first_name ?? null,
 				driver_last_name: driverProfile?.last_name ?? null,
 				driver_email: driverProfile?.email ?? null,
-				driver_payment_method: driverProfile?.payment_method ?? null,
 				ride_departure: rideInfo?.departure ?? null,
 				ride_arrival: rideInfo?.arrival ?? null,
 				ride_date: rideInfo?.ride_date ?? null,
@@ -208,8 +205,8 @@ export const GET: RequestHandler = async ({ request, url }) => {
 				'status', 'refund_status', 'admin_status', 'commission_percent', 'commission_amount',
 				'driver_payout_amount', 'provider', 'paypal_order_id', 'external_reference',
 				'admin_notes', 'payout_at', 'created_at', 'updated_at',
-				'passenger_first_name', 'passenger_last_name', 'passenger_email', 'passenger_payment_method',
-				'driver_first_name', 'driver_last_name', 'driver_email', 'driver_payment_method',
+				'passenger_first_name', 'passenger_last_name', 'passenger_email',
+				'driver_first_name', 'driver_last_name', 'driver_email',
 				'ride_departure', 'ride_arrival', 'ride_date'
 			];
 			const escape = (v: unknown) => {
@@ -345,7 +342,7 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		if (action === 'update_details') {
 			const amount = Number(body?.amount ?? 0);
 			const seatsBooked = Number(body?.seats_booked ?? 1);
-			const commissionPercent = Number(body?.commission_percent ?? 20);
+			const commissionPercent = Number(body?.commission_percent ?? 0);
 			const commissionAmount = Number(body?.commission_amount ?? 0);
 			const driverPayoutAmount = Number(body?.driver_payout_amount ?? 0);
 			const newStatus = (body?.status as string | undefined)?.toLowerCase();
@@ -409,7 +406,7 @@ export const PATCH: RequestHandler = async ({ request }) => {
 			}
 
 			const passengerProfile = body?.passenger_profile as
-				| { first_name?: string | null; last_name?: string | null; email?: string | null; payment_method?: string | null }
+				| { first_name?: string | null; last_name?: string | null; email?: string | null }
 				| undefined;
 
 			if (txRow.user_id && passengerProfile) {
@@ -419,7 +416,6 @@ export const PATCH: RequestHandler = async ({ request }) => {
 						first_name: passengerProfile.first_name ?? null,
 						last_name: passengerProfile.last_name ?? null,
 						email: passengerProfile.email ?? null,
-						payment_method: passengerProfile.payment_method ?? null,
 						updated_at: now
 					})
 					.eq('id', txRow.user_id);
@@ -450,7 +446,7 @@ export const PATCH: RequestHandler = async ({ request }) => {
 			}
 
 			const driverProfile = body?.driver_profile as
-				| { first_name?: string | null; last_name?: string | null; email?: string | null; payment_method?: string | null }
+				| { first_name?: string | null; last_name?: string | null; email?: string | null }
 				| undefined;
 
 			if (txRow.ride_id && driverProfile) {
@@ -471,7 +467,6 @@ export const PATCH: RequestHandler = async ({ request }) => {
 							first_name: driverProfile.first_name ?? null,
 							last_name: driverProfile.last_name ?? null,
 							email: driverProfile.email ?? null,
-							payment_method: driverProfile.payment_method ?? null,
 							updated_at: now
 						})
 						.eq('id', rideRow.driver_id);
@@ -559,7 +554,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		const amount = Number(body?.amount ?? 0);
 		const seatsBooked = Number(body?.seats_booked ?? 1);
-		const commissionPercent = Number(body?.commission_percent ?? 20);
+		const commissionPercent = Number(body?.commission_percent ?? 0);
 		const commissionAmount = Math.round(amount * (commissionPercent / 100) * 100) / 100;
 		const driverPayoutAmount = Math.round((amount - commissionAmount) * 100) / 100;
 
