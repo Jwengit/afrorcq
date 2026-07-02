@@ -107,11 +107,11 @@
 <div class="min-h-screen flex flex-col font-sans text-gray-900">
 	<!-- Hero Section -->
 	<!-- Assurez-vous que votre image (ex: header-bg.jpg) est bien dans le dossier 'static' -->
-	<section id="search" class="relative text-white py-20 px-4 md:px-8 bg-cover bg-center" style="background-image: url('/header-bg.jpg');">
+	<section id="search" class="relative text-white py-24 md:py-28 px-4 md:px-8 bg-cover bg-center" style="background-image: url('/header-bg.jpg');">
 		<!-- Calque sombre (overlay) pour que le texte reste lisible sur l'image -->
 		<div class="absolute inset-0 bg-black/50"></div>
 		
-		<div class="relative max-w-4xl mx-auto text-center z-10">
+		<div class="relative max-w-5xl mx-auto text-center z-10">
 			<h1 class="text-3xl md:text-5xl font-bold mb-4 tracking-tight">
 				Safety. Simplicity. Saving.
 			</h1>
@@ -123,7 +123,7 @@
 			<!-- Search Box -->
 			<form
 				on:submit|preventDefault={handleSearchSubmit}
-				class="bg-white p-4 rounded-xl shadow-2xl w-full flex flex-wrap gap-2 text-gray-900"
+				class="bg-white p-4 rounded-xl shadow-2xl w-full max-w-5xl mx-auto flex flex-wrap gap-2 text-gray-900"
 			>
 				<div class="flex-1 flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 min-w-45">
 					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 h-5 w-5">
@@ -175,7 +175,7 @@
 				<button
 					type="submit"
 					class="text-white px-6 py-3 rounded-lg font-bold hover:opacity-90 transition flex items-center justify-center gap-2 cursor-pointer"
-					style="background-color: #2BB573;"
+					style="background-color: #00B050;"
 				>
 					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5">
 						<circle cx="11" cy="11" r="8"/>
@@ -188,49 +188,68 @@
 	</section>
 
 	<!-- Most Popular Rides Section -->
-	<section id="popular-rides" class="py-10 px-4 bg-white">
+	<section id="popular-rides" class="py-14 px-4 bg-white">
 		<div class="max-w-7xl mx-auto text-center">
-			<h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-12">
-				Most popular rides
-			</h2>
-			<div class="grid md:grid-cols-3 gap-8 text-gray-800">
-				<div class="flex flex-col items-center gap-6">
-					<h3 class="text-xl font-semibold">Provo &harr; Rexbury</h3>
-					<div class="flex justify-center gap-4">
-						<button type="button" on:click={() => handlePublishClick('Provo', 'Rexbury')} class="bg-white text-gray-900 border border-gray-300 px-8 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition">Post</button>
+			<h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Most popular rides</h2>
+			<p class="text-gray-600 mb-10 max-w-2xl mx-auto">Post a trip or find a seat in our busiest travel corridors.</p>
+			<div class="grid md:grid-cols-3 gap-6 text-gray-800">
+				<div class="bg-white border border-green-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition">
+					<h3 class="text-2xl font-semibold text-gray-900 mb-6">Utah &harr; Idaho</h3>
+					<div class="flex justify-center gap-3">
 						<button
 							type="button"
-							on:click={() => handlePopularRideSearch('Provo', 'Rexbury')}
-							class="text-white px-8 py-3 rounded-lg font-bold text-center transition hover:opacity-90"
-							style="background-color: #2BB573;"
+							on:click={() => handlePublishClick('Utah', 'Idaho')}
+							class="bg-white text-gray-900 border border-gray-300 px-6 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition"
+						>
+							Post
+						</button>
+						<button
+							type="button"
+							on:click={() => handlePopularRideSearch('Utah', 'Idaho')}
+							class="text-white px-6 py-3 rounded-lg font-bold text-center transition hover:opacity-90"
+							style="background-color: #00B050;"
 						>
 							Search
 						</button>
 					</div>
 				</div>
-				<div class="flex flex-col items-center gap-6">
-					<h3 class="text-xl font-semibold">Salt Lake City &harr; Las Vegas</h3>
-					<div class="flex justify-center gap-4">
-						<button type="button" on:click={() => handlePublishClick('Salt Lake City', 'Las Vegas')} class="bg-white text-gray-900 border border-gray-300 px-8 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition">Post</button>
+
+				<div class="bg-white border border-green-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition">
+					<h3 class="text-2xl font-semibold text-gray-900 mb-6">Utah &harr; California</h3>
+					<div class="flex justify-center gap-3">
 						<button
 							type="button"
-							on:click={() => handlePopularRideSearch('Salt Lake City', 'Las Vegas')}
-							class="text-white px-8 py-3 rounded-lg font-bold text-center transition hover:opacity-90"
-							style="background-color: #2BB573;"
+							on:click={() => handlePublishClick('Utah', 'California')}
+							class="bg-white text-gray-900 border border-gray-300 px-6 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition"
+						>
+							Post
+						</button>
+						<button
+							type="button"
+							on:click={() => handlePopularRideSearch('Utah', 'California')}
+							class="text-white px-6 py-3 rounded-lg font-bold text-center transition hover:opacity-90"
+							style="background-color: #00B050;"
 						>
 							Search
 						</button>
 					</div>
 				</div>
-				<div class="flex flex-col items-center gap-6">
-					<h3 class="text-xl font-semibold">Salt Lake City &harr; Los Angeles</h3>
-					<div class="flex justify-center gap-4">
-						<button type="button" on:click={() => handlePublishClick('Salt Lake City', 'Los Angeles')} class="bg-white text-gray-900 border border-gray-300 px-8 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition">Post</button>
+
+				<div class="bg-white border border-green-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition">
+					<h3 class="text-2xl font-semibold text-gray-900 mb-6">Utah &harr; Nevada</h3>
+					<div class="flex justify-center gap-3">
 						<button
 							type="button"
-							on:click={() => handlePopularRideSearch('Salt Lake City', 'Los Angeles')}
-							class="text-white px-8 py-3 rounded-lg font-bold text-center transition hover:opacity-90"
-							style="background-color: #2BB573;"
+							on:click={() => handlePublishClick('Utah', 'Nevada')}
+							class="bg-white text-gray-900 border border-gray-300 px-6 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition"
+						>
+							Post
+						</button>
+						<button
+							type="button"
+							on:click={() => handlePopularRideSearch('Utah', 'Nevada')}
+							class="text-white px-6 py-3 rounded-lg font-bold text-center transition hover:opacity-90"
+							style="background-color: #00B050;"
 						>
 							Search
 						</button>
@@ -248,47 +267,176 @@
 				<p class="text-xl text-gray-600">We prioritize your safety and convenience above all else.</p>
 			</div>
 
-			<div class="grid md:grid-cols-3 gap-8">
-				<!-- Feature 1: Safety -->
-				<div class="p-6 text-center">
-					<div
-						class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4 mx-auto text-primary"
-					>
-						<img src="/safety.svg" alt="Safety Icon" class="h-8 w-8" />
-					</div>
-					<h3 class="text-xl font-semibold mb-2">Safety First</h3>
-					<p class="text-gray-600">
-						Verified profiles and manual validation for drivers. We focus on creating a secure
-						community for everyone.
-					</p>
+			<div class="grid grid-cols-2 xl:grid-cols-5 gap-4 md:gap-6">
+				<div class="p-5 text-center rounded-2xl border border-green-100 bg-white shadow-sm">
+					<div class="w-12 h-12 mx-auto mb-3 rounded-full flex items-center justify-center text-2xl" style="background-color: #e8f7ee;">🛡️</div>
+					<h3 class="text-lg font-semibold mb-2">Safety First</h3>
+					<p class="text-sm text-gray-600">Verified profiles and manual validation for every driver.</p>
 				</div>
 
-				<!-- Feature 2: Girls Only -->
-				<div class="p-6 text-center">
-					<div
-						class="w-16 h-16 bg-pink-100 rounded-full flex items-center justify-center mb-4 mx-auto text-secondary"
-					>
-						<img src="/girls-only.svg" alt="Girls Only Icon" class="h-8 w-8" />
-					</div>
-					<h3 class="text-xl font-semibold mb-2">Girls Only Option</h3>
-					<p class="text-gray-600">
-						A unique feature allowing female drivers to offer rides exclusively to female passengers for
-						added peace of mind.
-					</p>
+				<div class="p-5 text-center rounded-2xl border border-green-100 bg-white shadow-sm">
+					<div class="w-12 h-12 mx-auto mb-3 rounded-full flex items-center justify-center text-2xl" style="background-color: #e8f7ee;">♀️</div>
+					<h3 class="text-lg font-semibold mb-2">Girls Only</h3>
+					<p class="text-sm text-gray-600">Female drivers can offer rides exclusively to verified women.</p>
 				</div>
 
-				<!-- Feature 3: Saving -->
-				<div class="p-6 text-center">
-					<div
-						class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4 mx-auto text-green-600"
-					>
-						<img src="/save-money.svg" alt="Save Money Icon" class="h-8 w-8" />
+				<div class="p-5 text-center rounded-2xl border border-green-100 bg-white shadow-sm">
+					<div class="w-12 h-12 mx-auto mb-3 rounded-full flex items-center justify-center text-2xl" style="background-color: #e8f7ee;">⭐</div>
+					<h3 class="text-lg font-semibold mb-2">Personality</h3>
+					<p class="text-sm text-gray-600">Real reviews from real verified riders, every trip.</p>
+				</div>
+
+				<div class="p-5 text-center rounded-2xl border border-green-100 bg-white shadow-sm">
+					<div class="w-12 h-12 mx-auto mb-3 rounded-full flex items-center justify-center text-2xl" style="background-color: #e8f7ee;">🆘</div>
+					<h3 class="text-lg font-semibold mb-2">Support</h3>
+					<p class="text-sm text-gray-600">Every report reviewed, bad actors removed from the community.</p>
+				</div>
+
+				<div class="p-5 text-center rounded-2xl border border-green-100 bg-white shadow-sm col-span-2 xl:col-span-1">
+					<div class="w-12 h-12 mx-auto mb-3 rounded-full flex items-center justify-center text-2xl" style="background-color: #e8f7ee;">💰</div>
+					<h3 class="text-lg font-semibold mb-2">Price</h3>
+					<p class="text-sm text-gray-600">Share the ride, share the cost. No hidden fees.</p>
+				</div>
+			</div>
+
+			<div class="text-center mt-10">
+				<a
+					href="/why-hizli"
+					class="inline-flex items-center justify-center text-white px-7 py-3 rounded-lg font-bold transition hover:opacity-90"
+					style="background-color: #00B050;"
+				>
+					Learn more
+				</a>
+			</div>
+		</div>
+	</section>
+
+	<!-- Plans & Pricing Section -->
+	<section id="plans-pricing" class="py-16 bg-gray-50">
+		<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+			<div class="text-center mb-10">
+				<h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Choose your plan</h2>
+				<p class="text-xl text-gray-600">Join Hizli and travel with peace of mind.</p>
+			</div>
+
+			<div class="grid lg:grid-cols-3 gap-5 items-stretch">
+				<div class="bg-white border border-gray-200/90 rounded-2xl p-5 shadow-[0_6px_18px_rgba(15,23,42,0.06)] hover:-translate-y-0.5 hover:shadow-[0_12px_24px_rgba(15,23,42,0.1)] transition-all duration-200 flex flex-col">
+					<h3 class="text-lg font-semibold tracking-tight text-gray-900 mb-1">Free</h3>
+					<p class="text-2xl font-medium tracking-tight text-gray-900 mb-4">$0 <span class="text-sm font-normal text-gray-500">forever</span></p>
+					<div class="flex-1 flex flex-col border-t border-gray-100 pt-4">
+						<ul class="space-y-2.5 text-gray-700 text-sm">
+							<li class="flex items-start gap-2">
+								<span class="font-semibold leading-6" style="color: #00B050;">&#10003;</span>
+								<span>Search and post rides</span>
+							</li>
+							<li class="flex items-start gap-2">
+								<span class="font-semibold leading-6" style="color: #FF6B6B;">&#10007;</span>
+								<span>No access to verified members</span>
+							</li>
+							<li class="flex items-start gap-2">
+								<span class="font-semibold leading-6" style="color: #FF6B6B;">&#10007;</span>
+								<span>No reviews visible</span>
+							</li>
+							<li class="flex items-start gap-2">
+								<span class="font-semibold leading-6" style="color: #FF6B6B;">&#10007;</span>
+								<span>No Girls Only rides</span>
+							</li>
+							<li class="flex items-start gap-2">
+								<span class="font-semibold leading-6" style="color: #FF6B6B;">&#10007;</span>
+								<span>No support if something goes wrong</span>
+							</li>
+							<li class="flex items-start gap-2">
+								<span class="font-semibold leading-6" style="color: #FF6B6B;">&#10007;</span>
+								<span>You don't know who's in that car</span>
+							</li>
+						</ul>
+						<p class="mt-4 text-sm italic text-gray-500">Travel at your own risk.</p>
 					</div>
-					<h3 class="text-xl font-semibold mb-2">Save Money</h3>
-					<p class="text-gray-600">
-						Cut travel costs by sharing the ride. Transparent pricing with no hidden fees for a
-						simple, saving-focused experience.
-					</p>
+					<a
+						href="/register"
+						class="mt-auto inline-flex items-center justify-center w-full text-white px-5 py-2.5 rounded-lg font-semibold transition hover:opacity-90 hover:shadow-[0_8px_16px_rgba(0,176,80,0.24)]"
+						style="background-color: #00B050;"
+					>
+						Get started
+					</a>
+				</div>
+
+				<div
+					class="relative bg-white border rounded-2xl p-5 shadow-[0_14px_34px_rgba(0,176,80,0.16)] hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgba(0,176,80,0.22)] transition-all duration-200 flex flex-col lg:-my-2"
+					style="border-color: rgba(0, 176, 80, 0.3);"
+				>
+					<div class="absolute -top-2 left-1/2 -translate-x-1/2">
+						<span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] uppercase tracking-wide font-medium border" style="background-color: #ffffff; color: #00B050; border-color: rgba(0, 176, 80, 0.35);">
+							Most Popular
+						</span>
+					</div>
+					<h3 class="text-lg font-semibold tracking-tight text-gray-900 mb-1">Student Plan ⭐</h3>
+					<p class="text-2xl font-medium tracking-tight text-gray-900 mb-4">$25 <span class="text-sm font-normal text-gray-500">/year</span></p>
+					<div class="flex-1 flex flex-col border-t border-gray-100 pt-4">
+						<ul class="space-y-2.5 text-gray-700 text-sm">
+							<li class="flex items-start gap-2">
+								<span class="font-semibold leading-6" style="color: #00B050;">&#10003;</span>
+								<span>Everything in Free</span>
+							</li>
+							<li class="flex items-start gap-2">
+								<span class="font-semibold leading-6" style="color: #00B050;">&#10003;</span>
+								<span>Ride only with verified members</span>
+							</li>
+							<li class="flex items-start gap-2">
+								<span class="font-semibold leading-6" style="color: #00B050;">&#10003;</span>
+								<span>Driver's license & insurance checked</span>
+							</li>
+							<li class="flex items-start gap-2">
+								<span class="font-semibold leading-6" style="color: #00B050;">&#10003;</span>
+								<span>Real reviews from real riders</span>
+							</li>
+							<li class="flex items-start gap-2">
+								<span class="font-semibold leading-6" style="color: #00B050;">&#10003;</span>
+								<span>Girls Only rides for verified women</span>
+							</li>
+							<li class="flex items-start gap-2">
+								<span class="font-semibold leading-6" style="color: #00B050;">&#10003;</span>
+								<span>Report issues, bad actors removed</span>
+							</li>
+							<li class="flex items-start gap-2">
+								<span class="font-semibold leading-6" style="color: #00B050;">&#10003;</span>
+								<span>Verified badge on your profile</span>
+							</li>
+						</ul>
+						<p class="mt-4 text-sm italic text-gray-500">Less than $2.10/month. Built for students on a budget.</p>
+					</div>
+					<a
+						href="/register"
+						class="mt-auto inline-flex items-center justify-center w-full text-white px-5 py-2.5 rounded-lg font-semibold transition hover:opacity-90 hover:shadow-[0_8px_16px_rgba(0,176,80,0.24)]"
+						style="background-color: #00B050;"
+					>
+						Get started
+					</a>
+				</div>
+
+				<div class="bg-white border border-gray-200/90 rounded-2xl p-5 shadow-[0_6px_18px_rgba(15,23,42,0.06)] hover:-translate-y-0.5 hover:shadow-[0_12px_24px_rgba(15,23,42,0.1)] transition-all duration-200 flex flex-col">
+					<h3 class="text-lg font-semibold tracking-tight text-gray-900 mb-1">Standard Plan</h3>
+					<p class="text-2xl font-medium tracking-tight text-gray-900 mb-4">$35 <span class="text-sm font-normal text-gray-500">/year</span></p>
+					<div class="flex-1 flex flex-col border-t border-gray-100 pt-4">
+						<ul class="space-y-2.5 text-gray-700 text-sm">
+							<li class="flex items-start gap-2">
+								<span class="font-semibold leading-6" style="color: #00B050;">&#10003;</span>
+								<span>Same features as Student Plan</span>
+							</li>
+							<li class="flex items-start gap-2">
+								<span class="font-semibold leading-6" style="color: #00B050;">&#10003;</span>
+								<span>For non-student members</span>
+							</li>
+						</ul>
+						<p class="mt-4 text-sm italic text-gray-500">Less than $3/month. Same safety, no student ID required.</p>
+					</div>
+					<a
+						href="/register"
+						class="mt-auto inline-flex items-center justify-center w-full text-white px-5 py-2.5 rounded-lg font-semibold transition hover:opacity-90 hover:shadow-[0_8px_16px_rgba(0,176,80,0.24)]"
+						style="background-color: #00B050;"
+					>
+						Get started
+					</a>
 				</div>
 			</div>
 		</div>
