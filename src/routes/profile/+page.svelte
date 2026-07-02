@@ -4,7 +4,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { browser } from '$app/environment';
-	import { onDestroy, onMount } from 'svelte';
+	import { onDestroy, onMount, tick } from 'svelte';
 	import type { User } from '@supabase/supabase-js';
 
 	type Profile = {
@@ -95,6 +95,7 @@
 
 	const documentTypeOptions = [
 		{ value: 'identity_card', label: 'Identity card' },
+		{ value: 'student_id', label: 'Student ID' },
 		{ value: 'driver_license', label: 'Driver license' },
 		{ value: 'proof_of_address', label: 'Proof of address' },
 		{ value: 'insurance', label: 'Insurance proof' },
@@ -104,6 +105,7 @@
 
 	const documentTypeLabelMap: Record<string, string> = {
 		identity_card: 'Identity card',
+		student_id: 'Student ID',
 		driver_license: 'Driver license',
 		proof_of_address: 'Proof of address',
 		insurance: 'Insurance proof',
@@ -120,7 +122,7 @@
 		vehicle_papers: 'Vehicle registration'
 	};
 
-	const baseRequiredDocumentTypes = ['identity_card', 'proof_of_address'] as const;
+	const baseRequiredDocumentTypes = ['identity_card', 'student_id', 'proof_of_address'] as const;
 	const driverOnlyDocumentTypes = ['driver_license', 'insurance', 'vehicle_registration'] as const;
 	const allKnownRequiredTypes = [...baseRequiredDocumentTypes, ...driverOnlyDocumentTypes] as const;
 
@@ -129,6 +131,7 @@
 	function normalizeVerificationDocumentType(value: string | null | undefined): string {
 		const normalized = (value || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
 		if (normalized === 'identity' || normalized === 'id_card') return 'identity_card';
+		if (normalized === 'studentid') return 'student_id';
 		if (normalized === 'license' || normalized === 'driving_license') return 'driver_license';
 		if (normalized === 'insurance_proof') return 'insurance';
 		if (normalized === 'registration' || normalized === 'vehicle_papers') return 'vehicle_registration';
@@ -236,6 +239,18 @@
 			goto(resolve('/auth/login'));
 		}
 	});
+
+	$: if (browser && !loading) {
+		void scrollToVerificationDocumentsHash();
+	}
+
+	async function scrollToVerificationDocumentsHash() {
+		if (window.location.hash !== '#verification-documents') return;
+		await tick();
+		const section = document.getElementById('verification-documents');
+		if (!section) return;
+		section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+	}
 
 	function cleanArrayItem(value: string): string {
 		return value
@@ -1345,16 +1360,16 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 			</div>
 
 			<!-- Verification Documents -->
-			<div class="profile-card p-7 mt-6">
+			<div id="verification-documents" class="profile-card p-7 mt-6 scroll-mt-28">
 				<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
 					<div>
 						<h2 class="text-xl font-semibold text-slate-900">Verification Documents</h2>
 						<p class="text-sm text-slate-600 mt-1">Upload required documents so admins can verify your account.</p>
 						<p class="text-xs text-slate-500 mt-1">
 							{#if isDriver}
-								As a driver: Driver's license, Car insurance, Vehicle registration, Identity card, Proof of address.
+								As a driver: Driver's license, Car insurance, Vehicle registration, Identity card, Student ID, Proof of address.
 							{:else}
-								As a passenger: Identity card, Proof of address.
+								As a passenger: Identity card, Student ID, Proof of address.
 								Add your car info to register as a driver.
 							{/if}
 						</p>

@@ -17,6 +17,9 @@
 
 	type DriverProfile = {
 		gender?: string | null;
+		is_verified?: boolean | null;
+		membership_paid?: boolean | null;
+		membership_expires_at?: string | null;
 	};
 
 	type Ride = {
@@ -113,6 +116,9 @@
 
 	let currentUser: User | null = null;
 	let isFemaleDriver = false;
+	let isCurrentUserVerified = false;
+	let hasActiveMembership = false;
+	let membershipExpiresAt: string | null = null;
 	let loading = true;
 	let myRides: Ride[] = [];
 	let ridesLoading = false;
@@ -568,18 +574,47 @@
 	async function loadDriverEligibility(userId: string) {
 		const { data, error } = await supabase
 			.from('profiles')
-			.select('gender')
+			.select('gender, is_verified, membership_paid, membership_expires_at')
 			.eq('id', userId)
 			.maybeSingle();
 
 		if (error) {
-			console.error('Profile gender load error:', error);
-			isFemaleDriver = false;
+			const fallback = await supabase
+				.from('profiles')
+				.select('gender, is_verified')
+				.eq('id', userId)
+				.maybeSingle();
+
+			if (fallback.error) {
+				console.error('Profile eligibility load error:', fallback.error);
+				isFemaleDriver = false;
+				isCurrentUserVerified = false;
+				hasActiveMembership = false;
+				membershipExpiresAt = null;
+				return;
+			}
+
+			const fallbackProfile = (fallback.data as DriverProfile | null) ?? null;
+			isFemaleDriver = (fallbackProfile?.gender ?? '').toLowerCase() === 'female';
+			isCurrentUserVerified = Boolean(fallbackProfile?.is_verified);
+			hasActiveMembership = false;
+			membershipExpiresAt = null;
 			return;
 		}
 
 		const profile = (data as DriverProfile | null) ?? null;
+		const expiresAt = profile?.membership_expires_at ? Date.parse(profile.membership_expires_at) : NaN;
+		const isMembershipPaid = Boolean(profile?.membership_paid);
+		const isMembershipNotExpired = Number.isFinite(expiresAt) && expiresAt > Date.now();
+
 		isFemaleDriver = (profile?.gender ?? '').toLowerCase() === 'female';
+		isCurrentUserVerified = Boolean(profile?.is_verified);
+		hasActiveMembership = isMembershipPaid && isMembershipNotExpired;
+		membershipExpiresAt = profile?.membership_expires_at ?? null;
+	}
+
+	function goToVerificationDocuments() {
+		goto(`${resolve('/profile')}#verification-documents`);
 	}
 
 	function openArchive() {
@@ -1290,6 +1325,43 @@
 			</section>
 
 			{#if !showArchive}
+			<section id="become-member" class="dashboard-card p-6 scroll-mt-28 {isCurrentUserVerified && hasActiveMembership ? 'opacity-80 border-slate-200' : ''}">
+				<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+					<div>
+						<h2 class="text-xl font-semibold text-gray-900">Become a member</h2>
+						{#if isCurrentUserVerified && hasActiveMembership}
+							<p class="text-sm text-gray-600 mt-1">Your profile is verified and your membership is active. You can still review your submitted documents in your profile.</p>
+						{:else if isCurrentUserVerified && !hasActiveMembership}
+							<p class="text-sm text-gray-600 mt-1">Your profile is verified but your membership is not active. Complete renewal and review your documents to keep full member access.</p>
+							{#if membershipExpiresAt}
+								<p class="text-xs text-gray-500 mt-1">Last membership expiry: {new Date(membershipExpiresAt).toLocaleDateString()}</p>
+							{/if}
+						{:else}
+							<p class="text-sm text-gray-600 mt-1">Upload your verification documents to get validated and unlock verified member features.</p>
+						{/if}
+					</div>
+					{#if isCurrentUserVerified && hasActiveMembership}
+						<button
+							type="button"
+							disabled
+							class="inline-flex items-center justify-center px-4 py-2 rounded-lg font-semibold text-white cursor-not-allowed"
+							style="background-color: #9CA3AF;"
+						>
+							Already verified
+						</button>
+					{:else}
+						<button
+							type="button"
+							on:click={goToVerificationDocuments}
+							class="inline-flex items-center justify-center px-4 py-2 rounded-lg font-semibold text-white hover:opacity-90 transition cursor-pointer"
+							style="background-color: #00B050;"
+						>
+							{isCurrentUserVerified ? 'Renew membership' : 'Become a member'}
+						</button>
+					{/if}
+				</div>
+			</section>
+
 			<section id="activity-center" class="dashboard-card p-6 scroll-mt-28">
 				<div class="flex items-center justify-between gap-3 mb-3">
 					<div>
