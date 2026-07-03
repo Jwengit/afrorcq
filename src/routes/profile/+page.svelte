@@ -1365,14 +1365,20 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 					<div>
 						<h2 class="text-xl font-semibold text-slate-900">Verification Documents</h2>
 						<p class="text-sm text-slate-600 mt-1">Upload required documents so admins can verify your account.</p>
-						<p class="text-xs text-slate-500 mt-1">
+						<div class="mt-2 space-y-1 text-xs text-slate-500">
+							<p>
+								<strong>Passenger profile:</strong> Identity card and proof of address.
+								If you choose the student plan, also upload your Student ID.
+							</p>
 							{#if isDriver}
-								As a driver: Driver's license, Car insurance, Vehicle registration, Identity card, Student ID, Proof of address.
+								<p>
+									<strong>Driver profile:</strong> All passenger documents, plus driver's license,
+									car insurance, and vehicle registration.
+								</p>
 							{:else}
-								As a passenger: Identity card, Student ID, Proof of address.
-								Add your car info to register as a driver.
+								<p>Add your car information if you also want to register as a driver.</p>
 							{/if}
-						</p>
+						</div>
 					</div>
 					<div class="text-sm text-slate-500">
 						Accepted: PDF, PNG, JPG, JPEG, WEBP (max 10MB)

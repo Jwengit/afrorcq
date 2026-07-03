@@ -73,6 +73,15 @@
 		goto(`/search?${params.toString()}`);
 	}
 
+	function handlePaidPlanGetStarted() {
+		if (!currentUser) {
+			goto('/auth/signup');
+			return;
+		}
+
+		goto('/profile#verification-documents');
+	}
+
 	onMount(async () => {
 		try {
 			const response = await fetch('/api/platform-settings');
@@ -353,7 +362,7 @@
 						<p class="mt-4 text-sm italic text-gray-500">Travel at your own risk.</p>
 					</div>
 					<a
-						href="/register"
+						href="#popular-rides"
 						class="mt-auto inline-flex items-center justify-center w-full text-white px-5 py-2.5 rounded-lg font-semibold transition hover:opacity-90 hover:shadow-[0_8px_16px_rgba(0,176,80,0.24)]"
 						style="background-color: #00B050;"
 					>
@@ -405,13 +414,14 @@
 						</ul>
 						<p class="mt-4 text-sm italic text-gray-500">Less than $2.10/month. Built for students on a budget.</p>
 					</div>
-					<a
-						href="/register"
+					<button
+						type="button"
+						on:click={handlePaidPlanGetStarted}
 						class="mt-auto inline-flex items-center justify-center w-full text-white px-5 py-2.5 rounded-lg font-semibold transition hover:opacity-90 hover:shadow-[0_8px_16px_rgba(0,176,80,0.24)]"
 						style="background-color: #00B050;"
 					>
 						Get started
-					</a>
+					</button>
 				</div>
 
 				<div class="bg-white border border-gray-200/90 rounded-2xl p-5 shadow-[0_6px_18px_rgba(15,23,42,0.06)] hover:-translate-y-0.5 hover:shadow-[0_12px_24px_rgba(15,23,42,0.1)] transition-all duration-200 flex flex-col">
@@ -430,13 +440,14 @@
 						</ul>
 						<p class="mt-4 text-sm italic text-gray-500">Less than $3/month. Same safety, no student ID required.</p>
 					</div>
-					<a
-						href="/register"
+					<button
+						type="button"
+						on:click={handlePaidPlanGetStarted}
 						class="mt-auto inline-flex items-center justify-center w-full text-white px-5 py-2.5 rounded-lg font-semibold transition hover:opacity-90 hover:shadow-[0_8px_16px_rgba(0,176,80,0.24)]"
 						style="background-color: #00B050;"
 					>
 						Get started
-					</a>
+					</button>
 				</div>
 			</div>
 		</div>
