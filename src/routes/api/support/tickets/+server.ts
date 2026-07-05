@@ -1,6 +1,7 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
+import { resolveMemberStatus, canUseVerifiedFeatures } from '$lib/membershipAccess';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -32,6 +33,30 @@ function getAdminClient() {
 	return createClient(supabaseUrl, serviceRoleKey);
 }
 
+async function assertVerifiedMember(adminClient: ReturnType<typeof createClient>, userId: string) {
+const { data: profile } = await adminClient
+.from('profiles')
+.select('status, is_verified, membership_paid, membership_expires_at')
+.eq('id', userId)
+.maybeSingle();
+
+const status = resolveMemberStatus({
+status: profile?.status,
+isVerified: profile?.is_verified,
+membershipPaid: profile?.membership_paid,
+membershipExpiresAt: profile?.membership_expires_at
+});
+
+if (!canUseVerifiedFeatures(status)) {
+return json(
+{ error: 'This feature is available for verified members only. Upgrade your plan to unlock full access.' },
+{ status: 403 }
+);
+}
+
+return null;
+}
+
 async function purgeExpiredSupportConversations(adminClient: any) {
 	const cutoffIso = new Date(Date.now() - SUPPORT_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
@@ -50,6 +75,9 @@ export const GET: RequestHandler = async ({ request, url }) => {
 		if (!adminClient) {
 			return json({ error: 'Server configuration error' }, { status: 500 });
 		}
+
+		const blocked = await assertVerifiedMember(adminClient, userId);
+		if (blocked) return blocked;
 
 		await purgeExpiredSupportConversations(adminClient);
 
@@ -109,6 +137,9 @@ export const POST: RequestHandler = async ({ request }) => {
 		if (!adminClient) {
 			return json({ error: 'Server configuration error' }, { status: 500 });
 		}
+
+		const blocked = await assertVerifiedMember(adminClient, userId);
+		if (blocked) return blocked;
 
 		await purgeExpiredSupportConversations(adminClient);
 
@@ -187,6 +218,9 @@ export const DELETE: RequestHandler = async ({ request, url }) => {
 		if (!adminClient) {
 			return json({ error: 'Server configuration error' }, { status: 500 });
 		}
+
+		const blocked = await assertVerifiedMember(adminClient, userId);
+		if (blocked) return blocked;
 
 		await purgeExpiredSupportConversations(adminClient);
 

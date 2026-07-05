@@ -6,12 +6,21 @@
 	import type { User } from '@supabase/supabase-js';
 	import { user } from '$lib/authStore';
 	import { supabase } from '$lib/supabaseClient';
+	import {
+		resolveMemberStatus,
+		canUseVerifiedFeatures,
+		type MemberStatus,
+	} from '$lib/membershipAccess';
 
 	type DriverProfile = {
 		gender?: string | null;
 		car_make?: string | null;
 		car_year?: string | number | null;
 		plate_number?: string | null;
+		status?: string | null;
+		is_verified?: boolean | null;
+		membership_paid?: boolean | null;
+		membership_expires_at?: string | null;
 	};
 
 	type MissingRequirement =
@@ -38,6 +47,8 @@
 	let submitting = false;
 	let allowedToPublish = false;
 	let isFemaleDriver = false;
+	let memberStatus: MemberStatus = 'free';
+	let needsDriverDocumentsOnly = false;
 	let errorMessage = '';
 	let successMessage = '';
 
@@ -115,7 +126,7 @@
 
 		const { data, error } = await supabase
 			.from('profiles')
-			.select('gender, car_make, car_year, plate_number')
+			.select('gender, car_make, car_year, plate_number, status, is_verified, membership_paid, membership_expires_at')
 			.eq('id', userId)
 			.maybeSingle();
 
@@ -127,6 +138,13 @@
 		}
 
 		const profile = (data as DriverProfile | null) ?? null;
+		memberStatus = resolveMemberStatus({
+			status: profile?.status,
+			isVerified: profile?.is_verified,
+			membershipPaid: profile?.membership_paid,
+			membershipExpiresAt: profile?.membership_expires_at
+		});
+		const canUseVerified = canUseVerifiedFeatures(memberStatus);
 		isFemaleDriver = (profile?.gender ?? '').toLowerCase() === 'female';
 
 		// Check car information
@@ -142,7 +160,7 @@
 		// Check driver documents (driver_license, insurance, vehicle_registration)
 		const DRIVER_DOCS: MissingRequirement[] = ['driver_license', 'insurance', 'vehicle_registration'];
 
-		if (currentUser) {
+		if (currentUser && canUseVerified) {
 			const { data: docs, error: docsError } = await supabase
 				.from('verification_documents')
 				.select('document_type, status')
@@ -167,7 +185,12 @@
 			}
 		}
 
-		allowedToPublish = missingRequirements.length === 0;
+		const missingDriverDocs = missingRequirements.filter((requirement) => requirement !== 'car_info');
+		const missingCarInfo = missingRequirements.includes('car_info');
+
+		needsDriverDocumentsOnly = canUseVerified && !missingCarInfo && missingDriverDocs.length > 0;
+
+		allowedToPublish = !missingCarInfo && (!canUseVerified || missingDriverDocs.length === 0);
 
 		if (!isFemaleDriver) {
 			form.girlsOnly = false;
@@ -285,31 +308,43 @@
 				</div>
 			{/if}
 
-			{#if !allowedToPublish && missingRequirements.length > 0}
+			{#if !allowedToPublish}
 				<div class="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4">
-					<p class="text-sm font-semibold text-amber-800 mb-2">
-						You need to complete your driver profile before publishing a ride.
-					</p>
-					<ul class="list-disc list-inside space-y-1 text-sm text-amber-700">
-						{#if missingRequirements.includes('car_info')}
-							<li>Car information (make, year, and plate number) — complete in your profile</li>
-						{/if}
-						{#if missingRequirements.includes('driver_license')}
-							<li>Driver license document — upload and get it approved in your profile</li>
-						{/if}
-						{#if missingRequirements.includes('insurance')}
-							<li>Insurance proof — upload and get it approved in your profile</li>
-						{/if}
-						{#if missingRequirements.includes('vehicle_registration')}
-							<li>Vehicle registration — upload and get it approved in your profile</li>
-						{/if}
-					</ul>
-					<a
-						href="/profile"
-						class="mt-3 inline-block rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 transition-colors"
-					>
-						Go to my profile
-					</a>
+					{#if needsDriverDocumentsOnly}
+						<p class="text-sm font-semibold text-amber-800 mb-2">
+							You need to upload your driver documents before publishing a ride.
+						</p>
+						<a
+							href="/profile#verification-documents"
+							class="mt-3 inline-block rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 transition-colors"
+						>
+							Upload documents
+						</a>
+					{:else}
+						<p class="text-sm font-semibold text-amber-800 mb-2">
+							You need to complete your driver profile before publishing a ride.
+						</p>
+						<ul class="list-disc list-inside space-y-1 text-sm text-amber-700">
+							{#if missingRequirements.includes('car_info')}
+								<li>Car information (make, year, and plate number) — complete in your profile</li>
+							{/if}
+							{#if missingRequirements.includes('driver_license')}
+								<li>Driver license document — upload and get it approved in your profile</li>
+							{/if}
+							{#if missingRequirements.includes('insurance')}
+								<li>Insurance proof — upload and get it approved in your profile</li>
+							{/if}
+							{#if missingRequirements.includes('vehicle_registration')}
+								<li>Vehicle registration — upload and get it approved in your profile</li>
+							{/if}
+						</ul>
+						<a
+							href="/profile"
+							class="mt-3 inline-block rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 transition-colors"
+						>
+							Go to my profile
+						</a>
+					{/if}
 				</div>
 			{/if}
 

@@ -1,6 +1,7 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
+import { resolveMemberStatus, canUseVerifiedFeatures } from '$lib/membershipAccess';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -21,6 +22,21 @@ if (!authHeader || !authHeader.startsWith('Bearer ')) {
 return null;
 }
 return authHeader.slice(7).trim();
+}
+
+async function getUserMemberStatus(client: ReturnType<typeof createClient>, userId: string) {
+const { data: profile } = await client
+.from('profiles')
+.select('status, is_verified, membership_paid, membership_expires_at')
+.eq('id', userId)
+.maybeSingle();
+
+return resolveMemberStatus({
+status: profile?.status,
+isVerified: profile?.is_verified,
+membershipPaid: profile?.membership_paid,
+membershipExpiresAt: profile?.membership_expires_at
+});
 }
 
 export const POST: RequestHandler = async ({ request }) => {
@@ -44,6 +60,14 @@ return json({ error: 'Unauthorized' }, { status: 401 });
 }
 
 const supabase = getAuthedClient(token);
+
+const requesterStatus = await getUserMemberStatus(supabase, user.id);
+if (!canUseVerifiedFeatures(requesterStatus)) {
+return json(
+{ error: 'This feature is available for verified members only. Upgrade your plan to unlock full access.' },
+{ status: 403 }
+);
+}
 
 const body = await request.json();
 const { reviewee_id, ride_id, rating, comment } = body;
@@ -154,7 +178,32 @@ return json({ error: 'Missing user_id parameter' }, { status: 400 });
 
 const authHeader = request.headers.get('authorization');
 const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-const client = token ? getAuthedClient(token) : createClient(supabaseUrl, supabaseKey);
+if (!token) {
+return json(
+{ error: 'This feature is available for verified members only. Upgrade your plan to unlock full access.' },
+{ status: 403 }
+);
+}
+
+const authClient = createClient(supabaseUrl, supabaseKey);
+const {
+data: { user },
+error: userError
+} = await authClient.auth.getUser(token);
+
+if (userError || !user) {
+return json({ error: 'Unauthorized' }, { status: 401 });
+}
+
+const client = getAuthedClient(token);
+const requesterStatus = await getUserMemberStatus(client, user.id);
+if (!canUseVerifiedFeatures(requesterStatus)) {
+return json(
+{ error: 'This feature is available for verified members only. Upgrade your plan to unlock full access.' },
+{ status: 403 }
+);
+}
+
 const { data: reviews, error } = await client
 .from('reviews')
 .select(

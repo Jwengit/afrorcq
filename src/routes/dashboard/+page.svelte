@@ -5,6 +5,12 @@
 	import ReviewForm from '$lib/components/ReviewForm.svelte';
 	import { onMount } from 'svelte';
 	import { supabase } from '$lib/supabaseClient';
+	import {
+		resolveMemberStatus,
+		canUseVerifiedFeatures,
+		type MemberStatus,
+		VERIFIED_ONLY_MESSAGE
+	} from '$lib/membershipAccess';
 	import type { User } from '@supabase/supabase-js';
 
 	// Support form state
@@ -17,6 +23,7 @@
 
 	type DriverProfile = {
 		gender?: string | null;
+		status?: string | null;
 		is_verified?: boolean | null;
 		membership_paid?: boolean | null;
 		membership_expires_at?: string | null;
@@ -116,6 +123,7 @@
 
 	let currentUser: User | null = null;
 	let isFemaleDriver = false;
+	let memberStatus: MemberStatus = 'free';
 	let isCurrentUserVerified = false;
 	let hasActiveMembership = false;
 	let membershipExpiresAt: string | null = null;
@@ -201,7 +209,12 @@
 		await loadMyBookings(user!.id);
 		await loadIncomingBookingRequests(user!.id);
 		await refreshPendingArchiveReviewsCount();
-		await loadAdminInboxMessages();
+		if (canUseVerifiedFeatures(memberStatus)) {
+			await loadAdminInboxMessages();
+		} else {
+			adminInboxMessages = [];
+			adminInboxError = '';
+		}
 		loading = false;
 	});
 
@@ -299,6 +312,12 @@
 	}
 
 	async function loadAdminInboxMessages() {
+		if (!canUseVerifiedFeatures(memberStatus)) {
+			adminInboxMessages = [];
+			adminInboxError = '';
+			return;
+		}
+
 		if (!currentUser) {
 			adminInboxMessages = [];
 			return;
@@ -574,14 +593,14 @@
 	async function loadDriverEligibility(userId: string) {
 		const { data, error } = await supabase
 			.from('profiles')
-			.select('gender, is_verified, membership_paid, membership_expires_at')
+			.select('gender, status, is_verified, membership_paid, membership_expires_at')
 			.eq('id', userId)
 			.maybeSingle();
 
 		if (error) {
 			const fallback = await supabase
 				.from('profiles')
-				.select('gender, is_verified')
+				.select('gender, status, is_verified, membership_paid, membership_expires_at')
 				.eq('id', userId)
 				.maybeSingle();
 
@@ -596,6 +615,12 @@
 
 			const fallbackProfile = (fallback.data as DriverProfile | null) ?? null;
 			isFemaleDriver = (fallbackProfile?.gender ?? '').toLowerCase() === 'female';
+			memberStatus = resolveMemberStatus({
+				status: fallbackProfile?.status,
+				isVerified: fallbackProfile?.is_verified,
+				membershipPaid: fallbackProfile?.membership_paid,
+				membershipExpiresAt: fallbackProfile?.membership_expires_at
+			});
 			isCurrentUserVerified = Boolean(fallbackProfile?.is_verified);
 			hasActiveMembership = false;
 			membershipExpiresAt = null;
@@ -608,6 +633,12 @@
 		const isMembershipNotExpired = Number.isFinite(expiresAt) && expiresAt > Date.now();
 
 		isFemaleDriver = (profile?.gender ?? '').toLowerCase() === 'female';
+		memberStatus = resolveMemberStatus({
+			status: profile?.status,
+			isVerified: profile?.is_verified,
+			membershipPaid: profile?.membership_paid,
+			membershipExpiresAt: profile?.membership_expires_at
+		});
 		isCurrentUserVerified = Boolean(profile?.is_verified);
 		hasActiveMembership = isMembershipPaid && isMembershipNotExpired;
 		membershipExpiresAt = profile?.membership_expires_at ?? null;
@@ -1241,6 +1272,19 @@
 	<div class="min-h-screen dashboard-bg py-10 px-4 sm:px-6 lg:px-8 relative">
 		<div class="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.2),transparent_58%)]"></div>
 		<div class="max-w-6xl mx-auto space-y-6 relative z-10">
+			{#if memberStatus === 'free'}
+				<section class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+					<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+						<p class="text-sm text-amber-900">You're on the free plan. Upload your documents to start the verification process.</p>
+						<a href="/profile#verification-documents" class="inline-flex items-center rounded-md bg-amber-600 px-3 py-2 text-sm font-medium text-white hover:bg-amber-700">Upload documents</a>
+					</div>
+				</section>
+			{:else if memberStatus === 'pending'}
+				<section class="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3">
+					<p class="text-sm text-sky-900">Your documents are under review. We'll notify you once your account is verified.</p>
+				</section>
+			{/if}
+
 			<section class="rounded-2xl bg-linear-to-r from-emerald-600 via-emerald-500 to-teal-500 p-6 shadow-xl border border-emerald-300/30 text-white">
 				<div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
 					<div>
@@ -1277,9 +1321,13 @@
 							</a>
 						</li>
 					<li>
-						<button type="button" class="inline-flex items-center px-4 py-2 rounded-full bg-white/90 text-indigo-700 text-sm font-semibold hover:bg-white transition-colors" on:click={() => showSupportModal = true}>
-							Contact Support
-						</button>
+						{#if canUseVerifiedFeatures(memberStatus)}
+							<button type="button" class="inline-flex items-center px-4 py-2 rounded-full bg-white/90 text-indigo-700 text-sm font-semibold hover:bg-white transition-colors" on:click={() => showSupportModal = true}>
+								Contact Support
+							</button>
+						{:else}
+							<span class="inline-flex items-center px-4 py-2 rounded-full bg-white/90 text-indigo-700 text-sm font-semibold opacity-80">Contact Support</span>
+						{/if}
 					</li>
 					</ul>
 					<button type="button" on:click={showArchive ? closeArchive : openArchive} class="mt-3 inline-flex items-center gap-1.5 text-xs text-emerald-50/90 hover:text-white">
@@ -1291,7 +1339,7 @@
 				</nav>
 
 		<!-- Contact Support modal -->
-		{#if showSupportModal}
+		{#if showSupportModal && canUseVerifiedFeatures(memberStatus)}
 		<div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
 			<div class="bg-white text-gray-900 rounded-lg shadow-lg p-6 w-full max-w-md">
 				<h2 class="text-lg font-bold mb-2">Contact Support</h2>
@@ -1323,6 +1371,13 @@
 		</div>
 		{/if}
 			</section>
+
+			{#if !canUseVerifiedFeatures(memberStatus)}
+				<section class="dashboard-card p-4">
+					<p class="text-sm font-semibold text-amber-800">{VERIFIED_ONLY_MESSAGE}</p>
+					<a href="/pricing" class="mt-3 inline-flex items-center rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700">Upgrade now</a>
+				</section>
+			{/if}
 
 			{#if !showArchive}
 			<section id="become-member" class="dashboard-card p-6 scroll-mt-28 {isCurrentUserVerified && hasActiveMembership ? 'opacity-80 border-slate-200' : ''}">
@@ -1415,15 +1470,24 @@
 						<h2 class="text-xl font-semibold text-gray-900">Admin messages</h2>
 						<p class="text-sm text-gray-500">Private moderation and support messages visible only to your account.</p>
 					</div>
-					<button
-						type="button"
-						on:click={loadAdminInboxMessages}
-						disabled={adminInboxLoading}
-						class="px-3 py-2 rounded-md border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
-					>
-						{adminInboxLoading ? 'Refreshing...' : 'Refresh'}
-					</button>
+					{#if canUseVerifiedFeatures(memberStatus)}
+						<button
+							type="button"
+							on:click={loadAdminInboxMessages}
+							disabled={adminInboxLoading}
+							class="px-3 py-2 rounded-md border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+						>
+							{adminInboxLoading ? 'Refreshing...' : 'Refresh'}
+						</button>
+					{/if}
 				</div>
+
+				{#if !canUseVerifiedFeatures(memberStatus)}
+					<div class="rounded-lg border border-amber-200 bg-amber-50 p-3">
+						<p class="text-sm font-semibold text-amber-800">{VERIFIED_ONLY_MESSAGE}</p>
+						<a href="/pricing" class="mt-2 inline-flex items-center rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700">Upgrade now</a>
+					</div>
+				{:else}
 
 				{#if adminInboxError}
 					<p class="text-sm text-red-600">{adminInboxError}</p>
@@ -1498,6 +1562,7 @@
 							</article>
 						{/each}
 					</div>
+				{/if}
 				{/if}
 			</section>
 
@@ -1642,6 +1707,12 @@
 
 			<section id="ride-requests" class="dashboard-card p-6 scroll-mt-28">
 				<h2 class="text-xl font-semibold text-gray-900 mb-4">Booking requests</h2>
+				{#if !canUseVerifiedFeatures(memberStatus)}
+					<div class="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
+						<p class="text-sm font-semibold text-amber-800">{VERIFIED_ONLY_MESSAGE}</p>
+						<a href="/pricing" class="mt-2 inline-flex items-center rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700">Upgrade now</a>
+					</div>
+				{/if}
 				{#if reportActionError}
 					<p class="mb-3 text-sm text-red-600">{reportActionError}</p>
 				{/if}
@@ -1703,7 +1774,7 @@
 											{requestActionBookingId === request.id ? 'Updating...' : 'Reject'}
 										</button>
 									{/if}
-									{#if request.status === 'Confirmed' && hasRideEnded(request.ride.ride_date)}
+									{#if request.status === 'Confirmed' && hasRideEnded(request.ride.ride_date) && canUseVerifiedFeatures(memberStatus)}
 										<button
 											type="button"
 											on:click={() => toggleReviewForm(`active-request:${request.id}`)}
@@ -1730,7 +1801,7 @@
 										View details
 									</button>
 								</div>
-								{#if request.status === 'Confirmed' && hasRideEnded(request.ride.ride_date) && openReviewFormId === `active-request:${request.id}`}
+								{#if request.status === 'Confirmed' && hasRideEnded(request.ride.ride_date) && canUseVerifiedFeatures(memberStatus) && openReviewFormId === `active-request:${request.id}`}
 									<div class="w-full">
 										<ReviewForm
 											rideId={request.ride.id}
@@ -1750,6 +1821,12 @@
 
 			<section id="my-bookings" class="dashboard-card p-6 scroll-mt-28">
 				<h2 class="text-xl font-semibold text-gray-900 mb-4">My bookings</h2>
+				{#if !canUseVerifiedFeatures(memberStatus)}
+					<div class="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
+						<p class="text-sm font-semibold text-amber-800">{VERIFIED_ONLY_MESSAGE}</p>
+						<a href="/pricing" class="mt-2 inline-flex items-center rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700">Upgrade now</a>
+					</div>
+				{/if}
 				{#if reportActionError}
 					<p class="mb-3 text-sm text-red-600">{reportActionError}</p>
 				{/if}
@@ -1811,7 +1888,7 @@
 										</button>
 									{/if}
 								{/if}
-								{#if booking.status === 'Confirmed' && hasRideEnded(booking.ride.ride_date) && booking.ride.driver_id}
+								{#if booking.status === 'Confirmed' && hasRideEnded(booking.ride.ride_date) && booking.ride.driver_id && canUseVerifiedFeatures(memberStatus)}
 									<button
 										type="button"
 										on:click={() => toggleReviewForm(`active-booking:${booking.id}`)}
@@ -1850,7 +1927,7 @@
 									</button>
 								{/if}
 							</div>
-							{#if booking.status === 'Confirmed' && hasRideEnded(booking.ride.ride_date) && booking.ride.driver_id && openReviewFormId === `active-booking:${booking.id}`}
+							{#if booking.status === 'Confirmed' && hasRideEnded(booking.ride.ride_date) && booking.ride.driver_id && canUseVerifiedFeatures(memberStatus) && openReviewFormId === `active-booking:${booking.id}`}
 								<div class="w-full">
 									<ReviewForm
 										rideId={booking.ride_id}
@@ -1931,7 +2008,7 @@
 											>
 												View passenger profile
 											</a>
-											{#if request.status === 'Confirmed'}
+											{#if request.status === 'Confirmed' && canUseVerifiedFeatures(memberStatus)}
 												<button
 													type="button"
 													on:click={() => toggleReviewForm(`request:${request.id}`)}
@@ -1951,7 +2028,7 @@
 												</button>
 											{/if}
 										</div>
-										{#if request.status === 'Confirmed' && openReviewFormId === `request:${request.id}`}
+										{#if request.status === 'Confirmed' && canUseVerifiedFeatures(memberStatus) && openReviewFormId === `request:${request.id}`}
 											<ReviewForm
 												rideId={request.ride.id}
 												revieweeId={request.passenger_id}
@@ -1996,7 +2073,7 @@
 													View driver profile
 												</a>
 											{/if}
-											{#if booking.status === 'Confirmed' && booking.ride.driver_id}
+											{#if booking.status === 'Confirmed' && booking.ride.driver_id && canUseVerifiedFeatures(memberStatus)}
 												<button
 													type="button"
 													on:click={() => toggleReviewForm(`booking:${booking.id}`)}
@@ -2026,7 +2103,7 @@
 												</button>
 											{/if}
 										</div>
-										{#if booking.status === 'Confirmed' && booking.ride.driver_id && openReviewFormId === `booking:${booking.id}`}
+										{#if booking.status === 'Confirmed' && booking.ride.driver_id && canUseVerifiedFeatures(memberStatus) && openReviewFormId === `booking:${booking.id}`}
 											<ReviewForm
 												rideId={booking.ride_id}
 												revieweeId={booking.ride.driver_id}

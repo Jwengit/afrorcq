@@ -24,6 +24,65 @@ function normalizeLegacyStatus(status: 'approved' | 'rejected'): string {
   return status === 'approved' ? 'Approved' : 'Rejected';
 }
 
+function buildApprovalInboxMessage(): string {
+  return (
+    `<div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">` +
+    `<p style="margin: 0 0 10px;"><strong>Great news! Your documents have been verified.</strong></p>` +
+    `<p style="margin: 0 0 12px;">Complete your membership to unlock full access.</p>` +
+    `<p style="margin: 0;">` +
+    `<a href="/pricing" style="display:inline-block;padding:9px 14px;border-radius:8px;background:#16a34a;color:#ffffff;text-decoration:none;font-weight:600;">Complete my membership</a>` +
+    `</p>` +
+    `</div>`
+  );
+}
+
+async function notifyApprovedMember(adminClient: ReturnType<typeof createClient>, userId: string) {
+  const subject = 'Documents verified - complete your membership';
+
+  const { data: existingTicket } = await adminClient
+    .from('support_tickets')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('subject', subject)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  let ticketId = existingTicket?.id ?? null;
+  if (!ticketId) {
+    const { data: createdTicket } = await adminClient
+      .from('support_tickets')
+      .insert({
+        user_id: userId,
+        subject,
+        status: 'open',
+        priority: 'normal'
+      })
+      .select('id')
+      .single();
+    ticketId = createdTicket?.id ?? null;
+  }
+
+  if (ticketId) {
+    await adminClient.from('support_messages').insert({
+      ticket_id: ticketId,
+      sender_id: null,
+      sender_role: 'admin',
+      message: buildApprovalInboxMessage()
+    });
+  }
+
+  const { data: userData } = await adminClient.auth.admin.getUserById(userId);
+  const metadata = (userData?.user?.user_metadata ?? {}) as Record<string, unknown>;
+  await adminClient.auth.admin.updateUserById(userId, {
+    user_metadata: {
+      ...metadata,
+      verification_approved_email_sent_at: new Date().toISOString(),
+      verification_approved_payment_url: '/pricing'
+    }
+  });
+}
+
 function normalizeDocumentType(value: string | null | undefined): string {
   const normalized = (value || '').trim().toLowerCase();
 
@@ -376,18 +435,27 @@ export const PATCH: RequestHandler = async ({ request }) => {
       return json({ error: effectiveUpdateError.message }, { status: 500 });
     }
 
-    const isVerified = status === 'approved'
-      ? await shouldMarkProfileVerified(adminClient, existingDoc.user_id)
-      : false;
+    if (status === 'approved') {
+      await adminClient
+        .from('profiles')
+        .update({
+          is_verified: false,
+          status: 'pending',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existingDoc.user_id);
 
-    await adminClient
-      .from('profiles')
-      .update({
-        is_verified: isVerified,
-        status: resolveVerificationLabel(isVerified),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', existingDoc.user_id);
+      await notifyApprovedMember(adminClient, existingDoc.user_id);
+    } else {
+      await adminClient
+        .from('profiles')
+        .update({
+          is_verified: false,
+          status: 'free',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existingDoc.user_id);
+    }
 
     return json({ success: true });
   } catch (error) {

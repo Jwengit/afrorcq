@@ -5,6 +5,12 @@
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 	import ReviewsSection from '$lib/components/ReviewsSection.svelte';
+	import {
+		resolveMemberStatus,
+		canUseVerifiedFeatures,
+		type MemberStatus,
+		VERIFIED_ONLY_MESSAGE
+	} from '$lib/membershipAccess';
 
 	type PublicProfile = {
 		first_name: string;
@@ -32,6 +38,7 @@
 	let reportMessage = '';
 	let reportError = '';
 	let profileLoadError = '';
+	let viewerMemberStatus: MemberStatus = 'free';
 	let profile: PublicProfile = {
 		first_name: '',
 		last_name: '',
@@ -290,11 +297,30 @@
 			return;
 		}
 
+		const { data: viewerProfile } = await supabase
+			.from('profiles')
+			.select('status, is_verified, membership_paid, membership_expires_at')
+			.eq('id', authData.user.id)
+			.maybeSingle();
+
+		viewerMemberStatus = resolveMemberStatus({
+			status: viewerProfile?.status,
+			isVerified: viewerProfile?.is_verified,
+			membershipPaid: viewerProfile?.membership_paid,
+			membershipExpiresAt: viewerProfile?.membership_expires_at
+		});
+
 		const requestedPublicProfileId = parsePositiveInt($page.url.searchParams.get('pid'));
 		const requestedProfileId = $page.url.searchParams.get('id');
 		const profileId = requestedProfileId || authData.user.id;
 
 		if (requestedPublicProfileId) {
+			if (!canUseVerifiedFeatures(viewerMemberStatus)) {
+				profileLoadError = VERIFIED_ONLY_MESSAGE;
+				loading = false;
+				return;
+			}
+
 			const { data: profileByPublicId, error: profileByPublicIdError } = await supabase
 				.from('profiles')
 				.select('*')
@@ -523,7 +549,19 @@
 
 			</div>
 
-			<ReviewsSection userId={viewedProfileId} userName={`${profile.first_name} ${profile.last_name}`.trim()} />
+			{#if canUseVerifiedFeatures(viewerMemberStatus)}
+				<ReviewsSection userId={viewedProfileId} userName={`${profile.first_name} ${profile.last_name}`.trim()} />
+			{:else}
+				<div class="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
+					<p class="text-sm font-semibold text-amber-800">{VERIFIED_ONLY_MESSAGE}</p>
+					<a
+						href="/pricing"
+						class="mt-3 inline-flex items-center rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
+					>
+						Upgrade now
+					</a>
+				</div>
+			{/if}
 		</div>
 	</div>
 {/if}

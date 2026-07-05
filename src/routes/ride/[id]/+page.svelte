@@ -5,6 +5,13 @@
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 	import { supabase } from '$lib/supabaseClient';
+	import {
+		resolveMemberStatus,
+		canUseVerifiedFeatures,
+		canAccessGirlsOnlyRides,
+		type MemberStatus,
+		VERIFIED_ONLY_MESSAGE
+	} from '$lib/membershipAccess';
 	import type { User } from '@supabase/supabase-js';
 
 type Ride = {
@@ -33,6 +40,8 @@ let reportingRide = false;
 let reportMessage = '';
 let reportError = '';
 let driverPublicProfileId: number | null = null;
+let currentMemberStatus: MemberStatus = 'free';
+let currentUserGender = '';
 
 $: bookingTotalAmount = ride ? ride.price * bookingSeats : 0;
 
@@ -61,6 +70,22 @@ onMount(async () => {
 		data: { user }
 	} = await supabase.auth.getUser();
 	currentUser = user;
+
+	if (user) {
+		const { data: profile } = await supabase
+			.from('profiles')
+			.select('gender, status, is_verified, membership_paid, membership_expires_at')
+			.eq('id', user.id)
+			.maybeSingle();
+
+		currentUserGender = (profile?.gender ?? '').toLowerCase();
+		currentMemberStatus = resolveMemberStatus({
+			status: profile?.status,
+			isVerified: profile?.is_verified,
+			membershipPaid: profile?.membership_paid,
+			membershipExpiresAt: profile?.membership_expires_at
+		});
+	}
 
 	if (!user && browser) {
 		goto(resolve('/auth/login'));
@@ -221,15 +246,17 @@ onMount(async () => {
 				<h1 class="text-3xl font-bold text-gray-900">{ride.departure} to {ride.arrival}</h1>
 				<p class="mt-2 text-gray-600">{new Date(ride.ride_date).toLocaleString()}</p>
 				<div class="mt-4">
-					<button
-						type="button"
-						on:click={() =>
-							driverPublicProfileId && goto(resolve(`/profile/public?pid=${driverPublicProfileId}`))}
-						disabled={!driverPublicProfileId}
-						class="inline-flex items-center rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-					>
-						View driver public profile
-					</button>
+					{#if canUseVerifiedFeatures(currentMemberStatus)}
+						<button
+							type="button"
+							on:click={() =>
+								driverPublicProfileId && goto(resolve(`/profile/public?pid=${driverPublicProfileId}`))}
+							disabled={!driverPublicProfileId}
+							class="inline-flex items-center rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+						>
+							View driver public profile
+						</button>
+					{/if}
 				</div>
 
 				<div class="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -242,7 +269,12 @@ onMount(async () => {
 				{#if errorMessage}<div class="mt-6 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{errorMessage}</div>{/if}
 				{#if successMessage}<div class="mt-6 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700">{successMessage}</div>{/if}
 
-				{#if currentUser && currentUser.id !== ride.driver_id && ride.seats > 0}
+				{#if currentUser && currentUser.id !== ride.driver_id && ride.girls_only && !canAccessGirlsOnlyRides(currentMemberStatus, currentUserGender)}
+					<div class="mt-8 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+						<p>{VERIFIED_ONLY_MESSAGE}</p>
+						<a href="/pricing" class="mt-2 inline-flex items-center rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700">Upgrade now</a>
+					</div>
+				{:else if currentUser && currentUser.id !== ride.driver_id && ride.seats > 0}
 					<div class="mt-8 space-y-4 border-t border-gray-200 pt-6">
 						<h2 class="text-lg font-semibold text-gray-900">Book this ride</h2>
 						<div>
