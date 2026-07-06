@@ -1385,14 +1385,7 @@
 		{/if}
 			</section>
 
-			{#if !canUseVerifiedFeatures(memberStatus)}
-				<section class="dashboard-card p-4">
-					<p class="text-sm font-semibold text-amber-800">{VERIFIED_ONLY_MESSAGE}</p>
-					<a href="/pricing" class="mt-3 inline-flex items-center rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700">Upgrade now</a>
-				</section>
-			{/if}
-
-			{#if !showArchive}
+		{#if !showArchive}
 			<section id="become-member" class="dashboard-card p-6 scroll-mt-28 {isCurrentUserVerified && hasActiveMembership ? 'opacity-80 border-slate-200' : ''}">
 				<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
 					<div>
@@ -1405,7 +1398,7 @@
 								<p class="text-xs text-gray-500 mt-1">Last membership expiry: {new Date(membershipExpiresAt).toLocaleDateString()}</p>
 							{/if}
 						{:else}
-							<p class="text-sm text-gray-600 mt-1">Upload your verification documents to get validated and unlock verified member features.</p>
+							<p class="text-sm text-gray-600 mt-1">Upload your documents to get validated and unlock verified member features.</p>
 						{/if}
 					</div>
 					{#if isCurrentUserVerified && hasActiveMembership}
@@ -1504,13 +1497,6 @@
 					{/if}
 				</div>
 
-				{#if !canUseVerifiedFeatures(memberStatus)}
-					<div class="rounded-lg border border-amber-200 bg-amber-50 p-3">
-						<p class="text-sm font-semibold text-amber-800">{VERIFIED_ONLY_MESSAGE}</p>
-						<a href="/pricing" class="mt-2 inline-flex items-center rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700">Upgrade now</a>
-					</div>
-				{:else}
-
 				{#if adminInboxError}
 					<p class="text-sm text-red-600">{adminInboxError}</p>
 				{/if}
@@ -1584,7 +1570,6 @@
 							</article>
 						{/each}
 					</div>
-				{/if}
 				{/if}
 			</section>
 
@@ -1729,12 +1714,6 @@
 
 			<section id="ride-requests" class="dashboard-card p-6 scroll-mt-28">
 				<h2 class="text-xl font-semibold text-gray-900 mb-4">Booking requests</h2>
-				{#if !canUseVerifiedFeatures(memberStatus)}
-					<div class="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
-						<p class="text-sm font-semibold text-amber-800">{VERIFIED_ONLY_MESSAGE}</p>
-						<a href="/pricing" class="mt-2 inline-flex items-center rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700">Upgrade now</a>
-					</div>
-				{/if}
 				{#if reportActionError}
 					<p class="mb-3 text-sm text-red-600">{reportActionError}</p>
 				{/if}
@@ -1843,12 +1822,6 @@
 
 			<section id="my-bookings" class="dashboard-card p-6 scroll-mt-28">
 				<h2 class="text-xl font-semibold text-gray-900 mb-4">My bookings</h2>
-				{#if !canUseVerifiedFeatures(memberStatus)}
-					<div class="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
-						<p class="text-sm font-semibold text-amber-800">{VERIFIED_ONLY_MESSAGE}</p>
-						<a href="/pricing" class="mt-2 inline-flex items-center rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700">Upgrade now</a>
-					</div>
-				{/if}
 				{#if reportActionError}
 					<p class="mb-3 text-sm text-red-600">{reportActionError}</p>
 				{/if}

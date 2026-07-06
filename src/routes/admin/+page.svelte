@@ -5540,9 +5540,9 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 						</div>
 					</div>
 
-					<!-- Verification Documents -->
+					<!-- Document Verification -->
 					<div>
-						<h3 class="text-sm font-semibold text-gray-900 mb-3">Verification documents</h3>
+						<h3 class="text-sm font-semibold text-gray-900 mb-3">Document verification</h3>
 						{#if profileDocumentsError}
 							<p class="text-sm bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 mb-3">{profileDocumentsError}</p>
 						{/if}
@@ -5551,9 +5551,9 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 						{/if}
 
 						{#if profileDocumentsLoading}
-							<p class="text-sm text-gray-500">Loading verification documents...</p>
+							<p class="text-sm text-gray-500">Loading documents...</p>
 						{:else if profileDocuments.length === 0}
-							<p class="text-sm text-gray-500 italic">No verification documents uploaded.</p>
+							<p class="text-sm text-gray-500 italic">No documents uploaded.</p>
 						{:else}
 							<div class="space-y-2">
 								{#each profileDocuments as doc}

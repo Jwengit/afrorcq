@@ -217,21 +217,14 @@
 			<div class="mb-4 flex items-center gap-3">
 				<img src="/Logo sans phrase.png" alt="Hizli Carpooling" class="h-12 w-12 rounded-xl border border-gray-100 object-contain p-1" />
 				<div>
-					<p class="text-lg font-bold text-gray-900">Install Hizli Carpooling web app for quick access and a smoother experience.</p>
+					<p class="text-lg font-bold text-gray-900">Install Hizli</p>
+					<p class="text-sm text-gray-500">Get quick access and a smoother experience.</p>
 				</div>
 			</div>
 
 			{#if showIOSInstructions}
 				<div class="rounded-lg bg-green-50 p-3 text-sm text-green-900">
 					<p>Tap Share, then Add to Home Screen.</p>
-				</div>
-			{:else if !deferredPrompt}
-				<div class="rounded-lg bg-green-50 p-3 text-sm text-green-900">
-					<p class="text-center">Install Hizli Carpooling web app for quick access and a smoother experience.</p>
-				</div>
-			{:else}
-				<div class="rounded-lg bg-green-50 p-3 text-sm text-green-900">
-					Install Hizli Carpooling web app for quick access and a smoother experience.
 				</div>
 			{/if}
 

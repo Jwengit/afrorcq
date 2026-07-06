@@ -91,13 +91,14 @@
 	let deletingDocumentId: string | null = null;
 	let submittingForReview = false;
 	let verificationDocuments: VerificationDocument[] = [];
-	let selectedDocumentType = 'identity_card';
+	let selectedDocumentType = 'identity_card_front';
 	let selectedDocumentFile: File | null = null;
 	let documentFileName = 'Choose a file';
 	let documentFileInput: HTMLInputElement;
 
 	const documentTypeOptions = [
-		{ value: 'identity_card', label: 'Identity card' },
+		{ value: 'identity_card_front', label: 'Proof of ID (front)' },
+		{ value: 'identity_card_back', label: 'Proof of ID (back)' },
 		{ value: 'student_id', label: 'Student ID' },
 		{ value: 'driver_license', label: 'Driver license' },
 		{ value: 'proof_of_address', label: 'Proof of address' },
@@ -107,15 +108,17 @@
 	];
 
 	const documentTypeLabelMap: Record<string, string> = {
-		identity_card: 'Identity card',
+		identity_card_front: 'Proof of ID (front)',
+		identity_card_back: 'Proof of ID (back)',
+		identity_card: 'Proof of ID',
 		student_id: 'Student ID',
 		driver_license: 'Driver license',
 		proof_of_address: 'Proof of address',
 		insurance: 'Insurance proof',
 		vehicle_registration: 'Vehicle registration',
 		other: 'Other document',
-		identity: 'Identity card',
-		id_card: 'Identity card',
+		identity: 'Proof of ID',
+		id_card: 'Proof of ID',
 		license: 'Driver license',
 		driving_license: 'Driver license',
 		proof_address: 'Proof of address',
@@ -126,11 +129,11 @@
 	};
 
 	$: planRequiredDocTypes = profile.membership_plan === 'student'
-		? (['identity_card', 'student_id'] as const)
-		: (['identity_card'] as const);
+		? (['identity_card_front', 'identity_card_back', 'student_id', 'proof_of_address'] as const)
+		: (['identity_card_front', 'identity_card_back', 'proof_of_address'] as const);
 
 	$: docStatusByType = new Map(
-		(['identity_card', 'student_id', 'driver_license', 'insurance', 'vehicle_registration'] as const).map(
+		(['identity_card_front', 'identity_card_back', 'student_id', 'proof_of_address', 'driver_license', 'insurance', 'vehicle_registration'] as const).map(
 			(type) => {
 				const docs = verificationDocuments.filter(
 					(d) => normalizeVerificationDocumentType(d.document_type) === type
@@ -144,13 +147,13 @@
 	);
 
 	$: allRequiredDocsUploaded = (planRequiredDocTypes as readonly string[]).every((type) => {
-		const status = docStatusByType.get(type as 'identity_card' | 'student_id' | 'driver_license' | 'insurance' | 'vehicle_registration');
+		const status = docStatusByType.get(type as 'identity_card_front' | 'identity_card_back' | 'student_id' | 'proof_of_address' | 'driver_license' | 'insurance' | 'vehicle_registration');
 		return status === 'pending' || status === 'approved';
 	});
 
 	$: isProfileStatusPending = (profile.status ?? '').toLowerCase() === 'pending';
 
-	const baseRequiredDocumentTypes = ['identity_card', 'student_id', 'proof_of_address'] as const;
+	const baseRequiredDocumentTypes = ['identity_card_front', 'identity_card_back', 'student_id', 'proof_of_address'] as const;
 	const driverOnlyDocumentTypes = ['driver_license', 'insurance', 'vehicle_registration'] as const;
 	const allKnownRequiredTypes = [...baseRequiredDocumentTypes, ...driverOnlyDocumentTypes] as const;
 
@@ -184,9 +187,11 @@
 
 	$: isDriver = Boolean(profile.plate_number || profile.car_make);
 
-	$: requiredVerificationDocumentTypes = isDriver
-		? allKnownRequiredTypes
-		: baseRequiredDocumentTypes;
+	$: requiredVerificationDocumentTypes = profile.membership_plan
+		? (planRequiredDocTypes as readonly string[])
+		: (isDriver
+			? allKnownRequiredTypes
+			: baseRequiredDocumentTypes);
 
 	$: approvedRequiredDocumentTypes = new Set(
 		verificationDocuments
@@ -417,6 +422,11 @@
 		loading = true;
 		profileError = '';
 		try {
+			// Check if plan is being set via URL parameter
+			const urlParams = new URLSearchParams(browser ? window.location.search : '');
+			const planParam = urlParams.get('plan');
+			const isValidPlan = planParam === 'student' || planParam === 'standard';
+
 			let { data, error } = await supabase
 				.from('profiles')
 				.select('*')
@@ -437,7 +447,8 @@
 				const { error: createError } = await supabase.from('profiles').upsert(
 					{
 						id: currentUser.id,
-						first_name: fallbackFirstName
+						first_name: fallbackFirstName,
+						membership_plan: isValidPlan ? planParam : null
 					},
 					{ onConflict: 'id' }
 				);
@@ -446,6 +457,29 @@
 					throw createError;
 				}
 
+				const retry = await supabase
+					.from('profiles')
+					.select('*')
+					.eq('id', currentUser.id)
+					.maybeSingle();
+
+				if (retry.error) {
+					throw retry.error;
+				}
+
+				data = retry.data;
+			} else if (data && isValidPlan && data.membership_plan !== planParam) {
+				// Update plan if URL parameter is valid and different from current
+				const { error: updateError } = await supabase
+					.from('profiles')
+					.update({ membership_plan: planParam })
+					.eq('id', currentUser!.id);
+
+				if (updateError) {
+					throw updateError;
+				}
+
+				// Refresh the profile data
 				const retry = await supabase
 					.from('profiles')
 					.select('*')
@@ -1410,7 +1444,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 			<div id="verification-documents" class="profile-card p-7 mt-6 scroll-mt-28">
 				<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
 					<div>
-						<h2 class="text-xl font-semibold text-slate-900">Verification Documents</h2>
+						<h2 class="text-xl font-semibold text-slate-900">Document Verification</h2>
 						<p class="text-sm text-slate-600 mt-1">Upload the required documents so we can verify your account.</p>
 					</div>
 					<div class="text-sm text-slate-500">
@@ -1488,7 +1522,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 						bind:value={selectedDocumentType}
 						class="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
 					>
-						{#each documentTypeOptions as option (option.value)}
+						{#each documentTypeOptions.filter(opt => (planRequiredDocTypes as readonly string[]).includes(opt.value)) as option (option.value)}
 							<option value={option.value}>{option.label}</option>
 						{/each}
 					</select>

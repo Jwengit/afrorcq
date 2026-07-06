@@ -6,7 +6,8 @@ const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
 const BUCKET = 'verification-documents';
 const REQUIRED_VERIFICATION_DOCUMENT_TYPES = [
-  'identity_card'
+  'identity_card_front',
+  'identity_card_back'
 ] as const;
 
 const STUDENT_EXTRA_DOCUMENT_TYPES = [
@@ -202,8 +203,11 @@ async function shouldMarkProfileVerified(adminClient: any, userId: string): Prom
         .filter(Boolean)
     );
 
-    // Everyone needs identity_card
-    if (!approvedTypes.has('identity_card')) return false;
+    // Everyone needs both identity_card front and back
+    if (!approvedTypes.has('identity_card_front') || !approvedTypes.has('identity_card_back')) return false;
+
+    // Everyone also needs proof_of_address
+    if (!approvedTypes.has('proof_of_address')) return false;
 
     // Student plan also needs student_id
     const isStudent = (profile?.membership_plan ?? '').toLowerCase() === 'student';

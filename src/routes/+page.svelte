@@ -79,7 +79,7 @@
 			return;
 		}
 
-		goto(`/pricing?plan=${plan}`);
+		goto(`/profile?plan=${plan}#verification-documents`);
 	}
 
 	onMount(async () => {

@@ -77,9 +77,6 @@
 				>
 					Publish a ride
 				</button>
-				<a href="/pricing" class="text-gray-600 hover:text-gray-900 transition-colors">
-					Membership
-				</a>
 
 				{#if currentUser}
 					<!-- User is logged in -->
@@ -161,11 +158,6 @@
 				>
 					Publish a ride
 				</button>
-				<a
-					href="/pricing"
-					class="block px-3 py-2 text-gray-600 hover:text-primary hover:bg-gray-50 rounded-md"
-					>Membership</a
-				>
 
 				{#if currentUser}
 					<!-- User is logged in -->
