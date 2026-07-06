@@ -90,6 +90,8 @@ async function notifyRejectedDocument(adminClient: any, userId: string, document
     });
   }
 }
+
+async function notifyApprovedMember(adminClient: any, userId: string, siteUrl: string) {
   const subject = 'Documents verified - complete your membership';
 
   const { data: existingTicket } = await adminClient
