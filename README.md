@@ -17,12 +17,20 @@ VITE_SUPABASE_PERSIST_SESSION=false
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 RESEND_API_KEY=your_resend_api_key
 PUBLIC_SITE_URL=https://www.hizli-carpooling.com
+VITE_STRIPE_PUBLISHABLE_KEY=pk_test_xxx
+STRIPE_SECRET_KEY=sk_test_xxx
+STRIPE_WEBHOOK_SECRET=whsec_xxx
+STRIPE_ANNUAL_MEMBERSHIP_PRICE_ID=price_xxx
 ```
 
 Note: `SUPABASE_SERVICE_ROLE_KEY` is required for admin APIs (`/api/admin/users` and `/api/admin/overview`).
 Do not expose this key in client code.
 `RESEND_API_KEY` is required for sending welcome emails.
 `PUBLIC_SITE_URL` is used for building links included in emails.
+`VITE_STRIPE_PUBLISHABLE_KEY` is the Stripe public key used by the client checkout flow.
+`STRIPE_SECRET_KEY` is required for server-side Stripe API calls.
+`STRIPE_WEBHOOK_SECRET` is required to verify Stripe webhook signatures.
+`STRIPE_ANNUAL_MEMBERSHIP_PRICE_ID` is the Stripe Price ID for the yearly membership plan.
 `VITE_SUPABASE_PERSIST_SESSION` controls whether auth survives a full browser restart.
 Set it to `true` to keep users logged in across browser restarts via `localStorage`.
 Set it to `false` to keep users logged in only for the current browser session via `sessionStorage`.

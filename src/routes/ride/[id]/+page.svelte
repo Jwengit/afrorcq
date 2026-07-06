@@ -28,6 +28,17 @@ type Ride = {
 	girls_only: boolean;
 };
 
+type DriverPublicProfile = {
+	public_id: number | null;
+	first_name: string | null;
+	last_name: string | null;
+	profile_photo_url: string | null;
+	status?: string | null;
+	is_verified?: boolean | null;
+	membership_paid?: boolean | null;
+	membership_expires_at?: string | null;
+};
+
 let currentUser: User | null = null;
 let ride: Ride | null = null;
 let loading = true;
@@ -40,6 +51,8 @@ let reportingRide = false;
 let reportMessage = '';
 let reportError = '';
 let driverPublicProfileId: number | null = null;
+let driverName = 'Driver';
+let driverIsVerifiedMember = false;
 let currentMemberStatus: MemberStatus = 'free';
 let currentUserGender = '';
 
@@ -115,10 +128,21 @@ onMount(async () => {
 
 	const { data: driverProfile } = await supabase
 		.from('profiles')
-		.select('public_id')
+		.select('public_id, first_name, last_name, profile_photo_url, status, is_verified, membership_paid, membership_expires_at')
 		.eq('id', ride.driver_id)
 		.maybeSingle();
-	driverPublicProfileId = driverProfile?.public_id ?? null;
+
+	const typedDriver = (driverProfile as DriverPublicProfile | null) ?? null;
+	driverPublicProfileId = typedDriver?.public_id ?? null;
+	driverName = `${typedDriver?.first_name ?? ''} ${typedDriver?.last_name ?? ''}`.trim() || 'Driver';
+	driverIsVerifiedMember =
+		resolveMemberStatus({
+			status: typedDriver?.status,
+			isVerified: typedDriver?.is_verified,
+			membershipPaid: typedDriver?.membership_paid,
+			membershipExpiresAt: typedDriver?.membership_expires_at
+		}) === 'verified' &&
+		Boolean(typedDriver?.profile_photo_url?.trim());
 
 	loading = false;
 });
@@ -245,7 +269,18 @@ onMount(async () => {
 			<div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 sm:p-8">
 				<h1 class="text-3xl font-bold text-gray-900">{ride.departure} to {ride.arrival}</h1>
 				<p class="mt-2 text-gray-600">{new Date(ride.ride_date).toLocaleString()}</p>
-				<div class="mt-4">
+				<div class="mt-4 flex flex-wrap items-center gap-2">
+					<p class="text-sm font-semibold text-slate-800">{driverName}</p>
+					{#if driverIsVerifiedMember}
+						<span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+							<svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+								<path fill-rule="evenodd" d="M16.704 5.29a1 1 0 010 1.42l-7.02 7.02a1 1 0 01-1.415 0L4.29 9.752a1 1 0 111.415-1.415l3.271 3.272 6.313-6.313a1 1 0 011.415-.006z" clip-rule="evenodd" />
+							</svg>
+							Verified member
+						</span>
+					{/if}
+				</div>
+				<div class="mt-3">
 					{#if canUseVerifiedFeatures(currentMemberStatus)}
 						<button
 							type="button"

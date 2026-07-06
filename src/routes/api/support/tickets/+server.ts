@@ -33,28 +33,37 @@ function getAdminClient() {
 	return createClient(supabaseUrl, serviceRoleKey);
 }
 
-async function assertVerifiedMember(adminClient: ReturnType<typeof createClient>, userId: string) {
-const { data: profile } = await adminClient
-.from('profiles')
-.select('status, is_verified, membership_paid, membership_expires_at')
-.eq('id', userId)
-.maybeSingle();
+async function assertVerifiedMember(adminClient: any, userId: string) {
+	const { data: profile } = await adminClient
+		.from('profiles')
+		.select('status, is_verified, membership_paid, membership_expires_at')
+		.eq('id', userId)
+		.maybeSingle();
 
-const status = resolveMemberStatus({
-status: profile?.status,
-isVerified: profile?.is_verified,
-membershipPaid: profile?.membership_paid,
-membershipExpiresAt: profile?.membership_expires_at
-});
+	const typedProfile = (profile as
+		| {
+				status?: string | null;
+				is_verified?: boolean | null;
+				membership_paid?: boolean | null;
+				membership_expires_at?: string | null;
+		  }
+		| null) ?? null;
 
-if (!canUseVerifiedFeatures(status)) {
-return json(
-{ error: 'This feature is available for verified members only. Upgrade your plan to unlock full access.' },
-{ status: 403 }
-);
-}
+	const status = resolveMemberStatus({
+		status: typedProfile?.status,
+		isVerified: typedProfile?.is_verified,
+		membershipPaid: typedProfile?.membership_paid,
+		membershipExpiresAt: typedProfile?.membership_expires_at
+	});
 
-return null;
+	if (!canUseVerifiedFeatures(status)) {
+		return json(
+			{ error: 'This feature is available for verified members only. Upgrade your plan to unlock full access.' },
+			{ status: 403 }
+		);
+	}
+
+	return null;
 }
 
 async function purgeExpiredSupportConversations(adminClient: any) {

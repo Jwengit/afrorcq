@@ -91,6 +91,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
 		const adminStatus = (url.searchParams.get('admin_status') ?? '').toLowerCase();
 		const fromDate = (url.searchParams.get('from_date') ?? '').trim();
 		const toDate = (url.searchParams.get('to_date') ?? '').trim();
+		const provider = (url.searchParams.get('provider') ?? '').trim().toLowerCase();
 
 		if (allowedTransactionStatuses.includes(status as (typeof allowedTransactionStatuses)[number])) {
 			query = query.eq('status', status);
@@ -110,6 +111,10 @@ export const GET: RequestHandler = async ({ request, url }) => {
 
 		if (toDate) {
 			query = query.lte('created_at', `${toDate}T23:59:59.999Z`);
+		}
+
+		if (provider) {
+			query = query.eq('provider', provider);
 		}
 
 		const { data, error } = await query;
@@ -176,6 +181,8 @@ export const GET: RequestHandler = async ({ request, url }) => {
 
 			return {
 				...tx,
+				renewal_at: tx.payout_at ?? null,
+				member_name: `${passenger?.first_name ?? ''} ${passenger?.last_name ?? ''}`.trim() || null,
 				profiles: undefined,
 				passenger_first_name: passenger?.first_name ?? null,
 				passenger_last_name: passenger?.last_name ?? null,
@@ -201,6 +208,8 @@ export const GET: RequestHandler = async ({ request, url }) => {
 		const format = (url.searchParams.get('format') ?? '').toLowerCase();
 		if (format === 'csv') {
 			const csvCols = [
+				'member_name',
+				'renewal_at',
 				'id', 'booking_id', 'ride_id', 'user_id', 'seats_booked', 'amount', 'currency',
 				'status', 'refund_status', 'admin_status', 'commission_percent', 'commission_amount',
 				'driver_payout_amount', 'provider', 'paypal_order_id', 'external_reference',

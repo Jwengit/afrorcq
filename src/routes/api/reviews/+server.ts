@@ -24,18 +24,27 @@ return null;
 return authHeader.slice(7).trim();
 }
 
-async function getUserMemberStatus(client: ReturnType<typeof createClient>, userId: string) {
+async function getUserMemberStatus(client: any, userId: string) {
 const { data: profile } = await client
 .from('profiles')
 .select('status, is_verified, membership_paid, membership_expires_at')
 .eq('id', userId)
 .maybeSingle();
 
+const typedProfile = (profile as
+	| {
+			status?: string | null;
+			is_verified?: boolean | null;
+			membership_paid?: boolean | null;
+			membership_expires_at?: string | null;
+	  }
+	| null) ?? null;
+
 return resolveMemberStatus({
-status: profile?.status,
-isVerified: profile?.is_verified,
-membershipPaid: profile?.membership_paid,
-membershipExpiresAt: profile?.membership_expires_at
+status: typedProfile?.status,
+isVerified: typedProfile?.is_verified,
+membershipPaid: typedProfile?.membership_paid,
+membershipExpiresAt: typedProfile?.membership_expires_at
 });
 }
 

@@ -366,6 +366,8 @@
 			arrival: string | null;
 			ride_date: string | null;
 		} | null;
+		renewal_at?: string | null;
+		member_name?: string | null;
 		profiles?: {
 			first_name: string | null;
 			last_name: string | null;
@@ -2584,10 +2586,61 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 		transactionsError = '';
 		transactionsActionMessage = '';
 		transactionsActionIsError = false;
-		transactions = [];
-		transactionsActionMessage =
-			'Transaction records are intentionally hidden while member payment features are disabled.';
-		transactionsActionIsError = false;
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+
+		if (!session?.access_token) {
+			transactionsError = 'Session expired. Please sign in again.';
+			transactionsLoading = false;
+			return;
+		}
+
+		const params = new URLSearchParams();
+		params.set('provider', 'stripe');
+		if (transactionFilterStatus) params.set('status', transactionFilterStatus);
+		if (transactionFilterRefundStatus) params.set('refund_status', transactionFilterRefundStatus);
+		if (transactionFilterAdminStatus) params.set('admin_status', transactionFilterAdminStatus);
+		if (transactionFilterFromDate) params.set('from_date', transactionFilterFromDate);
+		if (transactionFilterToDate) params.set('to_date', transactionFilterToDate);
+
+		const response = await fetch(`/api/admin/transactions?${params.toString()}`, {
+			headers: {
+				Authorization: `Bearer ${session.access_token}`
+			}
+		});
+
+		const payload = await response.json();
+		if (!response.ok) {
+			transactionsError = payload?.error || 'Unable to load subscription payments.';
+			transactions = [];
+			transactionsLoading = false;
+			return;
+		}
+
+		const list = ((payload?.transactions ?? []) as AdminTransaction[]).filter(
+			(tx) => (tx.provider ?? '').toLowerCase() === 'stripe'
+		);
+
+		const q = transactionSearch.trim().toLowerCase();
+		transactions = !q
+			? list
+			: list.filter((tx) => {
+				const candidate = [
+					tx.id,
+					tx.user_id,
+					tx.member_name,
+					tx.passenger_profile?.first_name,
+					tx.passenger_profile?.last_name,
+					tx.passenger_profile?.email
+				]
+					.filter(Boolean)
+					.join(' ')
+					.toLowerCase();
+				return candidate.includes(q);
+			});
+
 		transactionsLoading = false;
 	}
 
@@ -2877,7 +2930,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 			return;
 		}
 
-		const params = new URLSearchParams({ format: 'csv' });
+		const params = new URLSearchParams({ format: 'csv', provider: 'stripe' });
 		if (transactionFilterStatus) params.append('status', transactionFilterStatus);
 		if (transactionFilterRefundStatus) params.append('refund_status', transactionFilterRefundStatus);
 		if (transactionFilterAdminStatus) params.append('admin_status', transactionFilterAdminStatus);
@@ -4268,7 +4321,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 									</select>
 									<input type="date" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" bind:value={transactionFilterFromDate} on:change={loadTransactions} />
 									<input type="date" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" bind:value={transactionFilterToDate} on:change={loadTransactions} />
-									<button on:click={loadTransactions} class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 font-medium">Load transactions</button>
+									<button on:click={loadTransactions} class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 font-medium">Load subscription payments</button>
 								</div>
 								<div class="flex flex-wrap gap-2 mt-3">
 									<button on:click={loadTransactions} class="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 font-medium">Refresh list</button>
@@ -4282,35 +4335,25 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 
 							{#if transactions.length > 0}
 								{@const totalRevenue = transactions.filter(t => t.status === 'succeeded').reduce((s, t) => s + Number(t.amount || 0), 0)}
-								{@const totalCommission = transactions.filter(t => t.status === 'succeeded').reduce((s, t) => s + Number(t.commission_amount || 0), 0)}
-								{@const totalPayout = transactions.filter(t => t.status === 'succeeded').reduce((s, t) => s + Number(t.driver_payout_amount || 0), 0)}
-								{@const awaitingCount = transactions.filter(t => t.admin_status === 'awaiting_payout' && t.status === 'succeeded').length}
-								{@const disputeCount = transactions.filter(t => t.admin_status === 'dispute').length}
-								{@const refundedCount = transactions.filter(t => t.refund_status === 'refunded').length}
-								<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+								{@const paidCount = transactions.filter(t => t.status === 'succeeded').length}
+								{@const pendingCount = transactions.filter(t => t.status === 'pending').length}
+								{@const failedCount = transactions.filter(t => t.status === 'failed' || t.status === 'canceled').length}
+								<div class="grid grid-cols-2 md:grid-cols-4 gap-3">
 									<div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
-										<p class="text-xs text-gray-500">Total revenue</p>
+										<p class="text-xs text-gray-500">Subscription revenue</p>
 										<p class="text-lg font-bold text-gray-900 mt-0.5">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(totalRevenue)}</p>
 									</div>
 									<div class="bg-white rounded-xl border border-green-200 px-4 py-3">
-										<p class="text-xs text-green-700">Commission earned</p>
-										<p class="text-lg font-bold text-green-800 mt-0.5">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(totalCommission)}</p>
-									</div>
-									<div class="bg-white rounded-xl border border-indigo-200 px-4 py-3">
-										<p class="text-xs text-indigo-700">Driver payouts</p>
-										<p class="text-lg font-bold text-indigo-800 mt-0.5">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(totalPayout)}</p>
+										<p class="text-xs text-green-700">Paid</p>
+										<p class="text-lg font-bold text-green-800 mt-0.5">{paidCount}</p>
 									</div>
 									<div class="bg-white rounded-xl border border-yellow-200 px-4 py-3">
-										<p class="text-xs text-yellow-700">Awaiting payout</p>
-										<p class="text-lg font-bold text-yellow-800 mt-0.5">{awaitingCount}</p>
+										<p class="text-xs text-yellow-700">Pending</p>
+										<p class="text-lg font-bold text-yellow-800 mt-0.5">{pendingCount}</p>
 									</div>
 									<div class="bg-white rounded-xl border border-red-200 px-4 py-3">
-										<p class="text-xs text-red-700">Disputes</p>
-										<p class="text-lg font-bold text-red-800 mt-0.5">{disputeCount}</p>
-									</div>
-									<div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
-										<p class="text-xs text-gray-500">Refunded</p>
-										<p class="text-lg font-bold text-gray-700 mt-0.5">{refundedCount}</p>
+										<p class="text-xs text-red-700">Failed / Canceled</p>
+										<p class="text-lg font-bold text-red-800 mt-0.5">{failedCount}</p>
 									</div>
 								</div>
 							{/if}
@@ -4320,18 +4363,17 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 							{:else if transactionsError}
 								<p class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{transactionsError}</p>
 							{:else if transactions.length === 0}
-								<p class="text-sm text-gray-500">No transactions to display. Member payment flows are disabled.</p>
+								<p class="text-sm text-gray-500">No subscription payments to display.</p>
 							{:else}
 								<div class="overflow-x-auto border border-gray-100 rounded-xl">
 									<table class="w-full text-sm">
 										<thead class="bg-gray-50 text-left text-gray-600">
 											<tr>
-												<th class="px-4 py-3 font-medium">Passenger</th>
-												<th class="px-4 py-3 font-medium">Driver</th>
-												<th class="px-4 py-3 font-medium">Payment status</th>
-												<th class="px-4 py-3 font-medium">Admin status</th>
-												<th class="px-4 py-3 font-medium">Amount / Commission / Payout</th>
-												<th class="px-4 py-3 font-medium">Created at</th>
+												<th class="px-4 py-3 font-medium">Member</th>
+												<th class="px-4 py-3 font-medium">Payment date</th>
+												<th class="px-4 py-3 font-medium">Amount</th>
+												<th class="px-4 py-3 font-medium">Status</th>
+												<th class="px-4 py-3 font-medium">Renewal date</th>
 												<th class="px-4 py-3 font-medium">Actions</th>
 											</tr>
 										</thead>
@@ -4339,28 +4381,20 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 											{#each transactions as tx}
 												<tr class="hover:bg-gray-50">
 													<td class="px-4 py-3 align-top">
-														<p class="font-medium text-gray-900">{tx.passenger_profile?.first_name} {tx.passenger_profile?.last_name}</p>
+														<p class="font-medium text-gray-900">{tx.member_name || `${tx.passenger_profile?.first_name ?? ''} ${tx.passenger_profile?.last_name ?? ''}`.trim() || '-'}</p>
 														<p class="text-xs text-gray-500">{tx.passenger_profile?.email || '-'}</p>
-														<p class="text-xs text-gray-500 mt-1">Booking ID: {tx.booking_id || '-'}</p>
 													</td>
+													<td class="px-4 py-3 text-gray-600">{new Date(tx.created_at).toLocaleString('en-US')}</td>
 													<td class="px-4 py-3 align-top">
-														<p class="font-medium text-gray-900">{tx.driver_profile?.first_name} {tx.driver_profile?.last_name}</p>
-														<p class="text-xs text-gray-500">{tx.driver_profile?.email || '-'}</p>
-														<p class="text-xs text-gray-500 mt-1">{tx.ride_info?.departure || '-'} to {tx.ride_info?.arrival || '-'}</p>
+														<p class="font-medium text-gray-900">{new Intl.NumberFormat('en-US', { style: 'currency', currency: tx.currency || 'USD' }).format(Number(tx.amount || 0))}</p>
 													</td>
-													<td class="px-4 py-3"><span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${tx.status === 'succeeded' ? 'bg-green-100 text-green-700' : tx.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{tx.status}</span></td>
 													<td class="px-4 py-3">
-														<span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${tx.admin_status === 'payout_done' ? 'bg-green-100 text-green-700' : tx.admin_status === 'dispute' ? 'bg-red-100 text-red-700' : tx.admin_status === 'validated' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}`}>{tx.admin_status || 'awaiting_payout'}</span>
+														<span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${tx.status === 'succeeded' ? 'bg-green-100 text-green-700' : tx.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{tx.status}</span>
 														{#if tx.refund_status && tx.refund_status !== 'none'}
 															<span class={`mt-1 inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${tx.refund_status === 'refunded' ? 'bg-indigo-100 text-indigo-700' : tx.refund_status === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{tx.refund_status}</span>
 														{/if}
 													</td>
-													<td class="px-4 py-3 align-top">
-														<p class="font-medium text-gray-900">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(tx.amount || 0))}</p>
-														<p class="text-xs text-green-700">Commission: {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(tx.commission_amount || 0))}</p>
-														<p class="text-xs text-indigo-700">Payout: {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(tx.driver_payout_amount || 0))}</p>
-													</td>
-													<td class="px-4 py-3 text-gray-600">{new Date(tx.created_at).toLocaleString('en-US')}</td>
+													<td class="px-4 py-3 text-gray-600">{tx.renewal_at ? new Date(tx.renewal_at).toLocaleString('en-US') : '-'}</td>
 													<td class="px-4 py-3">
 														<div class="flex flex-wrap gap-2">
 															<button on:click={() => openTransactionModal(tx)} class="px-3 py-1 rounded text-xs font-medium border border-green-200 text-green-700 hover:bg-green-50">Details</button>

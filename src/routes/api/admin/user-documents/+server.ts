@@ -36,7 +36,7 @@ function buildApprovalInboxMessage(): string {
   );
 }
 
-async function notifyApprovedMember(adminClient: ReturnType<typeof createClient>, userId: string) {
+async function notifyApprovedMember(adminClient: any, userId: string) {
   const subject = 'Documents verified - complete your membership';
 
   const { data: existingTicket } = await adminClient

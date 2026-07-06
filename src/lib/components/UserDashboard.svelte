@@ -589,7 +589,7 @@
 
 	@media (max-width: 1024px) {
 		.dashboard-layout,
-		profile-grid {
+		.profile-grid {
 			grid-template-columns: 1fr;
 		}
 

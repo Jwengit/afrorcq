@@ -32,6 +32,9 @@
 		first_name: string | null;
 		last_name: string | null;
 		profile_photo_url: string | null;
+		status?: string | null;
+		membership_paid?: boolean | null;
+		membership_expires_at?: string | null;
 		is_verified: boolean;
 	};
 
@@ -125,18 +128,20 @@
 			if (driverIds.length > 0) {
 				let { data: driverProfiles, error: driverProfilesError } = await supabase
 					.from('profiles')
-					.select('id, public_id, first_name, last_name, profile_photo_url, is_verified')
+					.select('id, public_id, first_name, last_name, profile_photo_url, status, is_verified, membership_paid, membership_expires_at')
 					.in('id', driverIds);
 
 				if (driverProfilesError?.message?.toLowerCase().includes('is_verified')) {
 					const fallback = await supabase
 						.from('profiles')
-						.select('id, public_id, first_name, last_name, profile_photo_url')
+						.select('id, public_id, first_name, last_name, profile_photo_url, status')
 						.in('id', driverIds);
 
 					driverProfiles = (fallback.data ?? []).map((profile) => ({
 						...profile,
-						is_verified: false
+						is_verified: false,
+						membership_paid: false,
+						membership_expires_at: null
 					}));
 					driverProfilesError = fallback.error;
 				}
@@ -153,8 +158,16 @@
 								first_name: profile.first_name ?? null,
 								last_name: profile.last_name ?? null,
 								profile_photo_url: profile.profile_photo_url ?? null,
+									status: profile.status ?? null,
+									membership_paid: profile.membership_paid ?? null,
+									membership_expires_at: profile.membership_expires_at ?? null,
 								is_verified:
-									Boolean(profile.is_verified) &&
+										resolveMemberStatus({
+											status: profile.status ?? null,
+											isVerified: profile.is_verified ?? false,
+											membershipPaid: profile.membership_paid ?? false,
+											membershipExpiresAt: profile.membership_expires_at ?? null
+										}) === 'verified' &&
 									Boolean(
 										typeof profile.profile_photo_url === 'string' &&
 										profile.profile_photo_url.trim()
@@ -378,7 +391,7 @@
 												<svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
 													<path fill-rule="evenodd" d="M16.704 5.29a1 1 0 010 1.42l-7.02 7.02a1 1 0 01-1.415 0L4.29 9.752a1 1 0 111.415-1.415l3.271 3.272 6.313-6.313a1 1 0 011.415-.006z" clip-rule="evenodd" />
 												</svg>
-												Verified
+												Verified member
 											</span>
 										{/if}
 									</div>

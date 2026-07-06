@@ -79,7 +79,7 @@
 			return;
 		}
 
-		goto('/profile#verification-documents');
+		goto('/pricing');
 	}
 
 	onMount(async () => {

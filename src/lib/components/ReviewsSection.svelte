@@ -166,11 +166,6 @@ line-height: 1;
 color: #475569;
 font-weight: 600;
 }
-.summary-text {
-margin: 0;
-color: #334155;
-font-size: 0.92rem;
-}
 .list {
 display: grid;
 gap: 0.85rem;
