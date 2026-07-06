@@ -102,7 +102,6 @@
 				options: {
 					emailRedirectTo: getAuthCallbackUrl(),
 					data: {
-						status: 'Unverified',
 						recaptcha_token: recaptchaToken
 					}
 				}
@@ -140,7 +139,12 @@
 				}
 
 				if (data.session) {
-					goto(resolve('/profile'));
+					const planParam = new URLSearchParams(window.location.search).get('plan');
+					if (planParam === 'student' || planParam === 'standard') {
+						goto(resolve(`/pricing?plan=${planParam}`));
+					} else {
+						goto(resolve('/profile'));
+					}
 					return;
 				}
 

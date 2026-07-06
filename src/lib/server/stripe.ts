@@ -21,8 +21,12 @@ export function getStripeClient(): Stripe {
 	return stripeClient;
 }
 
-export function getAnnualMembershipPriceId(): string {
-	return requireEnv('STRIPE_ANNUAL_MEMBERSHIP_PRICE_ID', env.STRIPE_ANNUAL_MEMBERSHIP_PRICE_ID);
+export function getStudentPriceId(): string {
+	return requireEnv('STRIPE_STUDENT_PRICE_ID', env.STRIPE_STUDENT_PRICE_ID);
+}
+
+export function getStandardPriceId(): string {
+	return requireEnv('STRIPE_STANDARD_PRICE_ID', env.STRIPE_STANDARD_PRICE_ID);
 }
 
 export function getStripeWebhookSecret(): string {

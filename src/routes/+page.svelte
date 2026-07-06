@@ -73,13 +73,13 @@
 		goto(`/search?${params.toString()}`);
 	}
 
-	function handlePaidPlanGetStarted() {
+	function handlePaidPlanGetStarted(plan: 'student' | 'standard') {
 		if (!currentUser) {
-			goto('/auth/signup');
+			goto(`/auth/signup?plan=${plan}`);
 			return;
 		}
 
-		goto('/pricing');
+		goto(`/pricing?plan=${plan}`);
 	}
 
 	onMount(async () => {
@@ -362,7 +362,7 @@
 						<p class="mt-4 text-sm italic text-gray-500">Travel at your own risk.</p>
 					</div>
 					<a
-						href="#popular-rides"
+						href="/auth/signup"
 						class="mt-auto inline-flex items-center justify-center w-full text-white px-5 py-2.5 rounded-lg font-semibold transition hover:opacity-90 hover:shadow-[0_8px_16px_rgba(0,176,80,0.24)]"
 						style="background-color: #00B050;"
 					>
@@ -416,7 +416,7 @@
 					</div>
 					<button
 						type="button"
-						on:click={handlePaidPlanGetStarted}
+						on:click={() => handlePaidPlanGetStarted('student')}
 						class="mt-auto inline-flex items-center justify-center w-full text-white px-5 py-2.5 rounded-lg font-semibold transition hover:opacity-90 hover:shadow-[0_8px_16px_rgba(0,176,80,0.24)]"
 						style="background-color: #00B050;"
 					>
@@ -442,7 +442,7 @@
 					</div>
 					<button
 						type="button"
-						on:click={handlePaidPlanGetStarted}
+						on:click={() => handlePaidPlanGetStarted('standard')}
 						class="mt-auto inline-flex items-center justify-center w-full text-white px-5 py-2.5 rounded-lg font-semibold transition hover:opacity-90 hover:shadow-[0_8px_16px_rgba(0,176,80,0.24)]"
 						style="background-color: #00B050;"
 					>

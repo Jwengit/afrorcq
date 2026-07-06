@@ -27,6 +27,7 @@
 		ride_preferences: string[];
 		profile_photo_url: string;
 		status: string;
+		membership_plan?: string | null;
 	};
 
 	type VerificationDocument = {
@@ -70,7 +71,8 @@
 		languages: [] as string[],
 		ride_preferences: [] as string[],
 		profile_photo_url: '',
-		status: 'Unverified'
+		status: 'Unverified',
+		membership_plan: null
 	};
 
 	let profile: Profile = { ...emptyProfile };
@@ -87,6 +89,7 @@
 	let documentsMessage = '';
 	let uploadingDocument = false;
 	let deletingDocumentId: string | null = null;
+	let submittingForReview = false;
 	let verificationDocuments: VerificationDocument[] = [];
 	let selectedDocumentType = 'identity_card';
 	let selectedDocumentFile: File | null = null;
@@ -121,6 +124,31 @@
 		registration: 'Vehicle registration',
 		vehicle_papers: 'Vehicle registration'
 	};
+
+	$: planRequiredDocTypes = profile.membership_plan === 'student'
+		? (['identity_card', 'student_id'] as const)
+		: (['identity_card'] as const);
+
+	$: docStatusByType = new Map(
+		(['identity_card', 'student_id', 'driver_license', 'insurance', 'vehicle_registration'] as const).map(
+			(type) => {
+				const docs = verificationDocuments.filter(
+					(d) => normalizeVerificationDocumentType(d.document_type) === type
+				);
+				if (docs.length === 0) return [type, 'missing'] as const;
+				if (docs.some((d) => d.status === 'approved')) return [type, 'approved'] as const;
+				if (docs.some((d) => d.status === 'rejected')) return [type, 'rejected'] as const;
+				return [type, 'pending'] as const;
+			}
+		)
+	);
+
+	$: allRequiredDocsUploaded = (planRequiredDocTypes as readonly string[]).every((type) => {
+		const status = docStatusByType.get(type as 'identity_card' | 'student_id' | 'driver_license' | 'insurance' | 'vehicle_registration');
+		return status === 'pending' || status === 'approved';
+	});
+
+	$: isProfileStatusPending = (profile.status ?? '').toLowerCase() === 'pending';
 
 	const baseRequiredDocumentTypes = ['identity_card', 'student_id', 'proof_of_address'] as const;
 	const driverOnlyDocumentTypes = ['driver_license', 'insurance', 'vehicle_registration'] as const;
@@ -571,6 +599,25 @@
 			documentsError = error instanceof Error ? error.message : 'Unable to upload document.';
 		} finally {
 			uploadingDocument = false;
+		}
+	}
+
+	async function submitForReview() {
+		submittingForReview = true;
+		documentsError = '';
+		documentsMessage = '';
+		try {
+			const { error } = await supabase
+				.from('profiles')
+				.update({ status: 'pending' })
+				.eq('id', currentUser!.id);
+			if (error) throw error;
+			profile = { ...profile, status: 'pending' };
+			documentsMessage = 'Your documents have been submitted for review. We\'ll notify you once verified.';
+		} catch (err) {
+			documentsError = err instanceof Error ? err.message : 'Unable to submit for review. Please try again.';
+		} finally {
+			submittingForReview = false;
 		}
 	}
 
@@ -1364,26 +1411,71 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 				<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
 					<div>
 						<h2 class="text-xl font-semibold text-slate-900">Verification Documents</h2>
-						<p class="text-sm text-slate-600 mt-1">Upload required documents so admins can verify your account.</p>
-						<div class="mt-2 space-y-1 text-xs text-slate-500">
-							<p>
-								<strong>Passenger profile:</strong> Identity card and proof of address.
-								If you choose the student plan, also upload your Student ID.
-							</p>
-							{#if isDriver}
-								<p>
-									<strong>Driver profile:</strong> All passenger documents, plus driver's license,
-									car insurance, and vehicle registration.
-								</p>
-							{:else}
-								<p>Add your car information if you also want to register as a driver.</p>
-							{/if}
-						</div>
+						<p class="text-sm text-slate-600 mt-1">Upload the required documents so we can verify your account.</p>
 					</div>
 					<div class="text-sm text-slate-500">
 						Accepted: PDF, PNG, JPG, JPEG, WEBP (max 10MB)
 					</div>
 				</div>
+
+				<!-- Required documents checklist -->
+				<div class="mt-5 space-y-2">
+					<h3 class="text-sm font-semibold text-slate-700 uppercase tracking-wide">Required documents</h3>
+					{#each planRequiredDocTypes as type}
+						{@const docStatus = docStatusByType.get(type) ?? 'missing'}
+						<div class="flex items-center justify-between rounded-lg border px-4 py-3 {docStatus === 'approved' ? 'border-emerald-200 bg-emerald-50' : docStatus === 'rejected' ? 'border-red-200 bg-red-50' : docStatus === 'pending' ? 'border-amber-200 bg-amber-50' : 'border-gray-200 bg-gray-50'}">
+							<div class="flex items-center gap-3">
+								{#if docStatus === 'approved'}
+									<span class="text-emerald-600 text-lg">✓</span>
+								{:else if docStatus === 'rejected'}
+									<span class="text-red-500 text-lg">✗</span>
+								{:else if docStatus === 'pending'}
+									<span class="text-amber-500 text-lg">⏳</span>
+								{:else}
+									<span class="text-gray-400 text-lg">○</span>
+								{/if}
+								<span class="text-sm font-medium text-slate-800">{documentTypeLabel(type)}</span>
+							</div>
+							<span class="text-xs font-semibold px-2 py-1 rounded-full {docStatus === 'approved' ? 'bg-emerald-100 text-emerald-700' : docStatus === 'rejected' ? 'bg-red-100 text-red-700' : docStatus === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}">
+								{docStatus === 'approved' ? 'Validated' : docStatus === 'rejected' ? 'Rejected — re-upload' : docStatus === 'pending' ? 'Uploaded' : 'To upload'}
+							</span>
+						</div>
+					{/each}
+
+					<p class="text-xs text-slate-400 pt-1">Driver's license &amp; vehicle insurance are optional here — they'll be required when you publish a ride.</p>
+
+					{#if !profile.profile_photo_url}
+						<div class="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+							<span class="mt-0.5">⚠️</span>
+							<span><strong>Profile photo required.</strong> Add a profile photo before submitting for review — it's mandatory for verification.</span>
+						</div>
+					{/if}
+				</div>
+
+				<!-- Submit for review -->
+				{#if !profile.is_verified}
+					<div class="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center">
+						{#if isProfileStatusPending}
+							<div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+								⏳ Your documents are under review. We'll notify you once verified. This usually takes 24–48 hours.
+							</div>
+						{:else}
+							<button
+								type="button"
+								on:click={submitForReview}
+								disabled={!allRequiredDocsUploaded || !profile.profile_photo_url || submittingForReview}
+								class="inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50 {allRequiredDocsUploaded && profile.profile_photo_url ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-gray-400'}"
+							>
+								{submittingForReview ? 'Submitting...' : 'Submit for review'}
+							</button>
+							{#if !profile.profile_photo_url}
+								<p class="text-xs text-slate-500">Add a profile photo to enable this button.</p>
+							{:else if !allRequiredDocsUploaded}
+								<p class="text-xs text-slate-500">Upload all required documents above to enable this button.</p>
+							{/if}
+						{/if}
+					</div>
+				{/if}
 
 				{#if !profile.is_verified && missingRequiredDocumentTypes.length > 0}
 					<div class="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">

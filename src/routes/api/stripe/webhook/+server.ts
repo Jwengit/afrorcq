@@ -8,6 +8,7 @@ const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 
 type ProfileMembershipRow = {
 	is_verified: boolean | null;
+	status: string | null;
 };
 
 function getNumberField(input: unknown, key: string): number | null {
@@ -57,11 +58,77 @@ function buildAdminClient() {
 	return createClient(supabaseUrl, env.SUPABASE_SERVICE_ROLE_KEY);
 }
 
-function resolveStatusFromVerification(isVerified: boolean, membershipPaid: boolean): 'free' | 'pending' | 'verified' {
-	if (membershipPaid && isVerified) return 'verified';
-	if (membershipPaid) return 'pending';
-	if (isVerified) return 'pending';
+function resolveStatusFromVerification(isVerified: boolean, profileStatus: string, paid: boolean): 'free' | 'pending' | 'verified' {
+	const isApproved = (profileStatus ?? '').toLowerCase() === 'approved';
+	if (paid && (isVerified || isApproved)) return 'verified';
+	if (paid) return 'pending';
+	if (isVerified || isApproved) return 'pending';
 	return 'free';
+}
+
+async function buildNotificationTicket(
+	adminClient: ReturnType<typeof buildAdminClient>,
+	userId: string,
+	subject: string
+): Promise<string | null> {
+	const { data: existing } = await adminClient
+		.from('support_tickets')
+		.select('id')
+		.eq('user_id', userId)
+		.eq('subject', subject)
+		.order('created_at', { ascending: false })
+		.limit(1)
+		.maybeSingle();
+
+	if (existing?.id) return existing.id;
+
+	const { data: created } = await adminClient
+		.from('support_tickets')
+		.insert({ user_id: userId, subject, status: 'open', priority: 'normal' })
+		.select('id')
+		.single();
+
+	return created?.id ?? null;
+}
+
+async function notifyMemberActivated(adminClient: ReturnType<typeof buildAdminClient>, userId: string, siteUrl: string) {
+	const dashboardUrl = `${siteUrl}/dashboard`;
+	const message =
+		`<div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">` +
+		`<p style="margin: 0 0 10px;"><strong>Welcome to Hizli! Your account is now verified.</strong></p>` +
+		`<p style="margin: 0 0 12px;">You now have full access to the Hizli community.</p>` +
+		`<p style="margin: 0;"><a href="${dashboardUrl}" style="display:inline-block;padding:9px 14px;border-radius:8px;background:#16a34a;color:#ffffff;text-decoration:none;font-weight:600;">Go to my dashboard</a></p>` +
+		`</div>`;
+
+	const ticketId = await buildNotificationTicket(adminClient, userId, 'Welcome — your account is now verified');
+	if (ticketId) {
+		await adminClient.from('support_messages').insert({
+			ticket_id: ticketId,
+			sender_id: null,
+			sender_role: 'admin',
+			message
+		});
+	}
+}
+
+async function notifyMemberExpired(adminClient: ReturnType<typeof buildAdminClient>, userId: string, siteUrl: string) {
+	const renewUrl = `${siteUrl}/pricing`;
+	const message =
+		`<div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">` +
+		`<p style="margin: 0 0 10px;"><strong>Your Hizli membership has expired.</strong></p>` +
+		`<p style="margin: 0 0 12px;">Renew now to keep full access.</p>` +
+		`<p style="margin: 0;"><a href="${renewUrl}" style="display:inline-block;padding:9px 14px;border-radius:8px;background:#d97706;color:#ffffff;text-decoration:none;font-weight:600;">Renew my membership</a></p>` +
+		`</div>`;
+
+	const ticketId = await buildNotificationTicket(adminClient, userId, 'Your Hizli membership has expired');
+	if (ticketId) {
+		await adminClient.from('support_messages').insert({
+			ticket_id: ticketId,
+			sender_id: null,
+			sender_role: 'admin',
+			message
+		});
+	}
 }
 
 async function findProfileByEmail(email: string): Promise<string | null> {
@@ -117,48 +184,63 @@ async function updateMembership(userId: string, paid: boolean, expiresAtIso: str
 	const adminClient = buildAdminClient();
 	const { data: profile, error: profileError } = await adminClient
 		.from('profiles')
-		.select('is_verified')
+		.select('is_verified, status')
 		.eq('id', userId)
 		.maybeSingle();
 
-	if (profileError) {
-		throw new Error(profileError.message);
-	}
+	if (profileError) throw new Error(profileError.message);
 
-	const typedProfile = (profile as ProfileMembershipRow | null) ?? { is_verified: false };
-	const nextStatus = resolveStatusFromVerification(Boolean(typedProfile.is_verified), paid);
+	const typedProfile = (profile as ProfileMembershipRow | null) ?? { is_verified: false, status: null };
+	const wasApproved = (typedProfile.status ?? '').toLowerCase() === 'approved';
+	const isVerifiedNow = Boolean(typedProfile.is_verified) || (paid && wasApproved);
+	const nextStatus = resolveStatusFromVerification(Boolean(typedProfile.is_verified), typedProfile.status ?? '', paid);
+	const siteUrl = (env.PUBLIC_SITE_URL ?? 'http://localhost:5173').replace(/\/$/, '');
 
-	const updatePayload = {
+	const updatePayload: Record<string, unknown> = {
 		membership_paid: paid,
 		membership_expires_at: expiresAtIso,
 		status: nextStatus,
 		updated_at: new Date().toISOString()
 	};
 
-	const { error: updateError } = await adminClient.from('profiles').update(updatePayload).eq('id', userId);
-	if (!updateError) {
-		return;
+	if (paid && wasApproved) {
+		updatePayload.is_verified = true;
 	}
-
-	// Fallback for schemas where `status` is not available yet.
-	if (updateError.message.toLowerCase().includes('status')) {
-		const fallback = await adminClient
-			.from('profiles')
-			.update({
-				membership_paid: paid,
-				membership_expires_at: expiresAtIso,
-				updated_at: new Date().toISOString()
-			})
-			.eq('id', userId);
-
-		if (!fallback.error) {
-			return;
+	if (!paid) {
+		// Keep is_verified=true but revoke active membership.
+		// Set status='approved' so the member can renew directly
+		// via the checkout without re-uploading their documents.
+		updatePayload.is_verified = false;
+		updatePayload.membership_expires_at = null;
+		if (Boolean(typedProfile.is_verified)) {
+			updatePayload.status = 'approved';
 		}
-
-		throw new Error(fallback.error.message);
 	}
 
-	throw new Error(updateError.message);
+	const { error: updateError } = await adminClient.from('profiles').update(updatePayload).eq('id', userId);
+
+	if (updateError) {
+		// Fallback for schemas where `status` column is unavailable
+		if (updateError.message.toLowerCase().includes('status')) {
+			const fallback = await adminClient
+				.from('profiles')
+				.update({ membership_paid: paid, membership_expires_at: expiresAtIso, updated_at: new Date().toISOString() })
+				.eq('id', userId);
+			if (fallback.error) throw new Error(fallback.error.message);
+		} else {
+			throw new Error(updateError.message);
+		}
+	}
+
+	// Notify on first activation (approved → verified)
+	if (paid && wasApproved) {
+		await notifyMemberActivated(adminClient, userId, siteUrl);
+	}
+
+	// Notify on expiration
+	if (!paid && isVerifiedNow) {
+		await notifyMemberExpired(adminClient, userId, siteUrl);
+	}
 }
 
 function timestampToIso(unixSeconds: number | null | undefined): string | null {
@@ -303,14 +385,19 @@ export const POST: RequestHandler = async ({ request }) => {
 			);
 		}
 
-		if (event.type === 'customer.subscription.deleted' || event.type === 'invoice.payment_failed') {
-			const payload = event.data.object as Stripe.Subscription | Stripe.Invoice;
+		if (event.type === 'customer.subscription.deleted') {
+			const payload = event.data.object as Stripe.Subscription;
 			const userId = await resolveUserId(stripe, payload);
 			if (!userId) {
 				return json({ received: true, ignored: 'no-user-id' });
 			}
-
 			await updateMembership(userId, false, null);
+		}
+
+		// invoice.payment_failed: Stripe retries automatically — do NOT revoke access yet.
+		// Access is only revoked when customer.subscription.deleted fires after all retries exhausted.
+		if (event.type === 'invoice.payment_failed') {
+			console.warn('[stripe webhook] invoice.payment_failed — Stripe will retry. No action taken.');
 		}
 
 		return json({ received: true });

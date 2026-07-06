@@ -1,6 +1,6 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
-import { getAnnualMembershipPriceId, getStripeClient } from '$lib/server/stripe';
+import { getStudentPriceId, getStandardPriceId, getStripeClient } from '$lib/server/stripe';
 import { env } from '$env/dynamic/private';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
@@ -36,18 +36,18 @@ export const POST: RequestHandler = async ({ request, url }) => {
 		}
 
 		const body = await request.json().catch(() => ({}));
-		const selectedPlan = body?.plan === 'annual' ? 'annual' : null;
+		const selectedPlan = body?.plan === 'student' ? 'student' : body?.plan === 'standard' ? 'standard' : null;
 		if (!selectedPlan) {
-			return json({ error: 'Invalid plan selection' }, { status: 400 });
+			return json({ error: 'Invalid plan selection. Use "student" or "standard".' }, { status: 400 });
 		}
 
 		const stripe = getStripeClient();
-		const annualPriceId = getAnnualMembershipPriceId();
+		const priceId = selectedPlan === 'student' ? getStudentPriceId() : getStandardPriceId();
 		const appBaseUrl = (env.PUBLIC_SITE_URL || url.origin).replace(/\/$/, '');
 
 		const checkoutSession = await stripe.checkout.sessions.create({
 			mode: 'subscription',
-			line_items: [{ price: annualPriceId, quantity: 1 }],
+			line_items: [{ price: priceId, quantity: 1 }],
 			client_reference_id: user.id,
 			customer_email: user.email ?? undefined,
 			allow_promotion_codes: true,
@@ -55,12 +55,12 @@ export const POST: RequestHandler = async ({ request, url }) => {
 			cancel_url: `${appBaseUrl}/pricing?checkout=cancel`,
 			metadata: {
 				supabase_user_id: user.id,
-				plan: 'annual_membership'
+				plan: selectedPlan
 			},
 			subscription_data: {
 				metadata: {
 					supabase_user_id: user.id,
-					plan: 'annual_membership'
+					plan: selectedPlan
 				}
 			}
 		});

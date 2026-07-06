@@ -6,8 +6,11 @@ const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
 const BUCKET = 'verification-documents';
 const REQUIRED_VERIFICATION_DOCUMENT_TYPES = [
-  'identity_card',
-  'proof_of_address'
+  'identity_card'
+] as const;
+
+const STUDENT_EXTRA_DOCUMENT_TYPES = [
+  'student_id'
 ] as const;
 
 const DRIVER_REQUIRED_DOCUMENT_TYPES = [
@@ -24,19 +27,68 @@ function normalizeLegacyStatus(status: 'approved' | 'rejected'): string {
   return status === 'approved' ? 'Approved' : 'Rejected';
 }
 
-function buildApprovalInboxMessage(): string {
+function buildApprovalInboxMessage(siteUrl: string): string {
+  const paymentUrl = `${siteUrl}/pricing`;
   return (
     `<div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">` +
-    `<p style="margin: 0 0 10px;"><strong>Great news! Your documents have been verified.</strong></p>` +
+    `<p style="margin: 0 0 10px;"><strong>Your documents have been verified!</strong></p>` +
     `<p style="margin: 0 0 12px;">Complete your membership to unlock full access.</p>` +
     `<p style="margin: 0;">` +
-    `<a href="/pricing" style="display:inline-block;padding:9px 14px;border-radius:8px;background:#16a34a;color:#ffffff;text-decoration:none;font-weight:600;">Complete my membership</a>` +
+    `<a href="${paymentUrl}" style="display:inline-block;padding:9px 14px;border-radius:8px;background:#16a34a;color:#ffffff;text-decoration:none;font-weight:600;">Complete my membership</a>` +
     `</p>` +
     `</div>`
   );
 }
 
-async function notifyApprovedMember(adminClient: any, userId: string) {
+function buildRejectionInboxMessage(documentTypeLabel: string, note: string | null, siteUrl: string): string {
+  const uploadUrl = `${siteUrl}/profile#verification-documents`;
+  const noteHtml = note
+    ? `<p style="margin: 0 0 12px; padding: 10px 12px; background: #fef2f2; border-left: 4px solid #ef4444; font-size: 14px;"><strong>Reason:</strong> ${note}</p>`
+    : '';
+  return (
+    `<div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">` +
+    `<p style="margin: 0 0 10px;"><strong>Your document "${documentTypeLabel}" has been rejected.</strong></p>` +
+    noteHtml +
+    `<p style="margin: 0 0 12px;">Please upload a new version of this document to continue the verification process.</p>` +
+    `<p style="margin: 0;">` +
+    `<a href="${uploadUrl}" style="display:inline-block;padding:9px 14px;border-radius:8px;background:#dc2626;color:#ffffff;text-decoration:none;font-weight:600;">Re-upload document</a>` +
+    `</p>` +
+    `</div>`
+  );
+}
+
+async function notifyRejectedDocument(adminClient: any, userId: string, documentType: string, note: string | null, siteUrl: string) {
+  const subject = 'Action required — document rejected';
+
+  const { data: existingTicket } = await adminClient
+    .from('support_tickets')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('subject', subject)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  let ticketId = existingTicket?.id ?? null;
+  if (!ticketId) {
+    const { data: createdTicket } = await adminClient
+      .from('support_tickets')
+      .insert({ user_id: userId, subject, status: 'open', priority: 'high' })
+      .select('id')
+      .single();
+    ticketId = createdTicket?.id ?? null;
+  }
+
+  if (ticketId) {
+    const label = documentType.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    await adminClient.from('support_messages').insert({
+      ticket_id: ticketId,
+      sender_id: null,
+      sender_role: 'admin',
+      message: buildRejectionInboxMessage(label, note, siteUrl)
+    });
+  }
+}
   const subject = 'Documents verified - complete your membership';
 
   const { data: existingTicket } = await adminClient
@@ -68,19 +120,9 @@ async function notifyApprovedMember(adminClient: any, userId: string) {
       ticket_id: ticketId,
       sender_id: null,
       sender_role: 'admin',
-      message: buildApprovalInboxMessage()
+      message: buildApprovalInboxMessage(siteUrl)
     });
   }
-
-  const { data: userData } = await adminClient.auth.admin.getUserById(userId);
-  const metadata = (userData?.user?.user_metadata ?? {}) as Record<string, unknown>;
-  await adminClient.auth.admin.updateUserById(userId, {
-    user_metadata: {
-      ...metadata,
-      verification_approved_email_sent_at: new Date().toISOString(),
-      verification_approved_payment_url: '/pricing'
-    }
-  });
 }
 
 function normalizeDocumentType(value: string | null | undefined): string {
@@ -135,15 +177,22 @@ type VerificationDocumentStatusRow = {
 
 async function shouldMarkProfileVerified(adminClient: any, userId: string): Promise<boolean> {
   try {
-    // Fetch approved document types for this user
+    const { data: profile } = await adminClient
+      .from('profiles')
+      .select('plate_number, car_make, profile_photo_url, membership_plan')
+      .eq('id', userId)
+      .maybeSingle();
+
+    const profilePhotoUrl =
+      typeof profile?.profile_photo_url === 'string' ? profile.profile_photo_url.trim() : '';
+    if (!profilePhotoUrl) return false;
+
     const { data, error } = await adminClient
       .from('verification_documents')
       .select('document_type, status')
       .eq('user_id', userId);
 
-    if (error) {
-      return false;
-    }
+    if (error) return false;
 
     const rows = (data ?? []) as Array<{ document_type?: string | null; status?: string | null }>;
     const approvedTypes = new Set(
@@ -153,25 +202,15 @@ async function shouldMarkProfileVerified(adminClient: any, userId: string): Prom
         .filter(Boolean)
     );
 
-    // All users need base documents
-    const hasBase = REQUIRED_VERIFICATION_DOCUMENT_TYPES.every((t) => approvedTypes.has(t));
-    if (!hasBase) return false;
+    // Everyone needs identity_card
+    if (!approvedTypes.has('identity_card')) return false;
 
-    // Check if user is a driver (has plate_number or car_make)
-    const { data: profile } = await adminClient
-      .from('profiles')
-      .select('plate_number, car_make, profile_photo_url')
-      .eq('id', userId)
-      .maybeSingle();
+    // Student plan also needs student_id
+    const isStudent = (profile?.membership_plan ?? '').toLowerCase() === 'student';
+    if (isStudent && !approvedTypes.has('student_id')) return false;
 
-    const profilePhotoUrl =
-      typeof profile?.profile_photo_url === 'string' ? profile.profile_photo_url.trim() : '';
-    if (!profilePhotoUrl) {
-      return false;
-    }
-
+    // Drivers also need driver docs
     const isDriver = Boolean(profile?.plate_number || profile?.car_make);
-
     if (isDriver) {
       return DRIVER_REQUIRED_DOCUMENT_TYPES.every((t) => approvedTypes.has(t));
     }
@@ -436,25 +475,30 @@ export const PATCH: RequestHandler = async ({ request }) => {
     }
 
     if (status === 'approved') {
-      await adminClient
-        .from('profiles')
-        .update({
-          is_verified: false,
-          status: 'pending',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', existingDoc.user_id);
+      const allApproved = await shouldMarkProfileVerified(adminClient, existingDoc.user_id);
 
-      await notifyApprovedMember(adminClient, existingDoc.user_id);
+      if (allApproved) {
+        await adminClient
+          .from('profiles')
+          .update({
+            is_verified: false,
+            status: 'approved',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingDoc.user_id);
+
+        const { data: userData } = await adminClient.auth.admin.getUserById(existingDoc.user_id);
+        const userEmail = userData?.user?.email ?? '';
+        void userEmail; // reserved for future email integration
+        const siteUrl = (env.PUBLIC_SITE_URL ?? 'http://localhost:5173').replace(/\/$/, '');
+
+        await notifyApprovedMember(adminClient, existingDoc.user_id, siteUrl);
+      }
     } else {
-      await adminClient
-        .from('profiles')
-        .update({
-          is_verified: false,
-          status: 'free',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', existingDoc.user_id);
+      // Doc rejected: keep profile in 'pending' so the member can re-upload without re-choosing a plan
+      const siteUrl = (env.PUBLIC_SITE_URL ?? 'http://localhost:5173').replace(/\/$/, '');
+      const rejectedDocType = resolveRowDocumentType(existingDoc);
+      await notifyRejectedDocument(adminClient, existingDoc.user_id, rejectedDocType, note, siteUrl);
     }
 
     return json({ success: true });

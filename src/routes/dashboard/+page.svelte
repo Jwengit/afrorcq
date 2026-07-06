@@ -644,8 +644,12 @@
 		membershipExpiresAt = profile?.membership_expires_at ?? null;
 	}
 
-	function goToVerificationDocuments() {
-		goto(`${resolve('/profile')}#verification-documents`);
+	function goToBecomeAMember() {
+		if (memberStatus === 'pending') {
+			goto(`${resolve('/profile')}#verification-documents`);
+		} else {
+			goto(resolve('/pricing'));
+		}
 	}
 
 	function openArchive() {
@@ -1275,13 +1279,22 @@
 			{#if memberStatus === 'free'}
 				<section class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
 					<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-						<p class="text-sm text-amber-900">You're on the free plan. Upload your documents to start the verification process.</p>
-						<a href="/profile#verification-documents" class="inline-flex items-center rounded-md bg-amber-600 px-3 py-2 text-sm font-medium text-white hover:bg-amber-700">Upload documents</a>
+						<p class="text-sm text-amber-900">You're on the free plan. Choose a membership plan to start the verification process.</p>
+						<a href="/pricing" class="inline-flex items-center rounded-md bg-amber-600 px-3 py-2 text-sm font-medium text-white hover:bg-amber-700">Choose a plan</a>
 					</div>
 				</section>
 			{:else if memberStatus === 'pending'}
-				<section class="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3">
-					<p class="text-sm text-sky-900">Your documents are under review. We'll notify you once your account is verified.</p>
+				<section class="rounded-xl border border-emerald-300 bg-emerald-50 px-5 py-4 shadow-sm">
+					<div class="flex items-start gap-3">
+						<span class="mt-0.5 text-2xl">✅</span>
+						<div>
+							<p class="font-semibold text-emerald-900">Your documents are under review.</p>
+							<p class="mt-1 text-sm text-emerald-800">
+								We'll notify you once your account is verified. This usually takes 24–48 hours.
+								In the meantime, you can continue using your free account.
+							</p>
+						</div>
+					</div>
 				</section>
 			{/if}
 
@@ -1404,10 +1417,19 @@
 						>
 							Already verified
 						</button>
+					{:else if memberStatus === 'pending'}
+						<button
+							type="button"
+							on:click={goToBecomeAMember}
+							class="inline-flex items-center justify-center px-4 py-2 rounded-lg font-semibold text-white hover:opacity-90 transition cursor-pointer"
+							style="background-color: #F59E0B;"
+						>
+							View my documents
+						</button>
 					{:else}
 						<button
 							type="button"
-							on:click={goToVerificationDocuments}
+							on:click={goToBecomeAMember}
 							class="inline-flex items-center justify-center px-4 py-2 rounded-lg font-semibold text-white hover:opacity-90 transition cursor-pointer"
 							style="background-color: #00B050;"
 						>
