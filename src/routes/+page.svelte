@@ -359,7 +359,6 @@
 								<span>You don't know who's in that car</span>
 							</li>
 						</ul>
-						<p class="mt-4 text-sm italic text-gray-500">Travel at your own risk.</p>
 					</div>
 					<a
 						href="/auth/signup"
@@ -412,7 +411,7 @@
 								<span>Verified badge on your profile</span>
 							</li>
 						</ul>
-						<p class="mt-4 text-sm italic text-gray-500">Less than $2.10/month. Built for students on a budget.</p>
+						<p class="mt-4 text-sm italic text-gray-500">Less than $2.10/month</p>
 					</div>
 					<button
 						type="button"
@@ -438,7 +437,7 @@
 								<span>For non-student members</span>
 							</li>
 						</ul>
-						<p class="mt-4 text-sm italic text-gray-500">Less than $3/month. Same safety, no student ID required.</p>
+						<p class="mt-4 text-sm italic text-gray-500">Less than $3/month</p>
 					</div>
 					<button
 						type="button"

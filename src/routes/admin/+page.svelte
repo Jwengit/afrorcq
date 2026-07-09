@@ -447,9 +447,6 @@
 	let settingsError = '';
 	let settingsMessage = '';
 	let settingsSaving = false;
-	let commissionPercent = 10;
-	let maxSeatsLimit = 6;
-	let maxPriceLimit = 200;
 	let footerBrandDescription = 'A carpooling platform that connects people.';
 	let footerAboutUsLabel = 'About Us';
 	let footerAboutUsUrl = '/about';
@@ -493,7 +490,9 @@
 		reservationsInProgress: 0,
 		revenue: {
 			hasPaymentIntegration: false,
-			estimatedRevenue: 0
+			estimatedRevenue: 0,
+			monthlyRecurringRevenue: 0,
+			activeMembers: 0
 		},
 		alerts: {
 			total: 0,
@@ -1107,6 +1106,9 @@
 		}
 		if (tab === 'reports') {
 			void loadReports();
+		}
+		if (tab === 'transactions') {
+			void loadTransactions();
 		}
 	}
 
@@ -3083,9 +3085,6 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 
 		const s = payload?.settings;
 		if (s) {
-			commissionPercent = Number(s.commission_percent ?? 10);
-			maxSeatsLimit = Number(s.max_seats ?? 6);
-			maxPriceLimit = Number(s.max_price ?? 200);
 			footerBrandDescription = String(s.footer_brand_description ?? 'A carpooling platform that connects people.');
 			footerAboutUsLabel = String(s.footer_about_us_label ?? 'About Us');
 			footerAboutUsUrl = String(s.footer_about_us_url ?? '/about');
@@ -3159,9 +3158,6 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 				Authorization: `Bearer ${session.access_token}`
 			},
 			body: JSON.stringify({
-				commission_percent: commissionPercent,
-				max_seats: maxSeatsLimit,
-				max_price: maxPriceLimit,
 				footer_brand_description: footerBrandDescription,
 				footer_about_us_label: footerAboutUsLabel,
 				footer_about_us_url: footerAboutUsUrl,
@@ -3408,6 +3404,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 						{ id: 'rides', label: 'Rides' },
 						{ id: 'bookings', label: 'Bookings' },
 						{ id: 'reviews', label: 'Reviews' },
+						{ id: 'transactions', label: 'Transactions' },
 						{ id: 'settings', label: 'Settings' },
 						{ id: 'reports', label: 'Reports' },
 						{ id: 'support', label: 'Support' }
@@ -3475,7 +3472,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 								</div>
 							</div>
 
-							<!-- Bookings + Revenue -->
+							<!-- Bookings + Membership Revenue -->
 							<div class="grid md:grid-cols-2 gap-4 items-stretch">
 								<div class="rounded-xl border border-sky-200 bg-sky-50 p-5 h-full flex flex-col justify-between shadow-sm">
 									<div class="flex items-center justify-between mb-2">
@@ -3486,19 +3483,25 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 								</div>
 								<div class="rounded-xl border border-emerald-200 bg-emerald-50 p-5 h-full flex flex-col justify-between shadow-sm">
 									<div class="flex items-center justify-between mb-2">
-										<p class="text-sm font-semibold text-emerald-800">Estimated revenue</p>
+										<p class="text-sm font-semibold text-emerald-800">Membership revenue</p>
 										{#if stats.revenue.hasPaymentIntegration}
-											<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-200 text-emerald-700">Integrated</span>
+											<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-200 text-emerald-700">Live</span>
 										{:else}
-											<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">Estimate</span>
+											<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">Offline</span>
 										{/if}
 									</div>
-									<p class="text-2xl font-bold text-emerald-700">
-										{stats.revenue.estimatedRevenue.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
-									</p>
-									{#if !stats.revenue.hasPaymentIntegration}
-										<p class="text-xs text-emerald-700 mt-1">Calculated from confirmed bookings (price x seats). Payments not integrated.</p>
-									{/if}
+									<div class="space-y-3">
+										<div>
+											<p class="text-xs text-emerald-700 mb-1">Monthly recurring revenue</p>
+											<p class="text-2xl font-bold text-emerald-700">
+												{stats.revenue.monthlyRecurringRevenue.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+											</p>
+										</div>
+										<div>
+											<p class="text-xs text-emerald-700 mb-1">Active members</p>
+											<p class="text-lg font-bold text-emerald-600">{stats.revenue.activeMembers}</p>
+										</div>
+									</div>
 								</div>
 							</div>
 
@@ -4583,43 +4586,6 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 								<div class="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-500">Loading settings...</div>
 							{:else}
 								<div class="grid grid-cols-1 xl:grid-cols-3 gap-5">
-									<div class="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
-										<h4 class="text-sm font-semibold text-gray-900">Ride limits</h4>
-										<div>
-											<p class="text-xs font-medium text-gray-600 mb-1">Commission (%)</p>
-											<input
-												id="commission-percent"
-												type="number"
-												min="0"
-												max="100"
-												step="0.1"
-												bind:value={commissionPercent}
-												class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-											/>
-										</div>
-										<div>
-											<p class="text-xs font-medium text-gray-600 mb-1">Maximum seats per ride</p>
-											<input
-												id="max-seats-limit"
-												type="number"
-												min="1"
-												bind:value={maxSeatsLimit}
-												class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-											/>
-										</div>
-										<div>
-											<p class="text-xs font-medium text-gray-600 mb-1">Maximum ride price (USD)</p>
-											<input
-												id="max-price-limit"
-												type="number"
-												min="1"
-												step="0.01"
-												bind:value={maxPriceLimit}
-												class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-											/>
-										</div>
-									</div>
-
 									<div class="rounded-xl border border-gray-200 bg-white p-5 space-y-4 xl:col-span-2">
 										<div class="flex items-start justify-between gap-4">
 											<div>

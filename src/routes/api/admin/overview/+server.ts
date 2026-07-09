@@ -245,6 +245,27 @@ export const GET: RequestHandler = async ({ request, url }) => {
 			return sum + seats * price;
 		}, 0);
 
+		// Calculate monthly recurring revenue (MRR) from Stripe subscription payments
+		const { data: stripeTransactions, error: txError } = await adminClient
+			.from('transactions')
+			.select('amount, user_id')
+			.eq('provider', 'stripe')
+			.eq('status', 'succeeded')
+			.gte('created_at', dateRange.start)
+			.lte('created_at', dateRange.end);
+
+		if (txError) {
+			return json({ error: txError.message }, { status: 500 });
+		}
+
+		const monthlyRecurringRevenue = (stripeTransactions ?? []).reduce((sum, tx) => {
+			return sum + Number(tx.amount ?? 0);
+		}, 0);
+
+		// Count unique active members (users with successful Stripe payments in the period)
+		const uniqueMemberIds = new Set((stripeTransactions ?? []).map((tx) => tx.user_id).filter(Boolean));
+		const activeMembers = uniqueMemberIds.size;
+
 		let reportsCount = 0;
 		const { count: pendingReportsCount, error: reportsError } = await adminClient
 			.from('reports')
@@ -275,7 +296,9 @@ export const GET: RequestHandler = async ({ request, url }) => {
 				reservationsInProgress,
 				revenue: {
 					hasPaymentIntegration: false,
-					estimatedRevenue
+					estimatedRevenue,
+					monthlyRecurringRevenue,
+					activeMembers
 				},
 				alerts: {
 					total: alertsCount,
