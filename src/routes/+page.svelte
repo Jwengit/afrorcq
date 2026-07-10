@@ -463,10 +463,7 @@
 			<div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
 				<div class="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
 					<div class="w-20 h-20 rounded-full flex items-center justify-center mb-6 mx-auto" style="background-color: rgba(0, 176, 80, 0.10);">
-						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#00B050" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-9 w-9" aria-hidden="true">
-							<circle cx="12" cy="8" r="3.5" />
-							<path d="M6 20a6 6 0 0 1 12 0" />
-						</svg>
+						<img src="/sign%20up.svg" alt="Sign up icon" class="h-9 w-9 object-contain" />
 					</div>
 					<h3 class="text-xl font-semibold mb-2 text-gray-900">Sign up for free</h3>
 					<p class="text-gray-600">Create your account in seconds and start browsing rides right away.</p>
@@ -474,14 +471,7 @@
 
 				<div class="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
 					<div class="w-20 h-20 rounded-full flex items-center justify-center mb-6 mx-auto" style="background-color: rgba(0, 176, 80, 0.10);">
-						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#00B050" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-9 w-9" aria-hidden="true">
-							<path d="M5 14h14" />
-							<path d="M6.5 14.5 7.8 11a2 2 0 0 1 1.9-1.3h4.6a2 2 0 0 1 1.9 1.3l1.3 3.5" />
-							<path d="M7.5 14.5v3" />
-							<path d="M16.5 14.5v3" />
-							<circle cx="8" cy="18" r="1" />
-							<circle cx="16" cy="18" r="1" />
-						</svg>
+						<img src="/Car.svg" alt="Car icon" class="h-9 w-9 object-contain" />
 					</div>
 					<h3 class="text-xl font-semibold mb-2 text-gray-900">Book or post a ride</h3>
 					<p class="text-gray-600">Find a ride that fits your schedule or share your journey with others.</p>
@@ -489,13 +479,7 @@
 
 				<div class="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
 					<div class="w-20 h-20 rounded-full flex items-center justify-center mb-6 mx-auto" style="background-color: rgba(0, 176, 80, 0.10);">
-						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#00B050" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-9 w-9" aria-hidden="true">
-							<path d="M5 19h14" />
-							<path d="M8 19c0-4 1.8-7 4-9 2.2 2 4 5 4 9" />
-							<path d="M12 10V4" />
-							<path d="M10 6h4" />
-							<path d="M9 15h6" />
-						</svg>
+						<img src="/Road.svg" alt="Road icon" class="h-9 w-9 object-contain" />
 					</div>
 					<h3 class="text-xl font-semibold mb-2 text-gray-900">Meet &amp; travel</h3>
 					<p class="text-gray-600">Meet your travel companion at the pickup point and pay directly — simple and hassle-free.</p>

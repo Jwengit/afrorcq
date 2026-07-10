@@ -35,7 +35,7 @@
 			</div>
 
 			<div class="lg:justify-self-end">
-				<div class="relative overflow-hidden rounded-[2rem] border border-white/20 bg-white/12 p-6 sm:p-8 shadow-[0_28px_80px_rgba(0,0,0,0.22)] backdrop-blur-md">
+				<div class="relative overflow-hidden rounded-4xl border border-white/20 bg-white/12 p-6 sm:p-8 shadow-[0_28px_80px_rgba(0,0,0,0.22)] backdrop-blur-md">
 					<div class="absolute -top-8 -right-8 h-36 w-36 rounded-full bg-white/10 blur-3xl"></div>
 					<p class="text-sm font-semibold uppercase tracking-[0.24em] text-white/80">Safety is the difference</p>
 					<div class="mt-6 grid gap-4">
@@ -110,12 +110,7 @@
 					<div class="absolute -top-6 -right-6 h-24 w-24 rounded-full bg-[#00B050]/10 blur-2xl"></div>
 					<div class="absolute -bottom-8 -left-8 h-28 w-28 rounded-full bg-[#00B050]/10 blur-2xl"></div>
 					<div class="relative flex items-center justify-center rounded-3xl border border-gray-100 bg-linear-to-br from-green-50 to-white p-8">
-						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#00B050" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-40 w-40 sm:h-48 sm:w-48" aria-hidden="true">
-							<path d="M12 22s7-3.8 7-10V6l-7-3-7 3v6c0 6.2 7 10 7 10Z" />
-							<path d="M9 12.5h6" />
-							<path d="M12 9.5v6" />
-							<circle cx="12" cy="10.5" r="2.2" />
-						</svg>
+						<img src="/Girls%20Only.svg" alt="Girls only icon" class="h-40 w-40 object-contain sm:h-48 sm:w-48" />
 					</div>
 				</div>
 			</div>
@@ -164,15 +159,7 @@
 					<div class="absolute -top-6 -right-6 h-24 w-24 rounded-full bg-[#00B050]/10 blur-2xl"></div>
 					<div class="absolute -bottom-8 -left-8 h-28 w-28 rounded-full bg-[#00B050]/10 blur-2xl"></div>
 					<div class="relative flex items-center justify-center rounded-3xl border border-gray-100 bg-linear-to-br from-green-50 to-white p-8">
-						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#00B050" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-40 w-40 sm:h-48 sm:w-48" aria-hidden="true">
-							<path d="M8 3h6l4 4v14H8z" />
-							<path d="M14 3v5h5" />
-							<path d="M10 12h4" />
-							<path d="M10 15h4" />
-							<path d="M10 9h1.5" />
-							<path d="M6.5 19.5a2.5 2.5 0 0 1 0-5h1.2" />
-							<path d="M7.7 14.5l1.2 1.2-1.2 1.2" />
-						</svg>
+						<img src="/Legality.svg" alt="Legality icon" class="h-40 w-40 object-contain sm:h-48 sm:w-48" />
 					</div>
 				</div>
 			</div>
@@ -195,12 +182,7 @@
 					<div class="absolute -top-6 -left-6 h-24 w-24 rounded-full bg-[#00B050]/10 blur-2xl"></div>
 					<div class="absolute -bottom-8 -right-8 h-28 w-28 rounded-full bg-[#00B050]/10 blur-2xl"></div>
 					<div class="relative flex items-center justify-center rounded-3xl border border-gray-100 bg-linear-to-br from-white to-green-50 p-8">
-						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#00B050" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-40 w-40 sm:h-48 sm:w-48" aria-hidden="true">
-							<path d="M4 5h16v10H9l-5 4V5Z" />
-							<path d="M12 8.2l.8 1.6 1.8.3-1.3 1.2.3 1.8-1.6-.8-1.6.8.3-1.8-1.3-1.2 1.8-.3.8-1.6Z" />
-							<path d="M8 9h1.2" />
-							<path d="M14.8 9H16" />
-						</svg>
+						<img src="/Personality.svg" alt="Personality icon" class="h-40 w-40 object-contain sm:h-48 sm:w-48" />
 					</div>
 				</div>
 			</div>
@@ -249,14 +231,7 @@
 					<div class="absolute -top-6 -left-6 h-24 w-24 rounded-full bg-[#00B050]/10 blur-2xl"></div>
 					<div class="absolute -bottom-8 -right-8 h-28 w-28 rounded-full bg-[#00B050]/10 blur-2xl"></div>
 					<div class="relative flex items-center justify-center rounded-3xl border border-gray-100 bg-linear-to-br from-white to-green-50 p-8">
-						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#00B050" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-40 w-40 sm:h-48 sm:w-48" aria-hidden="true">
-							<path d="M12 21a9 9 0 1 0-9-9" />
-							<path d="M3.5 12h4" />
-							<path d="M16.5 12H20" />
-							<path d="M12 3.5v4" />
-							<path d="M12 16.5v4" />
-							<circle cx="12" cy="12" r="2" />
-						</svg>
+						<img src="/Support.svg" alt="Support icon" class="h-40 w-40 object-contain sm:h-48 sm:w-48" />
 					</div>
 				</div>
 			</div>
@@ -331,12 +306,7 @@
 					<div class="absolute -top-6 -right-6 h-24 w-24 rounded-full bg-[#00B050]/10 blur-2xl"></div>
 					<div class="absolute -bottom-8 -left-8 h-28 w-28 rounded-full bg-[#00B050]/10 blur-2xl"></div>
 					<div class="relative flex items-center justify-center rounded-3xl border border-gray-100 bg-linear-to-br from-green-50 to-white p-8">
-						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#00B050" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-40 w-40 sm:h-48 sm:w-48" aria-hidden="true">
-							<path d="M12 3v18" />
-							<path d="M16 7.5c0-1.9-1.8-3.5-4-3.5s-4 1.3-4 3.2S9.4 10 12 10s4 1.3 4 3.3S14 17 12 17s-4-1.5-4-3.4" />
-							<path d="M8.5 7.5h7" />
-							<path d="M8.5 16.5h7" />
-						</svg>
+						<img src="/Dollar.svg" alt="Price icon" class="h-40 w-40 object-contain sm:h-48 sm:w-48" />
 					</div>
 				</div>
 			</div>
