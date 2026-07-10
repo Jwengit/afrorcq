@@ -270,9 +270,9 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		if (!adminAllowed) return json({ error: 'Forbidden' }, { status: 403 });
 
 		const body = await request.json();
-		const commission = Number(body?.commission_percent);
-		const maxSeats = Number(body?.max_seats);
-		const maxPrice = Number(body?.max_price);
+		const commission = Number(body?.commission_percent ?? 10);
+		const maxSeats = Number(body?.max_seats ?? 6);
+		const maxPrice = Number(body?.max_price ?? 200);
 		const footerSettings = normalizeFooterSettings((body ?? {}) as Record<string, unknown>);
 
 		if (
