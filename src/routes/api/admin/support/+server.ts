@@ -1,6 +1,7 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
+import { buildActivityCenterEmail, sendMemberEmail } from '$lib/server/memberEmail';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -157,6 +158,14 @@ export const POST: RequestHandler = async ({ request }) => {
 		const adminClient = result.client;
 		await purgeExpiredSupportConversations(adminClient);
 
+		const { data: ticketData, error: ticketLoadError } = await adminClient
+			.from('support_tickets')
+			.select('id, user_id, subject')
+			.eq('id', ticketId)
+			.maybeSingle();
+		if (ticketLoadError) return json({ error: ticketLoadError.message }, { status: 500 });
+		if (!ticketData?.user_id) return json({ error: 'Ticket not found' }, { status: 404 });
+
 		const { error: insertError } = await adminClient.from('support_messages').insert({
 			ticket_id: ticketId,
 			sender_id: adminCheck.userId,
@@ -170,6 +179,32 @@ export const POST: RequestHandler = async ({ request }) => {
 			.update({ status: 'in_progress', updated_at: new Date().toISOString() })
 			.eq('id', ticketId);
 		if (updateError) return json({ error: updateError.message }, { status: 500 });
+
+		const { data: profile } = await adminClient
+			.from('profiles')
+			.select('first_name, email')
+			.eq('id', ticketData.user_id)
+			.maybeSingle();
+
+		const memberEmail = (profile?.email ?? '').trim();
+		if (memberEmail) {
+			const siteUrl = (env.PUBLIC_SITE_URL ?? 'http://localhost:5173').replace(/\/$/, '');
+			const dashboardUrl = `${siteUrl}/dashboard`;
+			const emailContent = buildActivityCenterEmail({
+				email: memberEmail,
+				firstName: profile?.first_name,
+				subject: `New admin reply: ${String(ticketData.subject ?? 'Support update')}`,
+				messagePreview: message.length > 180 ? `${message.slice(0, 177)}...` : message,
+				dashboardUrl
+			});
+
+			await sendMemberEmail({
+				to: memberEmail,
+				subject: 'You have a new message from Hizli support',
+				html: emailContent.html,
+				text: emailContent.text
+			});
+		}
 
 		return json({ success: true });
 	} catch (error) {

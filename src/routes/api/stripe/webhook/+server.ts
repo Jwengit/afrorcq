@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
 import { env } from '$env/dynamic/private';
 import { getStripeClient, getStripeWebhookSecret } from '$lib/server/stripe';
+import { buildActivityCenterEmail, sendMemberEmail } from '$lib/server/memberEmail';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 
@@ -109,6 +110,28 @@ async function notifyMemberActivated(adminClient: ReturnType<typeof buildAdminCl
 			message
 		});
 	}
+
+	const { data: profile } = await adminClient
+		.from('profiles')
+		.select('first_name, email')
+		.eq('id', userId)
+		.maybeSingle();
+	const memberEmail = (profile?.email ?? '').trim();
+	if (memberEmail) {
+		const emailContent = buildActivityCenterEmail({
+			email: memberEmail,
+			firstName: profile?.first_name,
+			subject: 'Your account is now verified',
+			messagePreview: 'Your membership is active and your account is now fully verified.',
+			dashboardUrl
+		});
+		await sendMemberEmail({
+			to: memberEmail,
+			subject: 'Your Hizli account is now verified',
+			html: emailContent.html,
+			text: emailContent.text
+		});
+	}
 }
 
 async function notifyMemberExpired(adminClient: ReturnType<typeof buildAdminClient>, userId: string, siteUrl: string) {
@@ -127,6 +150,29 @@ async function notifyMemberExpired(adminClient: ReturnType<typeof buildAdminClie
 			sender_id: null,
 			sender_role: 'admin',
 			message
+		});
+	}
+
+	const { data: profile } = await adminClient
+		.from('profiles')
+		.select('first_name, email')
+		.eq('id', userId)
+		.maybeSingle();
+	const memberEmail = (profile?.email ?? '').trim();
+	if (memberEmail) {
+		const dashboardUrl = `${siteUrl}/dashboard`;
+		const emailContent = buildActivityCenterEmail({
+			email: memberEmail,
+			firstName: profile?.first_name,
+			subject: 'Your membership has expired',
+			messagePreview: 'Renew your membership to keep full access to verified features.',
+			dashboardUrl
+		});
+		await sendMemberEmail({
+			to: memberEmail,
+			subject: 'Your Hizli membership has expired',
+			html: emailContent.html,
+			text: emailContent.text
 		});
 	}
 }

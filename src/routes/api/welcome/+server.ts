@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import { createClient } from '@supabase/supabase-js';
+import { buildActivityCenterEmail, sendMemberEmail } from '$lib/server/memberEmail';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const WELCOME_TICKET_SUBJECT = 'Welcome to Hizli Carpooling';
@@ -112,6 +113,24 @@ export async function POST({ request }) {
 					sender_role: 'admin',
 					message: welcomeInboxMessage
 				});
+
+				const siteUrl = (env.PUBLIC_SITE_URL ?? 'http://localhost:5173').replace(/\/$/, '');
+				const dashboardUrl = `${siteUrl}/dashboard`;
+				if (user.email) {
+					const emailContent = buildActivityCenterEmail({
+						email: user.email,
+						firstName: firstName || null,
+						subject: 'Welcome to Hizli Carpooling',
+						messagePreview: 'Your account is ready. Complete your profile to get started.',
+						dashboardUrl
+					});
+					await sendMemberEmail({
+						to: user.email,
+						subject: 'Welcome to Hizli Carpooling',
+						html: emailContent.html,
+						text: emailContent.text
+					});
+				}
 			}
 		}
 

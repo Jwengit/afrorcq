@@ -1,6 +1,7 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
+import { buildActivityCenterEmail, sendMemberEmail } from '$lib/server/memberEmail';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -88,6 +89,29 @@ async function notifyRejectedDocument(adminClient: any, userId: string, document
       sender_role: 'admin',
       message: buildRejectionInboxMessage(label, note, siteUrl)
     });
+
+    const { data: profile } = await adminClient
+      .from('profiles')
+      .select('first_name, email')
+      .eq('id', userId)
+      .maybeSingle();
+    const memberEmail = (profile?.email ?? '').trim();
+    if (memberEmail) {
+      const dashboardUrl = `${siteUrl}/dashboard`;
+      const emailContent = buildActivityCenterEmail({
+        email: memberEmail,
+        firstName: profile?.first_name,
+        subject: `Document rejected: ${label}`,
+        messagePreview: note ? `Reason: ${note}` : 'Please review and upload a new version of your document.',
+        dashboardUrl
+      });
+      await sendMemberEmail({
+        to: memberEmail,
+        subject: 'Action required: a verification document was rejected',
+        html: emailContent.html,
+        text: emailContent.text
+      });
+    }
   }
 }
 
@@ -125,6 +149,29 @@ async function notifyApprovedMember(adminClient: any, userId: string, siteUrl: s
       sender_role: 'admin',
       message: buildApprovalInboxMessage(siteUrl)
     });
+
+    const { data: profile } = await adminClient
+      .from('profiles')
+      .select('first_name, email')
+      .eq('id', userId)
+      .maybeSingle();
+    const memberEmail = (profile?.email ?? '').trim();
+    if (memberEmail) {
+      const dashboardUrl = `${siteUrl}/dashboard`;
+      const emailContent = buildActivityCenterEmail({
+        email: memberEmail,
+        firstName: profile?.first_name,
+        subject: 'Documents verified',
+        messagePreview: 'Your documents are approved. Complete membership to unlock full access.',
+        dashboardUrl
+      });
+      await sendMemberEmail({
+        to: memberEmail,
+        subject: 'Your documents are verified',
+        html: emailContent.html,
+        text: emailContent.text
+      });
+    }
   }
 }
 
@@ -167,7 +214,11 @@ type AdminDocumentRow = {
   updated_at: string;
 };
 
-function resolveRowDocumentType(row: AdminDocumentRow): string {
+function resolveRowDocumentType(row: {
+  document_type?: string | null;
+  doc_type?: string | null;
+  type?: string | null;
+}): string {
   return row.document_type ?? row.doc_type ?? row.type ?? 'other';
 }
 
