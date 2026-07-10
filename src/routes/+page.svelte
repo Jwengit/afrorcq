@@ -457,36 +457,55 @@
 		<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 			<div class="text-center mb-16">
 				<h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">How it works</h2>
-				<p class="text-xl text-gray-600">Find your perfect ride in just a few clicks.</p>
+				<p class="text-xl text-gray-600">A simple three-step flow to get you moving faster.</p>
 			</div>
 
-			<div class="grid md:grid-cols-3 gap-8 text-center">
-				<!-- Step 1: Search -->
-				<div class="p-6">
-					<div class="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mb-6 mx-auto">
-						<img src="/search-ride.svg" alt="Search for a ride" class="h-9 w-9" />
+			<div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
+				<div class="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+					<div class="w-20 h-20 rounded-full flex items-center justify-center mb-6 mx-auto" style="background-color: rgba(0, 176, 80, 0.10);">
+						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#00B050" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-9 w-9" aria-hidden="true">
+							<circle cx="12" cy="8" r="3.5" />
+							<path d="M6 20a6 6 0 0 1 12 0" />
+						</svg>
 					</div>
-					<h3 class="text-xl font-semibold mb-2">1. Search for a ride</h3>
-					<p class="text-gray-600">Enter your departure and destination, and your travel date to find rides that match your needs.</p>
+					<h3 class="text-xl font-semibold mb-2 text-gray-900">Sign up for free</h3>
+					<p class="text-gray-600">Create your account in seconds and start browsing rides right away.</p>
 				</div>
 
-				<!-- Step 2: Book -->
-				<div class="p-6">
-					<div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-6 mx-auto">
-						<img src="/book-seat.svg" alt="Book your seat" class="h-9 w-9" />
+				<div class="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+					<div class="w-20 h-20 rounded-full flex items-center justify-center mb-6 mx-auto" style="background-color: rgba(0, 176, 80, 0.10);">
+						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#00B050" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-9 w-9" aria-hidden="true">
+							<path d="M5 14h14" />
+							<path d="M6.5 14.5 7.8 11a2 2 0 0 1 1.9-1.3h4.6a2 2 0 0 1 1.9 1.3l1.3 3.5" />
+							<path d="M7.5 14.5v3" />
+							<path d="M16.5 14.5v3" />
+							<circle cx="8" cy="18" r="1" />
+							<circle cx="16" cy="18" r="1" />
+						</svg>
 					</div>
-					<h3 class="text-xl font-semibold mb-2">2. Book your seat</h3>
-					<p class="text-gray-600">Choose the ride that suits you best and book your seat online. It's fast and secure.</p>
+					<h3 class="text-xl font-semibold mb-2 text-gray-900">Book or post a ride</h3>
+					<p class="text-gray-600">Find a ride that fits your schedule or share your journey with others.</p>
 				</div>
 
-				<!-- Step 3: Travel -->
-				<div class="p-6">
-					<div class="w-20 h-20 bg-purple-100 rounded-full flex items-center justify-center mb-6 mx-auto">
-						<img src="/travel-together.svg" alt="Travel together" class="h-9 w-9" />
+				<div class="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+					<div class="w-20 h-20 rounded-full flex items-center justify-center mb-6 mx-auto" style="background-color: rgba(0, 176, 80, 0.10);">
+						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#00B050" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-9 w-9" aria-hidden="true">
+							<path d="M5 19h14" />
+							<path d="M8 19c0-4 1.8-7 4-9 2.2 2 4 5 4 9" />
+							<path d="M12 10V4" />
+							<path d="M10 6h4" />
+							<path d="M9 15h6" />
+						</svg>
 					</div>
-					<h3 class="text-xl font-semibold mb-2">3. Travel together</h3>
-					<p class="text-gray-600">Meet your driver, enjoy the ride, and save money while reducing your carbon footprint.</p>
+					<h3 class="text-xl font-semibold mb-2 text-gray-900">Meet &amp; travel</h3>
+					<p class="text-gray-600">Meet your travel companion at the pickup point and pay directly — simple and hassle-free.</p>
 				</div>
+			</div>
+
+			<div class="mt-10 text-center">
+				<a href="/how-it-works" class="inline-flex items-center justify-center rounded-lg px-6 py-3 text-white font-semibold transition hover:opacity-90 hover:shadow-[0_8px_16px_rgba(0,176,80,0.24)]" style="background-color: #00B050;">
+					Learn how it works in detail
+				</a>
 			</div>
 		</div>
 	</section>
