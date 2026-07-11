@@ -1,7 +1,7 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
-import { sendMemberEmail } from '$lib/server/memberEmail';
+import { sendPasswordResetEmail } from '$lib/email';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -95,21 +95,16 @@ export const POST: RequestHandler = async ({ request }) => {
 		const recoveryLink =
 			typeof data?.properties?.action_link === 'string' ? data.properties.action_link : `${getOrigin()}/auth/login`;
 
-		await sendMemberEmail({
+		const { data: profile } = await adminClient
+			.from('profiles')
+			.select('first_name')
+			.eq('id', userId)
+			.maybeSingle();
+
+		await sendPasswordResetEmail({
 			to: email,
-			subject: 'Reset your Hizli password',
-			html:
-				`<div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">` +
-				`<p style="margin:0 0 12px;">We received a request to reset your password.</p>` +
-				`<p style="margin:0 0 12px;">` +
-				`<a href="${recoveryLink}" style="display:inline-block;padding:9px 14px;border-radius:8px;background:#16a34a;color:#ffffff;text-decoration:none;font-weight:600;">Reset my password</a>` +
-				`</p>` +
-				`<p style="margin:0; color:#6b7280; font-size:14px;">If you did not request this change, you can safely ignore this email.</p>` +
-				`</div>`,
-			text:
-				`We received a request to reset your password.\n\n` +
-				`Reset your password: ${recoveryLink}\n\n` +
-				`If you did not request this change, you can ignore this email.`
+			firstName: profile?.first_name,
+			resetUrl: recoveryLink
 		});
 
 		return json({
@@ -123,8 +118,10 @@ export const POST: RequestHandler = async ({ request }) => {
 };
 
 function getOrigin(): string {
-	// In production, this would be the actual domain
-	// In development, this is typically http://localhost:5173
+	const publicSiteUrl = process.env.PUBLIC_SITE_URL?.trim();
+	if (publicSiteUrl) {
+		return publicSiteUrl;
+	}
 	if (typeof process !== 'undefined' && process.env.PUBLIC_URL) {
 		return process.env.PUBLIC_URL;
 	}

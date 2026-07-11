@@ -9,6 +9,7 @@
 	import {
 		resolveMemberStatus,
 		canUseVerifiedFeatures,
+		hasPendingReviewBlock,
 		type MemberStatus,
 	} from '$lib/membershipAccess';
 
@@ -21,6 +22,8 @@
 		is_verified?: boolean | null;
 		membership_paid?: boolean | null;
 		membership_expires_at?: string | null;
+		review_pending?: boolean | null;
+		review_pending_ride_id?: string | null;
 	};
 
 	type MissingRequirement =
@@ -49,6 +52,7 @@
 	let isFemaleDriver = false;
 	let memberStatus: MemberStatus = 'free';
 	let needsDriverDocumentsOnly = false;
+	let reviewPendingBlocked = false;
 	let errorMessage = '';
 	let successMessage = '';
 
@@ -126,7 +130,7 @@
 
 		const { data, error } = await supabase
 			.from('profiles')
-			.select('gender, car_make, car_year, plate_number, status, is_verified, membership_paid, membership_expires_at')
+			.select('gender, car_make, car_year, plate_number, status, is_verified, membership_paid, membership_expires_at, review_pending, review_pending_ride_id')
 			.eq('id', userId)
 			.maybeSingle();
 
@@ -145,6 +149,13 @@
 			membershipExpiresAt: profile?.membership_expires_at
 		});
 		const canUseVerified = canUseVerifiedFeatures(memberStatus);
+		reviewPendingBlocked = hasPendingReviewBlock({
+			status: profile?.status,
+			isVerified: profile?.is_verified,
+			membershipPaid: profile?.membership_paid,
+			membershipExpiresAt: profile?.membership_expires_at,
+			reviewPending: profile?.review_pending
+		});
 		isFemaleDriver = (profile?.gender ?? '').toLowerCase() === 'female';
 
 		// Check car information
@@ -190,7 +201,7 @@
 
 		needsDriverDocumentsOnly = canUseVerified && !missingCarInfo && missingDriverDocs.length > 0;
 
-		allowedToPublish = !missingCarInfo && (!canUseVerified || missingDriverDocs.length === 0);
+		allowedToPublish = !reviewPendingBlocked && !missingCarInfo && (!canUseVerified || missingDriverDocs.length === 0);
 
 		if (!isFemaleDriver) {
 			form.girlsOnly = false;
@@ -205,6 +216,9 @@
 
 	async function submitRide() {
 		if (!currentUser || !allowedToPublish) {
+			if (reviewPendingBlocked) {
+				errorMessage = 'You have a pending review. Please rate your last trip before booking or posting a new ride.';
+			}
 			return;
 		}
 
@@ -310,7 +324,17 @@
 
 			{#if !allowedToPublish}
 				<div class="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4">
-					{#if needsDriverDocumentsOnly}
+					{#if reviewPendingBlocked}
+						<p class="text-sm font-semibold text-amber-800 mb-2">
+							You have a pending review. Please rate your last trip before booking or posting a new ride.
+						</p>
+						<a
+							href="/dashboard#archive"
+							class="mt-3 inline-block rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 transition-colors"
+						>
+							Leave a review
+						</a>
+					{:else if needsDriverDocumentsOnly}
 						<p class="text-sm font-semibold text-amber-800 mb-2">
 							You need to upload your driver documents before publishing a ride.
 						</p>

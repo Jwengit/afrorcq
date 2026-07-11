@@ -2,28 +2,40 @@
 	import { user } from '$lib/authStore';
 	import { supabase } from '$lib/supabaseClient';
 	import { goto } from '$app/navigation';
+	import { hasPendingReviewBlock } from '$lib/membershipAccess';
 
 	let isMenuOpen = false;
 	let currentUser: any = null;
 	let hasAdminAccess = false;
 	let profilePhotoUrl: string | null = null;
+	let reviewPendingBlocked = false;
 
 	async function updateAdminAccess(userId: string, email?: string | null) {
 		if (!userId) {
 			hasAdminAccess = false;
 			profilePhotoUrl = null;
+			reviewPendingBlocked = false;
 			return;
 		}
 
 		const isTargetEmail = (email ?? '').toLowerCase() === 'hizli.carpooling@gmail.com';
 		const { data: profile, error } = await supabase
 			.from('profiles')
-			.select('is_admin, profile_photo_url')
+			.select('is_admin, profile_photo_url, status, is_verified, membership_paid, membership_expires_at, review_pending')
 			.eq('id', userId)
 			.single();
 
 		hasAdminAccess = isTargetEmail || (!error && Boolean(profile?.is_admin));
 		profilePhotoUrl = !error ? (profile?.profile_photo_url ?? null) : null;
+		reviewPendingBlocked = !error
+			? hasPendingReviewBlock({
+					status: profile?.status,
+					isVerified: profile?.is_verified,
+					membershipPaid: profile?.membership_paid,
+					membershipExpiresAt: profile?.membership_expires_at,
+					reviewPending: profile?.review_pending
+				})
+			: false;
 	}
 
 	// Subscribe to user store
@@ -34,6 +46,7 @@
 		} else {
 			hasAdminAccess = false;
 			profilePhotoUrl = null;
+			reviewPendingBlocked = false;
 		}
 	});
 
@@ -44,6 +57,11 @@
 	function handlePublishClick() {
 		if (!currentUser) {
 			goto('/auth/login');
+			return;
+		}
+
+		if (reviewPendingBlocked) {
+			goto('/dashboard#archive');
 			return;
 		}
 		goto('/publish-ride');
@@ -72,8 +90,12 @@
 				<button
 					type="button"
 					on:click={handlePublishClick}
+					disabled={reviewPendingBlocked}
 					class="transition font-medium text-left cursor-pointer"
 					style="color: #2BB573;"
+					title={reviewPendingBlocked
+						? 'You have a pending review. Please rate your last trip before posting a new ride.'
+						: undefined}
 				>
 					Publish a ride
 				</button>
@@ -153,7 +175,11 @@
 				<button
 					type="button"
 					on:click={handlePublishClick}
+					disabled={reviewPendingBlocked}
 					class="block w-full text-left px-3 py-2 rounded-md hover:bg-gray-50 cursor-pointer"
+					title={reviewPendingBlocked
+						? 'You have a pending review. Please rate your last trip before posting a new ride.'
+						: undefined}
 					style="color: #2BB573;"
 				>
 					Publish a ride

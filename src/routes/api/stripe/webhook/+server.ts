@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
 import { env } from '$env/dynamic/private';
 import { getStripeClient, getStripeWebhookSecret } from '$lib/server/stripe';
-import { buildActivityCenterEmail, sendMemberEmail } from '$lib/server/memberEmail';
+import { sendAccountVerifiedEmail, sendMembershipExpiredEmail } from '$lib/email';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 
@@ -118,18 +118,9 @@ async function notifyMemberActivated(adminClient: ReturnType<typeof buildAdminCl
 		.maybeSingle();
 	const memberEmail = (profile?.email ?? '').trim();
 	if (memberEmail) {
-		const emailContent = buildActivityCenterEmail({
-			email: memberEmail,
-			firstName: profile?.first_name,
-			subject: 'Your account is now verified',
-			messagePreview: 'Your membership is active and your account is now fully verified.',
-			dashboardUrl
-		});
-		await sendMemberEmail({
+		await sendAccountVerifiedEmail({
 			to: memberEmail,
-			subject: 'Your Hizli account is now verified',
-			html: emailContent.html,
-			text: emailContent.text
+			firstName: profile?.first_name
 		});
 	}
 }
@@ -160,19 +151,9 @@ async function notifyMemberExpired(adminClient: ReturnType<typeof buildAdminClie
 		.maybeSingle();
 	const memberEmail = (profile?.email ?? '').trim();
 	if (memberEmail) {
-		const dashboardUrl = `${siteUrl}/dashboard`;
-		const emailContent = buildActivityCenterEmail({
-			email: memberEmail,
-			firstName: profile?.first_name,
-			subject: 'Your membership has expired',
-			messagePreview: 'Renew your membership to keep full access to verified features.',
-			dashboardUrl
-		});
-		await sendMemberEmail({
+		await sendMembershipExpiredEmail({
 			to: memberEmail,
-			subject: 'Your Hizli membership has expired',
-			html: emailContent.html,
-			text: emailContent.text
+			firstName: profile?.first_name
 		});
 	}
 }

@@ -1,6 +1,7 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
+import { sendDocumentsUnderReviewEmail } from '$lib/email';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -46,6 +47,28 @@ function createApiClient(token: string) {
         authorization: `Bearer ${token}`
       }
     }
+  });
+}
+
+async function notifyDocumentsUnderReview(
+  adminClient: any,
+  userId: string,
+  fallbackEmail: string | null | undefined
+) {
+  const { data: profile } = await adminClient
+    .from('profiles')
+    .select('first_name, email')
+    .eq('id', userId)
+    .maybeSingle();
+
+  const memberEmail = (profile?.email ?? fallbackEmail ?? '').trim();
+  if (!memberEmail) {
+    return;
+  }
+
+  await sendDocumentsUnderReviewEmail({
+    to: memberEmail,
+    firstName: profile?.first_name
   });
 }
 
@@ -371,6 +394,8 @@ export const POST: RequestHandler = async ({ request }) => {
         .update({ is_verified: false, updated_at: new Date().toISOString() })
         .eq('id', user.id);
 
+		await notifyDocumentsUnderReview(adminClient, user.id, user.email ?? null);
+
       return json({ success: true });
     }
 
@@ -402,6 +427,8 @@ export const POST: RequestHandler = async ({ request }) => {
       .from('profiles')
       .update({ is_verified: false, updated_at: new Date().toISOString() })
       .eq('id', user.id);
+
+	await notifyDocumentsUnderReview(adminClient, user.id, user.email ?? null);
 
     return json({ success: true });
   } catch (error) {

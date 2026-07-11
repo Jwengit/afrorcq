@@ -201,7 +201,7 @@
 	);
 
 	$: missingRequiredDocumentTypes = requiredVerificationDocumentTypes.filter(
-		(documentType) => !approvedRequiredDocumentTypes.has(documentType)
+		(documentType) => !approvedRequiredDocumentTypes.has(documentType as RequiredVerificationDocumentType)
 	);
 
 	$: hasPendingRequiredDocuments = verificationDocuments.some((doc) => {
@@ -422,6 +422,12 @@
 		loading = true;
 		profileError = '';
 		try {
+			if (!currentUser) {
+				throw new Error('User not authenticated.');
+			}
+
+			const currentUserId = currentUser.id;
+
 			// Check if plan is being set via URL parameter
 			const urlParams = new URLSearchParams(browser ? window.location.search : '');
 			const planParam = urlParams.get('plan');
@@ -430,7 +436,7 @@
 			let { data, error } = await supabase
 				.from('profiles')
 				.select('*')
-				.eq('id', currentUser!.id)
+				.eq('id', currentUserId)
 				.maybeSingle();
 
 			if (error) {
@@ -446,7 +452,7 @@
 
 				const { error: createError } = await supabase.from('profiles').upsert(
 					{
-						id: currentUser.id,
+						id: currentUserId,
 						first_name: fallbackFirstName,
 						membership_plan: isValidPlan ? planParam : null
 					},
@@ -460,7 +466,7 @@
 				const retry = await supabase
 					.from('profiles')
 					.select('*')
-					.eq('id', currentUser.id)
+					.eq('id', currentUserId)
 					.maybeSingle();
 
 				if (retry.error) {
@@ -473,7 +479,7 @@
 				const { error: updateError } = await supabase
 					.from('profiles')
 					.update({ membership_plan: planParam })
-					.eq('id', currentUser!.id);
+					.eq('id', currentUserId);
 
 				if (updateError) {
 					throw updateError;
@@ -483,7 +489,7 @@
 				const retry = await supabase
 					.from('profiles')
 					.select('*')
-					.eq('id', currentUser.id)
+					.eq('id', currentUserId)
 					.maybeSingle();
 
 				if (retry.error) {

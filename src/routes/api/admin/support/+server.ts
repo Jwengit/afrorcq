@@ -1,7 +1,7 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
-import { buildActivityCenterEmail, sendMemberEmail } from '$lib/server/memberEmail';
+import { sendSupportReplyEmail } from '$lib/email';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -188,21 +188,9 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		const memberEmail = (profile?.email ?? '').trim();
 		if (memberEmail) {
-			const siteUrl = (env.PUBLIC_SITE_URL ?? 'http://localhost:5173').replace(/\/$/, '');
-			const dashboardUrl = `${siteUrl}/dashboard`;
-			const emailContent = buildActivityCenterEmail({
-				email: memberEmail,
-				firstName: profile?.first_name,
-				subject: `New admin reply: ${String(ticketData.subject ?? 'Support update')}`,
-				messagePreview: message.length > 180 ? `${message.slice(0, 177)}...` : message,
-				dashboardUrl
-			});
-
-			await sendMemberEmail({
+			await sendSupportReplyEmail({
 				to: memberEmail,
-				subject: 'You have a new message from Hizli support',
-				html: emailContent.html,
-				text: emailContent.text
+				firstName: profile?.first_name
 			});
 		}
 

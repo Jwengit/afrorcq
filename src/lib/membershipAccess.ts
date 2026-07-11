@@ -5,6 +5,7 @@ type StatusInput = {
   isVerified?: boolean | null;
   membershipPaid?: boolean | null;
   membershipExpiresAt?: string | null;
+  reviewPending?: boolean | null;
 };
 
 function normalizeStatusLabel(value: string | null | undefined): string {
@@ -56,6 +57,10 @@ export function canUseVerifiedFeatures(status: MemberStatus): boolean {
 
 export function canAccessGirlsOnlyRides(status: MemberStatus, gender: string | null | undefined): boolean {
   return status === 'verified' && (gender ?? '').trim().toLowerCase() === 'female';
+}
+
+export function hasPendingReviewBlock(input: StatusInput): boolean {
+  return canUseVerifiedFeatures(resolveMemberStatus(input)) && Boolean(input.reviewPending);
 }
 
 export const VERIFIED_ONLY_MESSAGE =

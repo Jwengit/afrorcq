@@ -7,6 +7,7 @@
 		resolveMemberStatus,
 		canUseVerifiedFeatures,
 		canAccessGirlsOnlyRides,
+		hasPendingReviewBlock,
 		type MemberStatus,
 		VERIFIED_ONLY_MESSAGE
 	} from '$lib/membershipAccess';
@@ -48,6 +49,8 @@
 	let errorMessage = '';
 	let isFemaleUser = false;
 	let currentMemberStatus: MemberStatus = 'free';
+	let reviewPendingBlocked = false;
+	let reviewPendingRideId: string | null = null;
 
 	function persistSearchState() {
 		const params = new URLSearchParams();
@@ -100,6 +103,11 @@
 	}
 
 	async function searchRides() {
+		if (reviewPendingBlocked) {
+			errorMessage = 'You have a pending review. Please rate your last trip before booking or posting a new ride.';
+			return;
+		}
+
 		const dep = departure.trim();
 		const arr = arrival.trim();
 
@@ -227,7 +235,7 @@
 		if (user) {
 			const { data: profile } = await supabase
 				.from('profiles')
-				.select('gender, status, is_verified, membership_paid, membership_expires_at')
+				.select('gender, status, is_verified, membership_paid, membership_expires_at, review_pending, review_pending_ride_id')
 				.eq('id', user.id)
 				.maybeSingle();
 			isFemaleUser = (profile?.gender ?? '').toLowerCase() === 'female';
@@ -237,6 +245,14 @@
 				membershipPaid: profile?.membership_paid,
 				membershipExpiresAt: profile?.membership_expires_at
 			});
+			reviewPendingBlocked = hasPendingReviewBlock({
+				status: profile?.status,
+				isVerified: profile?.is_verified,
+				membershipPaid: profile?.membership_paid,
+				membershipExpiresAt: profile?.membership_expires_at,
+				reviewPending: profile?.review_pending
+			});
+			reviewPendingRideId = profile?.review_pending_ride_id ?? null;
 		}
 
 		const dep = $page.url.searchParams.get('departure') ?? '';
@@ -262,7 +278,7 @@
 			}
 		}
 
-		if (departure || arrival || dateFilter || seatsFilter > 1) {
+		if (!reviewPendingBlocked && (departure || arrival || dateFilter || seatsFilter > 1)) {
 			await searchRides();
 		}
 	});
@@ -272,6 +288,18 @@
 	<div class="max-w-3xl mx-auto">
 		<h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Find a ride</h1>
 		<p class="mt-2 text-gray-600">Search for available rides by city.</p>
+
+		{#if reviewPendingBlocked}
+			<div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+				<p class="text-sm font-medium text-amber-900">You have a pending review. Please rate your last trip before booking or posting a new ride.</p>
+				<a
+					href={reviewPendingRideId ? `/dashboard#archive` : '/dashboard#archive'}
+					class="mt-2 inline-flex items-center rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700"
+				>
+					Leave a review
+				</a>
+			</div>
+		{/if}
 
 		<form class="mt-6 bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4" on:submit|preventDefault={searchRides}>
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -312,10 +340,10 @@
 
 			<button
 				type="submit"
-				disabled={loading}
+				disabled={loading || reviewPendingBlocked}
 				class="w-full rounded-md bg-green-600 text-white font-medium py-2.5 hover:bg-green-700 transition-colors disabled:opacity-60"
 			>
-				{loading ? 'Searching...' : 'Search'}
+				{loading ? 'Searching...' : reviewPendingBlocked ? 'Leave a review first' : 'Search'}
 			</button>
 		</form>
 

@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import ReviewForm from '$lib/components/ReviewForm.svelte';
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { supabase } from '$lib/supabaseClient';
 	import {
 		resolveMemberStatus,
@@ -27,6 +27,8 @@
 		is_verified?: boolean | null;
 		membership_paid?: boolean | null;
 		membership_expires_at?: string | null;
+		review_pending?: boolean | null;
+		review_pending_ride_id?: string | null;
 	};
 
 	type Ride = {
@@ -127,6 +129,8 @@
 	let isCurrentUserVerified = false;
 	let hasActiveMembership = false;
 	let membershipExpiresAt: string | null = null;
+	let reviewPendingBlocked = false;
+	let reviewPendingRideId: string | null = null;
 	let loading = true;
 	let myRides: Ride[] = [];
 	let ridesLoading = false;
@@ -209,6 +213,12 @@
 		await loadMyBookings(user!.id);
 		await loadIncomingBookingRequests(user!.id);
 		await refreshPendingArchiveReviewsCount();
+		if (browser && window.location.hash === '#archive') {
+			showArchive = true;
+			if (reviewPendingBlocked) {
+				await goToPendingReview();
+			}
+		}
 		if (canUseVerifiedFeatures(memberStatus)) {
 			await loadAdminInboxMessages();
 		} else {
@@ -588,12 +598,15 @@
 
 	async function handleReviewSubmitted() {
 		await refreshPendingArchiveReviewsCount();
+		if (currentUser) {
+			await loadDriverEligibility(currentUser.id);
+		}
 	}
 
 	async function loadDriverEligibility(userId: string) {
 		const { data, error } = await supabase
 			.from('profiles')
-			.select('gender, status, is_verified, membership_paid, membership_expires_at')
+			.select('gender, status, is_verified, membership_paid, membership_expires_at, review_pending, review_pending_ride_id')
 			.eq('id', userId)
 			.maybeSingle();
 
@@ -610,6 +623,8 @@
 				isCurrentUserVerified = false;
 				hasActiveMembership = false;
 				membershipExpiresAt = null;
+				reviewPendingBlocked = false;
+				reviewPendingRideId = null;
 				return;
 			}
 
@@ -624,6 +639,8 @@
 			isCurrentUserVerified = Boolean(fallbackProfile?.is_verified);
 			hasActiveMembership = false;
 			membershipExpiresAt = null;
+			reviewPendingBlocked = Boolean(fallbackProfile?.review_pending) && canUseVerifiedFeatures(memberStatus);
+			reviewPendingRideId = fallbackProfile?.review_pending_ride_id ?? null;
 			return;
 		}
 
@@ -642,6 +659,41 @@
 		isCurrentUserVerified = Boolean(profile?.is_verified);
 		hasActiveMembership = isMembershipPaid && isMembershipNotExpired;
 		membershipExpiresAt = profile?.membership_expires_at ?? null;
+		reviewPendingBlocked = Boolean(profile?.review_pending) && canUseVerifiedFeatures(memberStatus);
+		reviewPendingRideId = profile?.review_pending_ride_id ?? null;
+	}
+
+	async function goToPendingReview() {
+		showArchive = true;
+
+		if (!reviewPendingRideId) {
+			await tick();
+			document.getElementById('archive')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+			return;
+		}
+
+		const archivedRequest = archivedRequests.find(
+			(request) => request.status === 'Confirmed' && request.ride.id === reviewPendingRideId
+		);
+		if (archivedRequest) {
+			openReviewFormId = `request:${archivedRequest.id}`;
+			await tick();
+			document.getElementById(`pending-review-request-${archivedRequest.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+			return;
+		}
+
+		const archivedBooking = myArchivedBookings.find(
+			(booking) => booking.status === 'Confirmed' && booking.ride_id === reviewPendingRideId
+		);
+		if (archivedBooking) {
+			openReviewFormId = `booking:${archivedBooking.id}`;
+			await tick();
+			document.getElementById(`pending-review-booking-${archivedBooking.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+			return;
+		}
+
+		await tick();
+		document.getElementById('archive')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 	}
 
 	function goToBecomeAMember() {
@@ -1276,6 +1328,21 @@
 	<div class="min-h-screen dashboard-bg py-10 px-4 sm:px-6 lg:px-8 relative">
 		<div class="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.2),transparent_58%)]"></div>
 		<div class="max-w-6xl mx-auto space-y-6 relative z-10">
+			{#if reviewPendingBlocked}
+				<section class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+					<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+						<p class="text-sm text-amber-900">You have a pending review. Please rate your last trip before booking or posting a new ride.</p>
+						<button
+							type="button"
+							on:click={goToPendingReview}
+							class="inline-flex items-center rounded-md bg-amber-600 px-3 py-2 text-sm font-medium text-white hover:bg-amber-700"
+						>
+							Leave a review
+						</button>
+					</div>
+				</section>
+			{/if}
+
 			{#if memberStatus === 'free'}
 				<section class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
 					<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1983,7 +2050,7 @@
 						<h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Booking requests</h3>
 						<div class="space-y-3">
 							{#each archivedRequests as request (request.id)}
-								<article class="subtle-card p-4 opacity-75">
+								<article id={`pending-review-request-${request.id}`} class="subtle-card p-4 opacity-75">
 									<p class="text-xs text-gray-400">{formatRideDate(request.ride.ride_date)}</p>
 									<h4 class="text-base font-semibold text-gray-700 mt-1">
 										{request.ride.departure} → {request.ride.arrival}
@@ -2044,7 +2111,7 @@
 						<h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">My bookings</h3>
 						<div class="space-y-3">
 							{#each myArchivedBookings as booking (booking.id)}
-								<article class="subtle-card p-4 opacity-75">
+								<article id={`pending-review-booking-${booking.id}`} class="subtle-card p-4 opacity-75">
 									<p class="text-xs text-gray-400">{formatRideDate(booking.ride.ride_date)}</p>
 									<h4 class="text-base font-semibold text-gray-700 mt-1">
 										{booking.ride.departure} → {booking.ride.arrival}

@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { user } from '$lib/authStore';
+	import { supabase } from '$lib/supabaseClient';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
+	import { hasPendingReviewBlock } from '$lib/membershipAccess';
 
 	let currentUser: any = null;
 	let searchDeparture = '';
@@ -26,9 +28,38 @@
 	let socialYoutubeUrl = 'https://www.youtube.com';
 	user.subscribe((u) => (currentUser = u));
 
-	function handlePublishClick(departure?: string, arrival?: string) {
+	async function hasReviewPendingBlockForCurrentUser(): Promise<boolean> {
+		if (!currentUser?.id) {
+			return false;
+		}
+
+		const { data: profile, error } = await supabase
+			.from('profiles')
+			.select('status, is_verified, membership_paid, membership_expires_at, review_pending')
+			.eq('id', currentUser.id)
+			.maybeSingle();
+
+		if (error || !profile) {
+			return false;
+		}
+
+		return hasPendingReviewBlock({
+			status: profile.status,
+			isVerified: profile.is_verified,
+			membershipPaid: profile.membership_paid,
+			membershipExpiresAt: profile.membership_expires_at,
+			reviewPending: profile.review_pending
+		});
+	}
+
+	async function handlePublishClick(departure?: string, arrival?: string) {
 		if (!currentUser) {
 			goto('/auth/login');
+			return;
+		}
+
+		if (await hasReviewPendingBlockForCurrentUser()) {
+			goto('/dashboard#archive');
 			return;
 		}
 
@@ -41,7 +72,12 @@
 		goto('/publish-ride');
 	}
 
-	function handleSearchSubmit() {
+	async function handleSearchSubmit() {
+		if (currentUser && (await hasReviewPendingBlockForCurrentUser())) {
+			goto('/dashboard#archive');
+			return;
+		}
+
 		const params = new URLSearchParams();
 		if (searchDeparture.trim()) {
 			params.set('departure', searchDeparture.trim());
@@ -59,7 +95,12 @@
 		goto(`/search${params.toString() ? `?${params.toString()}` : ''}`);
 	}
 
-	function handlePopularRideSearch(departure: string, arrival: string) {
+	async function handlePopularRideSearch(departure: string, arrival: string) {
+		if (currentUser && (await hasReviewPendingBlockForCurrentUser())) {
+			goto('/dashboard#archive');
+			return;
+		}
+
 		const params = new URLSearchParams();
 		params.set('departure', departure);
 		params.set('arrival', arrival);
