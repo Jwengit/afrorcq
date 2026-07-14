@@ -433,6 +433,43 @@ export const DELETE: RequestHandler = async ({ request }) => {
 		}
 
 		const adminClient = createClient(supabaseUrl, serviceRoleKey);
+
+		// First, manually cascade delete related data to avoid foreign key constraint violations
+		// This handles cases where ON DELETE CASCADE may not be properly configured
+		try {
+			// Delete reviews where this user is the reviewer or reviewee
+			await adminClient.from('reviews').delete().or(`reviewer_id.eq.${userId},reviewee_id.eq.${userId}`);
+
+			// Delete bookings where this user is the passenger
+			await adminClient.from('bookings').delete().eq('passenger_id', userId);
+
+			// Delete rides where this user is the driver
+			await adminClient.from('rides').delete().eq('driver_id', userId);
+
+			// Delete reports where this user is the reporter or reported user
+			await adminClient.from('reports').delete().or(`reporter_id.eq.${userId},user_id.eq.${userId}`);
+
+			// Delete support tickets where this user is the user
+			await adminClient.from('support_tickets').delete().eq('user_id', userId);
+
+			// Delete verification documents
+			await adminClient.from('verification_documents').delete().eq('user_id', userId);
+
+			// Delete transactions related to this user (if user_id column exists)
+			try {
+				await adminClient.from('transactions').delete().eq('user_id', userId);
+			} catch {
+				// Transactions table may not have user_id column or may not exist - continue anyway
+			}
+
+			// Now delete the profile (this may cascade or may need explicit deletion)
+			await adminClient.from('profiles').delete().eq('id', userId);
+		} catch (cascadeError) {
+			// Log cascade errors but continue - the auth.users deletion should still work
+			console.warn('Cascade delete warning:', cascadeError);
+		}
+
+		// Finally delete the auth user
 		const { error } = await adminClient.auth.admin.deleteUser(userId);
 		if (error) {
 			return json({ error: error.message }, { status: 500 });
