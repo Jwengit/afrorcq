@@ -318,17 +318,17 @@
 			</div>
 
 			<div class="grid grid-cols-2 xl:grid-cols-5 gap-4 md:gap-6">
-				<div class="p-5 text-center rounded-2xl border border-green-100 bg-white shadow-sm">
-					<div class="w-12 h-12 mx-auto mb-3 rounded-full flex items-center justify-center text-2xl" style="background-color: #e8f7ee;">🛡️</div>
-					<h3 class="text-lg font-semibold mb-2">Safety First</h3>
-					<p class="text-sm text-gray-600">Verified profiles and manual validation for every driver.</p>
-				</div>
+    <div class="p-5 text-center rounded-2xl border border-green-100 bg-white shadow-sm">
+        <div class="w-12 h-12 mx-auto mb-3 rounded-full flex items-center justify-center text-2xl" style="background-color: #e8f7ee;">♀️</div>
+        <h3 class="text-lg font-semibold mb-2">Girls Only</h3>
+        <p class="text-sm text-gray-600">Female drivers can offer rides exclusively to verified women.</p>
+    </div>
 
-				<div class="p-5 text-center rounded-2xl border border-green-100 bg-white shadow-sm">
-					<div class="w-12 h-12 mx-auto mb-3 rounded-full flex items-center justify-center text-2xl" style="background-color: #e8f7ee;">♀️</div>
-					<h3 class="text-lg font-semibold mb-2">Girls Only</h3>
-					<p class="text-sm text-gray-600">Female drivers can offer rides exclusively to verified women.</p>
-				</div>
+    <div class="p-5 text-center rounded-2xl border border-green-100 bg-white shadow-sm">
+        <div class="w-12 h-12 mx-auto mb-3 rounded-full flex items-center justify-center text-2xl" style="background-color: #e8f7ee;">🛡️</div>
+        <h3 class="text-lg font-semibold mb-2">Legality</h3>
+        <p class="text-sm text-gray-600">Verified profiles and manual validation for every driver.</p>
+    </div>
 
 				<div class="p-5 text-center rounded-2xl border border-green-100 bg-white shadow-sm">
 					<div class="w-12 h-12 mx-auto mb-3 rounded-full flex items-center justify-center text-2xl" style="background-color: #e8f7ee;">⭐</div>
