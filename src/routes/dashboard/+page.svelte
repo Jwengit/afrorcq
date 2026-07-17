@@ -1346,9 +1346,8 @@
 			{#if memberStatus === 'free'}
 				<section class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
 					<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-						<p class="text-sm text-amber-900">You're on the free plan. Choose a membership plan to start the verification process.</p>
-						<a href="/pricing" class="inline-flex items-center rounded-md bg-amber-600 px-3 py-2 text-sm font-medium text-white hover:bg-amber-700">Choose a plan</a>
-					</div>
+						<p class="text-sm text-amber-900">You're on the free plan. Click on "Become a member" to start the verification process..</p>
+		
 				</section>
 			{:else if memberStatus === 'pending'}
 				<section class="rounded-xl border border-emerald-300 bg-emerald-50 px-5 py-4 shadow-sm">

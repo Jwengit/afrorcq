@@ -217,7 +217,7 @@
 			<div class="mb-4 flex items-center gap-3">
 				<img src="/Logo sans phrase.png" alt="Hizli Carpooling" class="h-12 w-12 rounded-xl border border-gray-100 object-contain p-1" />
 				<div>
-					<p class="text-lg font-bold text-gray-900">Install Hizli</p>
+					<p class="text-lg font-bold text-gray-900">Install Hizli Web-app</p>
 					<p class="text-sm text-gray-500">Get quick access and a smoother experience.</p>
 				</div>
 			</div>
