@@ -23,9 +23,9 @@
 	let footerPrivacyPolicyUrl = '/privacy';
 	let footerTermsOfServiceLabel = 'Terms of Service';
 	let footerTermsOfServiceUrl = '/terms';
-	let socialFacebookUrl = 'https://www.facebook.com';
-	let socialInstagramUrl = 'https://www.instagram.com';
-	let socialYoutubeUrl = 'https://www.youtube.com';
+	let socialFacebookUrl = 'https://www.facebook.com/HizliCarpooling';
+	let socialInstagramUrl = 'https://www.instagram.com/hizli.carpooling/';
+	let socialYoutubeUrl = 'https://www.youtube.com/@hizlicarpooling4265';
 	user.subscribe((u) => (currentUser = u));
 
 	async function hasReviewPendingBlockForCurrentUser(): Promise<boolean> {
