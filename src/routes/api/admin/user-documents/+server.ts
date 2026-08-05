@@ -366,7 +366,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
 
         const legacyTypeQuery = await adminClient
           .from('verification_documents')
-          .select('id, type')
+          .select('id, doc_type')
           .eq('user_id', userId);
 
         if (!legacyTypeQuery.error) {
@@ -394,7 +394,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
       } else {
         const fallbackTypeQuery = await adminClient
           .from('verification_documents')
-          .select('id, user_id, type, file_name, storage_path, mime_type, file_size, status, admin_note, reviewed_by, reviewed_at, created_at, updated_at')
+          .select('id, user_id, doc_type, file_name, storage_path, mime_type, file_size, status, admin_note, reviewed_by, reviewed_at, created_at, updated_at')
           .eq('user_id', userId)
           .order('created_at', { ascending: false });
 

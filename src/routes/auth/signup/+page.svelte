@@ -80,88 +80,77 @@
 	});
 
 	async function signUp() {
-		error = '';
-		successMessage = '';
+error = '';
+successMessage = '';
 
-		if (password !== confirmPassword) {
-			error = 'Passwords do not match';
-			return;
-		}
+if (password !== confirmPassword) {
+error = 'Passwords do not match';
+return;
+}
 
-		if (!recaptchaToken) {
-			error = 'Please complete the reCAPTCHA verification';
-			return;
-		}
+if (!recaptchaToken) {
+error = 'Please complete the reCAPTCHA verification';
+return;
+}
 
-		loading = true;
+loading = true;
 
-		try {
-			const { data, error: signUpError } = await supabase.auth.signUp({
-				email,
-				password,
-				options: {
-					emailRedirectTo: getAuthCallbackUrl(),
-					data: {
-						recaptcha_token: recaptchaToken
-					}
-				}
-			});
+try {
+const { data, error: signUpError } = await supabase.auth.signUp({
+email,
+password,
+options: {
+emailRedirectTo: getAuthCallbackUrl(),
+data: {
+recaptcha_token: recaptchaToken
+}
+}
+});
 
-			console.log('Supabase signUp response:', { data, signUpError });
+console.log('Supabase signUp response:', { data, signUpError });
 
-			if (signUpError) {
-				error = signUpError.message;
-			} else {
-				let welcomeMessageError = false;
-				const welcomePayload = JSON.stringify({
-					userId: data.user?.id,
-					email: data.user?.email ?? email,
-					name:
-						(data.user?.user_metadata?.full_name as string | undefined) ||
-						(data.user?.user_metadata?.name as string | undefined) ||
-						''
-				});
+if (signUpError) {
+error = signUpError.message;
+} else {
+if (data.user?.id) {
+try {
+await fetch('/api/welcome', {
+method: 'POST',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify({
+userId: data.user.id,
+email: data.user.email ?? email,
+name:
+(data.user.user_metadata?.full_name as string | undefined) ||
+(data.user.user_metadata?.name as string | undefined) ||
+''
+})
+});
+} catch (welcomeErr) {
+console.error('Error creating welcome message:', welcomeErr);
+}
+}
 
-				try {
-					const welcomeResponse = await fetch('/api/welcome', {
-						method: 'POST',
-						headers: { 'Content-Type': 'application/json' },
-						body: welcomePayload
-					});
+if (data.session) {
+const planParam = new URLSearchParams(window.location.search).get('plan');
+if (planParam === 'student' || planParam === 'standard') {
+goto(resolve(`/pricing?plan=${planParam}`));
+} else {
+goto(resolve('/profile'));
+}
+return;
+}
 
-					if (!welcomeResponse.ok) {
-						welcomeMessageError = true;
-						console.error('Welcome message request failed with status:', welcomeResponse.status);
-					}
-				} catch (welcomeErr) {
-					welcomeMessageError = true;
-					console.error('Error creating welcome message:', welcomeErr);
-				}
-
-				if (data.session) {
-					const planParam = new URLSearchParams(window.location.search).get('plan');
-					if (planParam === 'student' || planParam === 'standard') {
-						goto(resolve(`/pricing?plan=${planParam}`));
-					} else {
-						goto(resolve('/profile'));
-					}
-					return;
-				}
-
-				successMessage = 'Account created. Please check your inbox to confirm your email before signing in.';
-				if (welcomeMessageError) {
-					successMessage += ' Welcome dashboard message could not be created right now.';
-				}
-			}
-		} catch (err) {
-			console.error('Unexpected signUp error:', err);
-			error = 'Unexpected error during sign up. Check browser console.';
-		} finally {
-			loading = false;
-		}
-	}
-
-	async function signUpWithGoogle() {
+successMessage = 'Account created. Please check your inbox to confirm your email before signing in.';
+}
+} catch (err) {
+console.error('Unexpected signUp error:', err);
+error = 'Unexpected error during sign up. Check browser console.';
+} finally {
+loading = false;
+}
+}
+async function signUpWithGoogle() {
 		try {
 			const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
 				provider: 'google',

@@ -86,13 +86,20 @@ export async function POST({ request }) {
 		const safeFirstName = escapeHtml(firstName || 'there');
 		const welcomeInboxMessage = buildWelcomeInboxMessage(safeFirstName);
 
-		const { data: existingWelcomeTicket } = await adminClient
+		let welcomeMessageCreated = false;
+		let welcomeEmailSent = false;
+
+		const { data: existingWelcomeTicket, error: existingTicketError } = await adminClient
 			.from('support_tickets')
 			.select('id')
 			.eq('user_id', userId)
 			.eq('subject', WELCOME_TICKET_SUBJECT)
 			.limit(1)
 			.maybeSingle();
+
+		if (existingTicketError) {
+			console.error('Welcome ticket lookup error:', existingTicketError);
+		}
 
 		if (!existingWelcomeTicket?.id) {
 			const { data: createdTicket, error: createTicketError } = await adminClient
@@ -106,33 +113,62 @@ export async function POST({ request }) {
 				.select('id')
 				.single();
 
-			if (!createTicketError && createdTicket?.id) {
-				await adminClient.from('support_messages').insert({
+			if (createTicketError || !createdTicket?.id) {
+				console.error('Welcome ticket creation error:', createTicketError);
+			} else {
+				welcomeMessageCreated = true;
+				const { error: createMessageError } = await adminClient.from('support_messages').insert({
 					ticket_id: createdTicket.id,
 					sender_id: null,
 					sender_role: 'admin',
 					message: welcomeInboxMessage
 				});
 
-				if (user.email) {
-					await sendWelcomeEmail({
-						to: user.email,
-						firstName: firstName || null
-					});
+				if (createMessageError) {
+					console.error('Welcome inbox message creation error:', createMessageError);
 				}
 			}
+		} else {
+			welcomeMessageCreated = true;
+		}
+
+		if (user.email) {
+			const emailResult = await sendWelcomeEmail({
+				to: user.email,
+				firstName: firstName || null
+			});
+
+			if (!emailResult) {
+				console.error('Welcome email send failed for user:', user.id);
+				return json({ error: 'Failed to send welcome email' }, { status: 500 });
+			}
+
+			welcomeEmailSent = true;
+		}
+
+		if (!welcomeMessageCreated && !welcomeEmailSent) {
+			return json({ error: 'No welcome action was performed' }, { status: 500 });
+		}
+
+		const metadata: Record<string, unknown> = {
+			...existingMetadata
+		};
+
+		if (welcomeMessageCreated) {
+			metadata.welcome_message_sent_at = new Date().toISOString();
+		}
+
+		if (welcomeEmailSent) {
+			metadata.welcome_email_sent_at = new Date().toISOString();
 		}
 
 		const { error: metadataUpdateError } = await adminClient.auth.admin.updateUserById(userId, {
-			user_metadata: {
-				...existingMetadata,
-				welcome_message_sent_at: new Date().toISOString(),
-				welcome_email_sent_at: new Date().toISOString()
-			}
+			user_metadata: metadata
 		});
 
 		if (metadataUpdateError) {
 			console.error('Welcome metadata update error:', metadataUpdateError);
+			return json({ error: 'Failed to update welcome metadata' }, { status: 500 });
 		}
 
 		return json({ success: true });

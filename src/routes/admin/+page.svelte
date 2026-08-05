@@ -1072,8 +1072,9 @@
 		});
 
 		const payload = await response.json();
-		if (!response.ok) {
-			usersActionMessage = payload?.error || 'Unable to delete this account right now.';
+		// Display success only when API explicitly confirms deletion
+		if (!response.ok || payload?.success !== true) {
+			usersActionMessage = payload?.error || 'Account deletion failed. Please try again or contact support.';
 			actionUserId = null;
 			return;
 		}
@@ -1114,6 +1115,8 @@
 
 	async function openProfileModal(user: AdminUser) {
 		selectedProfile = user;
+		// Reset any previous user action messages when opening a profile
+		usersActionMessage = '';
 		showProfileModal = true;
 		profileRides = [];
 		profileBookings = [];
@@ -5402,6 +5405,39 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 						>
 							{privateProfileOpenInProgress ? 'Opening...' : 'Open full profile in new window'}
 						</button>
+					</div>
+
+					<div>
+						<h3 class="text-sm font-semibold text-gray-900 mb-3">Profile photo</h3>
+						<div class="flex items-center gap-4 mb-3">
+							{#if selectedProfile && selectedProfile.profile_photo_url}
+								<img src={selectedProfile.profile_photo_url} alt="Profile photo" class="w-20 h-20 object-cover rounded-full border border-gray-200" />
+							{:else}
+								<div class="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center text-xl">👤</div>
+							{/if}
+
+							<div class="flex flex-col gap-2">
+								<p class="text-xs text-gray-500">Approve or reject the member's profile photo.</p>
+								<div class="flex gap-2">
+									<button
+										type="button"
+										disabled={actionUserId === selectedProfile?.id || !selectedProfile?.profile_photo_url}
+										on:click={() => selectedProfile && updateSelectedProfileVerification(true)}
+										class="px-3 py-2 rounded-lg border border-green-300 text-green-700 bg-green-50 text-sm font-medium hover:bg-green-100 disabled:opacity-50"
+									>
+										Approve photo
+									</button>
+									<button
+										type="button"
+										disabled={actionUserId === selectedProfile?.id}
+										on:click={() => selectedProfile && updateSelectedProfileVerification(false)}
+										class="px-3 py-2 rounded-lg border border-red-300 text-red-700 bg-red-50 text-sm font-medium hover:bg-red-100 disabled:opacity-50"
+									>
+										Reject photo
+									</button>
+								</div>
+							</div>
+						</div>
 					</div>
 
 					<!-- Status Actions -->
