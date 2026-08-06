@@ -402,7 +402,7 @@
 						</ul>
 					</div>
 					<a
-						href="/auth/signup"
+						href={currentUser ? '/dashboard' : '/auth/signup'}
 						class="mt-auto inline-flex items-center justify-center w-full text-white px-5 py-2.5 rounded-lg font-semibold transition hover:opacity-90 hover:shadow-[0_8px_16px_rgba(0,176,80,0.24)]"
 						style="background-color: #00B050;"
 					>

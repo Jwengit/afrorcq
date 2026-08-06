@@ -6,6 +6,12 @@
 	/>
 </svelte:head>
 
+<script lang="ts">
+	import { user } from '$lib/authStore';
+	let currentUser: any = null;
+	user.subscribe((u) => (currentUser = u));
+</script>
+
 <section class="relative overflow-hidden text-white">
 	<div class="absolute inset-0 bg-cover bg-center" style="background-image: url('/header-bg.jpg');"></div>
 	<div class="absolute inset-0" style="background: linear-gradient(135deg, rgba(0, 176, 80, 0.88), rgba(0, 176, 80, 0.68));"></div>
@@ -26,7 +32,7 @@
 				</p>
 				<div class="mt-10 flex flex-col sm:flex-row gap-4">
 					<a
-						href="/auth/signup"
+						href={currentUser ? '/dashboard' : '/auth/signup'}
 						class="inline-flex items-center justify-center rounded-full px-8 py-3.5 font-semibold text-[#00B050] bg-white transition hover:-translate-y-px hover:shadow-[0_16px_30px_rgba(0,0,0,0.18)]"
 					>
 						Get started
