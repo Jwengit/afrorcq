@@ -76,9 +76,10 @@
 	};
 
 	let profile: Profile = { ...emptyProfile };
+	let formData: Profile = { ...emptyProfile };
 
-	// Form data
-	let formData = { ...profile };
+	const MAX_PROFILE_PHOTO_SIZE_BYTES = 2 * 1024 * 1024;
+
 	let selectedFile: File | null = null;
 	let previewUrl = '';
 	let profilePhotoFileName = 'No file selected';
@@ -727,6 +728,16 @@
 		const target = event.target as HTMLInputElement;
 		const file = target.files?.[0];
 		if (file) {
+			if (file.size > MAX_PROFILE_PHOTO_SIZE_BYTES) {
+				profileError = 'Your photo is too large. Please upload an image under 2MB.';
+				selectedFile = null;
+				profilePhotoFileName = 'No file selected';
+				previewUrl = profile.profile_photo_url || '';
+				target.value = '';
+				return;
+			}
+
+			profileError = '';
 			selectedFile = file;
 			profilePhotoFileName = file.name;
 			previewUrl = URL.createObjectURL(file);
@@ -793,6 +804,12 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 
 			// Upload new photo if selected
 			if (selectedFile) {
+				if (selectedFile.size > MAX_PROFILE_PHOTO_SIZE_BYTES) {
+					profileError = 'Your photo is too large. Please upload an image under 2MB.';
+					saving = false;
+					return;
+				}
+
 				const uploadedUrl = await uploadPhoto(selectedFile);
 				if (!uploadedUrl) {
 					profileError = 'Error uploading profile photo. Please check the file and try again.';
