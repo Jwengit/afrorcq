@@ -1347,7 +1347,7 @@
 				<section class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
 					<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 						<p class="text-sm text-amber-900">You're on the free plan. Click on "Become a member" to start the verification process..</p>
-		
+					</div>
 				</section>
 			{:else if memberStatus === 'pending'}
 				<section class="rounded-xl border border-emerald-300 bg-emerald-50 px-5 py-4 shadow-sm">
@@ -1363,16 +1363,10 @@
 					</div>
 				</section>
 			{/if}
+			<p class="text-sm text-emerald-50/90">Connected as {currentUser.email}</p>
+			<h1 class="text-3xl font-bold mt-1 tracking-tight">Dashboard</h1>
 
-			<section class="rounded-2xl bg-linear-to-r from-emerald-600 via-emerald-500 to-teal-500 p-6 shadow-xl border border-emerald-300/30 text-white">
-				<div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-					<div>
-						<p class="text-sm text-emerald-50/90">Connected as {currentUser.email}</p>
-						<h1 class="text-3xl font-bold mt-1 tracking-tight">Dashboard</h1>
-					</div>
-				</div>
-
-				<nav class="mt-6 border-t border-white/30 pt-4" aria-label="User dashboard navigation">
+			<nav class="mt-6 border-t border-white/30 pt-4" aria-label="User dashboard navigation">
 					<ul class="flex flex-wrap gap-2">
 						<li>
 							<a href="#activity-center" class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/90 text-violet-700 text-sm font-semibold hover:bg-white transition-colors">
@@ -1400,13 +1394,9 @@
 							</a>
 						</li>
 					<li>
-						{#if canUseVerifiedFeatures(memberStatus)}
-							<button type="button" class="inline-flex items-center px-4 py-2 rounded-full bg-white/90 text-indigo-700 text-sm font-semibold hover:bg-white transition-colors" on:click={() => showSupportModal = true}>
-								Contact Support
-							</button>
-						{:else}
-							<span class="inline-flex items-center px-4 py-2 rounded-full bg-white/90 text-indigo-700 text-sm font-semibold opacity-80">Contact Support</span>
-						{/if}
+						<button type="button" class="inline-flex items-center px-4 py-2 rounded-full bg-white/90 text-indigo-700 text-sm font-semibold hover:bg-white transition-colors" on:click={() => goto(resolve('/support'))}>
+							Contact Support
+						</button>
 					</li>
 					</ul>
 					<button type="button" on:click={showArchive ? closeArchive : openArchive} class="mt-3 inline-flex items-center gap-1.5 text-xs text-emerald-50/90 hover:text-white">
@@ -1416,40 +1406,6 @@
 							: `View archive (${myArchivedRides.length + myArchivedBookings.length + archivedRequests.length})${pendingArchiveReviewsCount > 0 ? ` · ${pendingArchiveReviewsCount} review${pendingArchiveReviewsCount > 1 ? 's' : ''} left` : ''}`}
 					</button>
 				</nav>
-
-		<!-- Contact Support modal -->
-		{#if showSupportModal && canUseVerifiedFeatures(memberStatus)}
-		<div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-			<div class="bg-white text-gray-900 rounded-lg shadow-lg p-6 w-full max-w-md">
-				<h2 class="text-lg font-bold mb-2">Contact Support</h2>
-				<form on:submit|preventDefault={sendSupportTicket}>
-					<label class="block mb-2">
-						<span class="text-sm font-medium">Subject</span>
-						<input type="text" class="mt-1 w-full border rounded px-3 py-2 bg-white text-gray-900 placeholder-gray-500 caret-gray-900" bind:value={supportSubject} placeholder="Subject" required />
-					</label>
-					<label class="block mb-2">
-						<span class="text-sm font-medium">Message</span>
-						<textarea class="mt-1 w-full border rounded px-3 py-2 bg-white text-gray-900 placeholder-gray-500 caret-gray-900" rows="4" bind:value={supportMessage} placeholder="Describe the issue" required></textarea>
-					</label>
-					{#if supportSendError}
-						<p class="text-red-600 text-sm mb-2">{supportSendError}</p>
-					{/if}
-					{#if supportSendSuccess}
-						<p class="text-green-600 text-sm mb-2">{supportSendSuccess}</p>
-					{/if}
-					<div class="flex justify-end gap-2 mt-4">
-						<button type="button" class="px-3 py-2 rounded border text-sm" on:click={() => { showSupportModal = false; supportSendError = ''; supportSendSuccess = ''; supportSubject = ''; supportMessage = ''; }}>
-							Cancel
-						</button>
-						<button type="submit" class="px-3 py-2 rounded bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-60" disabled={supportSending}>
-							{supportSending ? 'Sending...' : 'Send'}
-						</button>
-					</div>
-				</form>
-			</div>
-		</div>
-		{/if}
-			</section>
 
 		{#if !showArchive}
 			<section id="become-member" class="dashboard-card p-6 scroll-mt-28 {isCurrentUserVerified && hasActiveMembership ? 'opacity-80 border-slate-200' : ''}">

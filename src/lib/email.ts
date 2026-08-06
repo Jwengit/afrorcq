@@ -2,6 +2,7 @@ import { env } from '$env/dynamic/private';
 import { Resend } from 'resend';
 
 const HIZLI_BASE_URL = 'https://hizli-carpooling.com';
+const HIZLI_SIGNUP_URL = `${HIZLI_BASE_URL}/auth/signup`;
 const HIZLI_DASHBOARD_URL = `${HIZLI_BASE_URL}/dashboard`;
 const HIZLI_PROFILE_URL = `${HIZLI_BASE_URL}/profile`;
 const HIZLI_PRICING_URL = `${HIZLI_BASE_URL}/pricing`;
@@ -162,7 +163,7 @@ export function buildWelcomeEmail(firstName?: string | null): EmailTemplate {
 			'The Hizli Team'
 		],
 		buttonLabel: 'Get started',
-		buttonUrl: HIZLI_DASHBOARD_URL
+		buttonUrl: HIZLI_SIGNUP_URL
 	});
 }
 

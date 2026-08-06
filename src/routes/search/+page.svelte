@@ -348,17 +348,6 @@
 		</form>
 
 		{#if searched}
-			{#if !canUseVerifiedFeatures(currentMemberStatus)}
-				<div class="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4">
-					<p class="text-sm font-semibold text-amber-800">{VERIFIED_ONLY_MESSAGE}</p>
-					<a
-						href="/pricing"
-						class="mt-3 inline-flex items-center rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
-					>
-						Upgrade now
-					</a>
-				</div>
-			{/if}
 			<div class="mt-8 space-y-4">
 				{#if results.length === 0}
 					<p class="text-center text-gray-500 py-10">No rides found for this route.</p>

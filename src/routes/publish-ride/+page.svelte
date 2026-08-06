@@ -136,7 +136,6 @@
 
 		if (error) {
 			console.error('Profile fetch error:', error);
-			errorMessage = 'Could not load your profile. Please try again.';
 			allowedToPublish = false;
 			return;
 		}

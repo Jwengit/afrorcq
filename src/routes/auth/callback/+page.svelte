@@ -40,23 +40,19 @@
 				}
 			}
 
-			const provider = user.app_metadata?.provider;
-
-			if (provider === 'google') {
-				// Backend endpoint is idempotent and creates the internal welcome message only once.
-				try {
-					await fetch('/api/welcome', {
-						method: 'POST',
-						headers: { 'Content-Type': 'application/json' },
-						body: JSON.stringify({
-							userId: user.id,
-							email: user.email,
-							name: user.user_metadata?.full_name || ''
-						})
-					});
-				} catch (welcomeErr) {
-					console.error('Error creating welcome message:', welcomeErr);
-				}
+			// Backend endpoint is idempotent and creates the internal welcome message only once.
+			try {
+				await fetch('/api/welcome', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						userId: user.id,
+						email: user.email,
+						name: user.user_metadata?.full_name || ''
+					})
+				});
+			} catch (welcomeErr) {
+				console.error('Error creating welcome message:', welcomeErr);
 			}
 			goto(resolve('/profile'));
 		} else {

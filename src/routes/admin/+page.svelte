@@ -35,6 +35,7 @@
 		user_status: string | null;
 		average_rating: number | null;
 		created_at: string | null;
+		profile_photo_url?: string | null;
 		has_profile?: boolean;
 	};
 
@@ -5411,7 +5412,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 						<h3 class="text-sm font-semibold text-gray-900 mb-3">Profile photo</h3>
 						<div class="flex items-center gap-4 mb-3">
 							{#if selectedProfile && selectedProfile.profile_photo_url}
-								<img src={selectedProfile.profile_photo_url} alt="Profile photo" class="w-20 h-20 object-cover rounded-full border border-gray-200" />
+								<img src={selectedProfile.profile_photo_url} alt="" class="w-20 h-20 object-cover rounded-full border border-gray-200" />
 							{:else}
 								<div class="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center text-xl">👤</div>
 							{/if}
