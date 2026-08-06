@@ -28,6 +28,14 @@
 	let socialYoutubeUrl = 'https://www.youtube.com/@hizlicarpooling4265';
 	user.subscribe((u) => (currentUser = u));
 
+	function normalizeFooterHref(href: string) {
+		if (!href) return '/';
+		const trimmed = String(href).trim();
+		if (/^https?:\/\//.test(trimmed)) return trimmed;
+		if (trimmed.startsWith('/')) return trimmed;
+		return `/${trimmed}`;
+	}
+
 	async function hasReviewPendingBlockForCurrentUser(): Promise<boolean> {
 		if (!currentUser?.id) {
 			return false;
@@ -554,8 +562,8 @@
 				<div>
 					<h4 class="text-lg font-bold mb-4">About</h4>
 					<ul class="space-y-2 text-gray-50">
-						<li><a href={footerAboutUsUrl} class="hover:text-white transition">{footerAboutUsLabel}</a></li>
-						<li><a href={footerHowItWorksUrl} class="hover:text-white transition">{footerHowItWorksLabel}</a></li>
+						<li><a href={normalizeFooterHref(footerAboutUsUrl)} class="hover:text-white transition">{footerAboutUsLabel}</a></li>
+						<li><a href={normalizeFooterHref(footerHowItWorksUrl)} class="hover:text-white transition">{footerHowItWorksLabel}</a></li>
 					</ul>
 				</div>
 
@@ -563,8 +571,8 @@
 				<div>
 					<h4 class="text-lg font-bold mb-4">Support</h4>
 					<ul class="space-y-2 text-gray-50">
-						<li><a href={footerFaqUrl} class="hover:text-white transition">{footerFaqLabel}</a></li>
-						<li><a href={footerHelpCenterUrl} class="hover:text-white transition">{footerHelpCenterLabel}</a></li>
+						<li><a href={normalizeFooterHref(footerFaqUrl)} class="hover:text-white transition">{footerFaqLabel}</a></li>
+						<li><a href={normalizeFooterHref(footerHelpCenterUrl)} class="hover:text-white transition">{footerHelpCenterLabel}</a></li>
 					</ul>
 				</div>
 
@@ -572,8 +580,8 @@
 				<div>
 					<h4 class="text-lg font-bold mb-4">Legal</h4>
 					<ul class="space-y-2 text-gray-50">
-						<li><a href={footerPrivacyPolicyUrl} class="hover:text-white transition">{footerPrivacyPolicyLabel}</a></li>
-						<li><a href={footerTermsOfServiceUrl} class="hover:text-white transition">{footerTermsOfServiceLabel}</a></li>
+						<li><a href={normalizeFooterHref(footerPrivacyPolicyUrl)} class="hover:text-white transition">{footerPrivacyPolicyLabel}</a></li>
+						<li><a href={normalizeFooterHref(footerTermsOfServiceUrl)} class="hover:text-white transition">{footerTermsOfServiceLabel}</a></li>
 					</ul>
 				</div>
 
