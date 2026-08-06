@@ -6,6 +6,7 @@ const HIZLI_SIGNUP_URL = `${HIZLI_BASE_URL}/auth/signup`;
 const HIZLI_DASHBOARD_URL = `${HIZLI_BASE_URL}/dashboard`;
 const HIZLI_PROFILE_URL = `${HIZLI_BASE_URL}/profile`;
 const HIZLI_PRICING_URL = `${HIZLI_BASE_URL}/pricing`;
+const HIZLI_SEARCH_URL = `${HIZLI_BASE_URL}/search`;
 const HIZLI_LOGO_URL = `${HIZLI_BASE_URL}/logo.png`;
 const EMAIL_FROM = 'Hizli Carpooling <service@hizli-carpooling.com>';
 const FOOTER_COPY =
@@ -206,6 +207,150 @@ export function buildPasswordResetEmail(input: { firstName?: string | null; rese
 
 export async function sendPasswordResetEmail(input: PasswordResetEmailInput): Promise<string | null> {
 	return sendEmail({ ...input, template: buildPasswordResetEmail(input) });
+}
+
+export function buildBookingRequestReceivedEmail(input: {
+	firstName?: string | null;
+	passengerName: string;
+	rideRoute: string;
+	rideDate: string;
+	seatsRequested: number;
+	rideRequestsUrl: string;
+}): EmailTemplate {
+	return buildEmailTemplate({
+		firstName: input.firstName,
+		subject: 'New booking request for your ride',
+		lines: [
+			'A passenger requested seats on your ride.',
+			`Passenger: ${input.passengerName}`,
+			`Route: ${input.rideRoute}`,
+			`Date: ${input.rideDate}`,
+			`Seats requested: ${input.seatsRequested}`,
+			'Review and respond to the request in your dashboard.',
+			'The Hizli Team'
+		],
+		buttonLabel: 'Review request',
+		buttonUrl: input.rideRequestsUrl
+	});
+}
+
+export async function sendBookingRequestReceivedEmail(input: {
+	to: string;
+	firstName?: string | null;
+	passengerName: string;
+	rideRoute: string;
+	rideDate: string;
+	seatsRequested: number;
+	rideRequestsUrl: string;
+}): Promise<string | null> {
+	return sendEmail({
+		to: input.to,
+		firstName: input.firstName,
+		template: buildBookingRequestReceivedEmail(input)
+	});
+}
+
+export function buildBookingAcceptedEmail(input: {
+	firstName?: string | null;
+	rideRoute: string;
+	rideDate: string;
+	driverName: string;
+	myBookingsUrl: string;
+}): EmailTemplate {
+	return buildEmailTemplate({
+		firstName: input.firstName,
+		subject: 'Your booking has been confirmed',
+		lines: [
+			'Your booking request has been accepted by the driver.',
+			`Route: ${input.rideRoute}`,
+			`Date: ${input.rideDate}`,
+			`Driver: ${input.driverName}`,
+			'You can review your booking details in your dashboard.',
+			'The Hizli Team'
+		],
+		buttonLabel: 'View booking',
+		buttonUrl: input.myBookingsUrl
+	});
+}
+
+export async function sendBookingAcceptedEmail(input: {
+	to: string;
+	firstName?: string | null;
+	rideRoute: string;
+	rideDate: string;
+	driverName: string;
+	myBookingsUrl: string;
+}): Promise<string | null> {
+	return sendEmail({
+		to: input.to,
+		firstName: input.firstName,
+		template: buildBookingAcceptedEmail(input)
+	});
+}
+
+export function buildBookingRejectedEmail(input: {
+	firstName?: string | null;
+	rideRoute: string;
+	rideDate: string;
+	searchRidesUrl: string;
+}): EmailTemplate {
+	return buildEmailTemplate({
+		firstName: input.firstName,
+		subject: 'Update on your booking request',
+		lines: [
+			'Your booking request was not accepted.',
+			`Route: ${input.rideRoute}`,
+			`Date: ${input.rideDate}`,
+			'You can search for another ride that fits your schedule.',
+			'The Hizli Team'
+		],
+		buttonLabel: 'Find another ride',
+		buttonUrl: input.searchRidesUrl
+	});
+}
+
+export async function sendBookingRejectedEmail(input: {
+	to: string;
+	firstName?: string | null;
+	rideRoute: string;
+	rideDate: string;
+	searchRidesUrl: string;
+}): Promise<string | null> {
+	return sendEmail({
+		to: input.to,
+		firstName: input.firstName,
+		template: buildBookingRejectedEmail(input)
+	});
+}
+
+export function buildDashboardMessageNotificationEmail(input: {
+	firstName?: string | null;
+	messageSubject?: string;
+}): EmailTemplate {
+	return buildEmailTemplate({
+		firstName: input.firstName,
+		subject: 'You have a new message on Hizli Carpooling',
+		lines: [
+			'A new message is waiting for you in your dashboard.',
+			`Subject: ${input.messageSubject ?? 'New dashboard message'}`,
+			'Open your dashboard to continue the conversation.',
+			'The Hizli Team'
+		],
+		buttonLabel: 'Open dashboard',
+		buttonUrl: HIZLI_DASHBOARD_URL
+	});
+}
+
+export async function sendDashboardMessageNotificationEmail(input: {
+	to: string;
+	firstName?: string | null;
+	messageSubject?: string;
+}): Promise<string | null> {
+	return sendEmail({
+		to: input.to,
+		firstName: input.firstName,
+		template: buildDashboardMessageNotificationEmail(input)
+	});
 }
 
 export function buildDocumentsUnderReviewEmail(firstName?: string | null): EmailTemplate {
