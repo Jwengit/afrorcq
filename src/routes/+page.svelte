@@ -224,14 +224,14 @@
 				</div>
 				<button
 					type="submit"
-					class="text-white px-6 py-3 rounded-lg font-bold hover:opacity-90 transition flex items-center justify-center gap-2 cursor-pointer"
+					class="text-white px-4 py-2 rounded-lg font-bold hover:opacity-90 transition flex items-center justify-center gap-2 cursor-pointer h-full"
 					style="background-color: #00B050;"
 				>
-					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5">
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5 block">
 						<circle cx="11" cy="11" r="8"/>
 						<path d="m21 21-4.3-4.3"/>
 					</svg>
-					<span>Search</span>
+					<span class="leading-none">Search</span>
 				</button>
 			</form>
 		</div>
