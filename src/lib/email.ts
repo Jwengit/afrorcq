@@ -2,7 +2,6 @@ import { env } from '$env/dynamic/private';
 import { Resend } from 'resend';
 
 const HIZLI_BASE_URL = 'https://hizli-carpooling.com';
-const HIZLI_SIGNUP_URL = `${HIZLI_BASE_URL}/auth/signup`;
 const HIZLI_DASHBOARD_URL = `${HIZLI_BASE_URL}/dashboard`;
 const HIZLI_PROFILE_URL = `${HIZLI_BASE_URL}/profile`;
 const HIZLI_PRICING_URL = `${HIZLI_BASE_URL}/pricing`;
@@ -93,7 +92,7 @@ function buildEmailTemplate(input: {
 		<div style="margin:0;padding:32px 16px;background-color:#f5f5f5;">
 			<div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e5e5e5;border-radius:16px;overflow:hidden;">
 				<div style="padding:32px 32px 24px;text-align:center;border-bottom:1px solid #e5e5e5;background:#ffffff;">
-					<img src="${HIZLI_LOGO_URL}" alt="Hizli Carpooling" style="max-width:168px;width:100%;height:auto;display:inline-block;" />
+					<img src="${HIZLI_LOGO_URL}" alt="" style="max-width:168px;width:100%;height:auto;display:inline-block;" />
 				</div>
 				<div style="padding:32px;font-family:Arial,sans-serif;color:#000000;line-height:1.6;background:#ffffff;">
 					<p style="margin:0 0 16px;">Hi ${safeFirstName},</p>
@@ -152,6 +151,8 @@ async function sendEmail(payload: SendEmailPayload): Promise<string | null> {
 	return data.id;
 }
 
+// ─── EMAIL 1 — Welcome (envoyé à l'inscription Google ET email/mdp) ───
+
 export function buildWelcomeEmail(firstName?: string | null): EmailTemplate {
 	return buildEmailTemplate({
 		firstName,
@@ -164,13 +165,15 @@ export function buildWelcomeEmail(firstName?: string | null): EmailTemplate {
 			'The Hizli Team'
 		],
 		buttonLabel: 'Get started',
-		buttonUrl: HIZLI_SIGNUP_URL
+		buttonUrl: HIZLI_DASHBOARD_URL
 	});
 }
 
 export async function sendWelcomeEmail(input: BaseEmailInput): Promise<string | null> {
 	return sendEmail({ ...input, template: buildWelcomeEmail(input.firstName) });
 }
+
+// ─── EMAIL 2 — Support reply (envoyé quand l'admin répond) ───
 
 export function buildSupportReplyEmail(firstName?: string | null): EmailTemplate {
 	return buildEmailTemplate({
@@ -189,6 +192,8 @@ export function buildSupportReplyEmail(firstName?: string | null): EmailTemplate
 export async function sendSupportReplyEmail(input: BaseEmailInput): Promise<string | null> {
 	return sendEmail({ ...input, template: buildSupportReplyEmail(input.firstName) });
 }
+
+// ─── EMAIL 3 — Reset password ───
 
 export function buildPasswordResetEmail(input: { firstName?: string | null; resetUrl: string }): EmailTemplate {
 	return buildEmailTemplate({
@@ -209,6 +214,8 @@ export async function sendPasswordResetEmail(input: PasswordResetEmailInput): Pr
 	return sendEmail({ ...input, template: buildPasswordResetEmail(input) });
 }
 
+// ─── EMAIL 4 — Ride bookée (pour le conducteur) ───
+
 export function buildBookingRequestReceivedEmail(input: {
 	firstName?: string | null;
 	passengerName: string;
@@ -219,17 +226,17 @@ export function buildBookingRequestReceivedEmail(input: {
 }): EmailTemplate {
 	return buildEmailTemplate({
 		firstName: input.firstName,
-		subject: 'New booking request for your ride',
+		subject: 'Someone booked your ride! 🚗',
 		lines: [
-			'A passenger requested seats on your ride.',
+			'Good news! A passenger has requested a seat on your ride.',
 			`Passenger: ${input.passengerName}`,
 			`Route: ${input.rideRoute}`,
 			`Date: ${input.rideDate}`,
 			`Seats requested: ${input.seatsRequested}`,
-			'Review and respond to the request in your dashboard.',
+			'Log in to your dashboard to accept or decline this booking.',
 			'The Hizli Team'
 		],
-		buttonLabel: 'Review request',
+		buttonLabel: 'View booking',
 		buttonUrl: input.rideRequestsUrl
 	});
 }
@@ -250,6 +257,8 @@ export async function sendBookingRequestReceivedEmail(input: {
 	});
 }
 
+// ─── EMAIL 5 — Ride acceptée (pour le passager) ───
+
 export function buildBookingAcceptedEmail(input: {
 	firstName?: string | null;
 	rideRoute: string;
@@ -259,16 +268,17 @@ export function buildBookingAcceptedEmail(input: {
 }): EmailTemplate {
 	return buildEmailTemplate({
 		firstName: input.firstName,
-		subject: 'Your booking has been confirmed',
+		subject: 'Your booking has been confirmed! 🎉',
 		lines: [
-			'Your booking request has been accepted by the driver.',
+			'Great news! Your booking has been confirmed by the driver.',
 			`Route: ${input.rideRoute}`,
 			`Date: ${input.rideDate}`,
 			`Driver: ${input.driverName}`,
-			'You can review your booking details in your dashboard.',
+			'Remember: payment is handled directly between you and your driver at the time of the trip.',
+			'See you on the road!',
 			'The Hizli Team'
 		],
-		buttonLabel: 'View booking',
+		buttonLabel: 'View my trip',
 		buttonUrl: input.myBookingsUrl
 	});
 }
@@ -288,6 +298,8 @@ export async function sendBookingAcceptedEmail(input: {
 	});
 }
 
+// ─── EMAIL 6 — Ride refusée (pour le passager) ───
+
 export function buildBookingRejectedEmail(input: {
 	firstName?: string | null;
 	rideRoute: string;
@@ -296,15 +308,15 @@ export function buildBookingRejectedEmail(input: {
 }): EmailTemplate {
 	return buildEmailTemplate({
 		firstName: input.firstName,
-		subject: 'Update on your booking request',
+		subject: 'Your booking was not accepted',
 		lines: [
-			'Your booking request was not accepted.',
+			"Unfortunately, the driver was unable to confirm your booking for this trip.",
 			`Route: ${input.rideRoute}`,
 			`Date: ${input.rideDate}`,
-			'You can search for another ride that fits your schedule.',
+			"Don't worry — there are other rides available for your route. Search for another ride now.",
 			'The Hizli Team'
 		],
-		buttonLabel: 'Find another ride',
+		buttonLabel: 'Search another ride',
 		buttonUrl: input.searchRidesUrl
 	});
 }
@@ -323,54 +335,14 @@ export async function sendBookingRejectedEmail(input: {
 	});
 }
 
-export function buildDashboardMessageNotificationEmail(input: {
-	firstName?: string | null;
-	messageSubject?: string;
-}): EmailTemplate {
-	return buildEmailTemplate({
-		firstName: input.firstName,
-		subject: 'You have a new message on Hizli Carpooling',
-		lines: [
-			'A new message is waiting for you in your dashboard.',
-			`Subject: ${input.messageSubject ?? 'New dashboard message'}`,
-			'Open your dashboard to continue the conversation.',
-			'The Hizli Team'
-		],
-		buttonLabel: 'Open dashboard',
-		buttonUrl: HIZLI_DASHBOARD_URL
-	});
-}
-
-export async function sendDashboardMessageNotificationEmail(input: {
-	to: string;
-	firstName?: string | null;
-	messageSubject?: string;
-}): Promise<string | null> {
-	return sendEmail({
-		to: input.to,
-		firstName: input.firstName,
-		template: buildDashboardMessageNotificationEmail(input)
-	});
-}
-
-export function buildDocumentsUnderReviewEmail(firstName?: string | null): EmailTemplate {
-	return buildEmailTemplate({
-		firstName,
-		subject: 'We received your documents!',
-		lines: [
-			'Thank you for submitting your documents. Our team will review them within 24-48 hours.',
-			"We'll notify you as soon as your verification is complete.",
-			'In the meantime, you can still search and post rides with your free account.',
-			'The Hizli Team'
-		],
-		buttonLabel: 'Go to my dashboard',
-		buttonUrl: HIZLI_DASHBOARD_URL
-	});
-}
+// ─── EMAIL 7 — Documents under review (DÉSACTIVÉ — activity center uniquement) ───
 
 export async function sendDocumentsUnderReviewEmail(input: BaseEmailInput): Promise<string | null> {
-	return sendEmail({ ...input, template: buildDocumentsUnderReviewEmail(input.firstName) });
+	console.log('Documents under review — activity center only, email skipped.');
+	return null;
 }
+
+// ─── EMAIL 8 — Document rejeté ───
 
 export function buildDocumentRejectedEmail(input: { firstName?: string | null; reason: string }): EmailTemplate {
 	return buildEmailTemplate({
@@ -391,6 +363,8 @@ export function buildDocumentRejectedEmail(input: { firstName?: string | null; r
 export async function sendDocumentRejectedEmail(input: DocumentRejectedEmailInput): Promise<string | null> {
 	return sendEmail({ ...input, template: buildDocumentRejectedEmail(input) });
 }
+
+// ─── EMAIL 9 — Documents vérifiés → Complete membership ───
 
 export function buildDocumentsVerifiedEmail(firstName?: string | null): EmailTemplate {
 	return buildEmailTemplate({
@@ -415,6 +389,8 @@ export async function sendDocumentsVerifiedEmail(input: BaseEmailInput): Promise
 	return sendEmail({ ...input, template: buildDocumentsVerifiedEmail(input.firstName) });
 }
 
+// ─── EMAIL 10 — Compte verified (après paiement Stripe) ───
+
 export function buildAccountVerifiedEmail(firstName?: string | null): EmailTemplate {
 	return buildEmailTemplate({
 		firstName,
@@ -426,7 +402,6 @@ export function buildAccountVerifiedEmail(firstName?: string | null): EmailTempl
 			'✓ Real reviews from real riders',
 			'✓ Your verified badge on your profile',
 			'✓ Girls Only rides (if applicable)',
-			'✓ Priority support',
 			'See you on the road,',
 			'The Hizli Team'
 		],
@@ -438,6 +413,8 @@ export function buildAccountVerifiedEmail(firstName?: string | null): EmailTempl
 export async function sendAccountVerifiedEmail(input: BaseEmailInput): Promise<string | null> {
 	return sendEmail({ ...input, template: buildAccountVerifiedEmail(input.firstName) });
 }
+
+// ─── EMAIL 11 — Membership expiré (email + activity center) ───
 
 export function buildMembershipExpiredEmail(firstName?: string | null): EmailTemplate {
 	return buildEmailTemplate({
@@ -455,4 +432,15 @@ export function buildMembershipExpiredEmail(firstName?: string | null): EmailTem
 
 export async function sendMembershipExpiredEmail(input: BaseEmailInput): Promise<string | null> {
 	return sendEmail({ ...input, template: buildMembershipExpiredEmail(input.firstName) });
+}
+
+// ─── Dashboard message notification (DÉSACTIVÉ — activity center uniquement) ───
+
+export async function sendDashboardMessageNotificationEmail(input: {
+	to: string;
+	firstName?: string | null;
+	messageSubject?: string;
+}): Promise<string | null> {
+	console.log('Dashboard message notification — activity center only, email skipped.');
+	return null;
 }
