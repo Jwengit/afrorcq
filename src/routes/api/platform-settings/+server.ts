@@ -7,7 +7,7 @@ const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
 
 const DEFAULT_PUBLIC_SETTINGS = {
   commission_percent: 10,
-  footer_brand_description: 'A carpooling platform that connects people.',
+  footer_brand_description: 'A trusted community of verified carpoolers.',
   footer_about_us_label: 'About Us',
   footer_about_us_url: '/about',
   footer_how_it_works_label: 'How it works',

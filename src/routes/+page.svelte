@@ -10,7 +10,7 @@
 	let searchArrival = '';
 	let searchDate = '';
 	let searchSeats = 1;
-	let footerBrandDescription = 'A carpooling platform that connects people.';
+	let footerBrandDescription = 'A trusted community of verified carpoolers.';
 	let footerAboutUsLabel = 'About Us';
 	let footerAboutUsUrl = '/about';
 	let footerHowItWorksLabel = 'How it works';
@@ -174,7 +174,7 @@
 				Safety. Simplicity. Saving.
 			</h1>
 			<div class="text-xl md:text-2xl mb-10 text-blue-100 max-w-2xl mx-auto">
-				<p>A carpooling platform that connects people.</p>
+				<p>A trusted community of verified carpoolers.</p>
 				<p>With Hizli it's easy</p>		
 			</div>
 

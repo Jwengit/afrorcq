@@ -448,7 +448,7 @@
 	let settingsError = '';
 	let settingsMessage = '';
 	let settingsSaving = false;
-	let footerBrandDescription = 'A carpooling platform that connects people.';
+	let footerBrandDescription = 'A trusted community of verified carpoolers.';
 	let footerAboutUsLabel = 'About Us';
 	let footerAboutUsUrl = '/about';
 	let footerHowItWorksLabel = 'How it works';
@@ -3089,7 +3089,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 
 		const s = payload?.settings;
 		if (s) {
-			footerBrandDescription = String(s.footer_brand_description ?? 'A carpooling platform that connects people.');
+			footerBrandDescription = String(s.footer_brand_description ?? 'A trusted community of verified carpoolers.');
 			footerAboutUsLabel = String(s.footer_about_us_label ?? 'About Us');
 			footerAboutUsUrl = String(s.footer_about_us_url ?? '/about');
 			footerHowItWorksLabel = String(s.footer_how_it_works_label ?? 'How it works');
