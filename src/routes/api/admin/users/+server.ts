@@ -354,7 +354,7 @@ export const PATCH: RequestHandler = async ({ request }) => {
 			if (value) {
 				const { data: profileForVerification, error: profileForVerificationError } = await adminClient
 					.from('profiles')
-					.select('profile_photo_url')
+					.select('profile_photo_status')
 					.eq('id', userId)
 					.maybeSingle();
 
@@ -362,14 +362,13 @@ export const PATCH: RequestHandler = async ({ request }) => {
 					return json({ error: profileForVerificationError.message }, { status: 500 });
 				}
 
-				const profilePhotoUrl =
-					typeof profileForVerification?.profile_photo_url === 'string'
-						? profileForVerification.profile_photo_url.trim()
-						: '';
+				const profilePhotoStatus = String(profileForVerification?.profile_photo_status ?? '')
+					.trim()
+					.toLowerCase();
 
-				if (!profilePhotoUrl) {
+				if (profilePhotoStatus !== 'approved') {
 					return json(
-						{ error: 'Profile photo is required before marking this account as verified.' },
+						{ error: 'Profile photo must be approved before marking this account as verified.' },
 						{ status: 400 }
 					);
 				}

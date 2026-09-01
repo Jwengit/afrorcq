@@ -919,6 +919,57 @@
 		await updateUserFlag(profile, 'is_verified', value);
 	}
 
+	async function updateProfilePhotoStatus(status: 'approved' | 'rejected') {
+		if (!selectedProfile?.id || !selectedProfile.profile_photo_url) return;
+
+		const profileId = selectedProfile.id;
+		actionUserId = profileId;
+		usersActionMessage = '';
+
+		try {
+			const {
+				data: { session }
+			} = await supabase.auth.getSession();
+
+			if (!session?.access_token) {
+				usersActionMessage = 'Session expired. Please sign in again.';
+				return;
+			}
+
+			const response = await fetch('/api/admin/profile-photo', {
+				method: 'PATCH',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${session.access_token}`
+				},
+				body: JSON.stringify({ userId: profileId, status })
+			});
+
+			const payload = await response.json();
+			if (!response.ok) {
+				usersActionMessage = payload?.error || 'Unable to update profile photo status.';
+				return;
+			}
+
+			usersActionMessage =
+				status === 'approved'
+					? 'Profile photo approved successfully.'
+					: 'Profile photo rejected successfully.';
+		} catch {
+			usersActionMessage = 'Unable to update profile photo status.';
+		} finally {
+			actionUserId = null;
+		}
+	}
+
+	async function approveProfilePhoto() {
+		await updateProfilePhotoStatus('approved');
+	}
+
+	async function rejectProfilePhoto() {
+		await updateProfilePhotoStatus('rejected');
+	}
+
 	async function updateSelectedProfileGender(gender: string) {
 		if (!selectedProfile) return;
 		const selectedProfileId = selectedProfile.id;
@@ -5423,15 +5474,15 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 									<button
 										type="button"
 										disabled={actionUserId === selectedProfile?.id || !selectedProfile?.profile_photo_url}
-										on:click={() => selectedProfile && updateSelectedProfileVerification(true)}
+										on:click={approveProfilePhoto}
 										class="px-3 py-2 rounded-lg border border-green-300 text-green-700 bg-green-50 text-sm font-medium hover:bg-green-100 disabled:opacity-50"
 									>
 										Approve photo
 									</button>
 									<button
 										type="button"
-										disabled={actionUserId === selectedProfile?.id}
-										on:click={() => selectedProfile && updateSelectedProfileVerification(false)}
+										disabled={actionUserId === selectedProfile?.id || !selectedProfile?.profile_photo_url}
+										on:click={rejectProfilePhoto}
 										class="px-3 py-2 rounded-lg border border-red-300 text-red-700 bg-red-50 text-sm font-medium hover:bg-red-100 disabled:opacity-50"
 									>
 										Reject photo

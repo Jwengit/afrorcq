@@ -84,6 +84,10 @@
 	let previewUrl = '';
 	let profilePhotoFileName = 'No file selected';
 
+	function getProfilePhotoLabel(photoUrl: string): string {
+		return photoUrl ? 'Photo already uploaded' : 'No file selected';
+	}
+
 	// Verification documents
 	let documentsLoading = false;
 	let documentsError = '';
@@ -504,6 +508,7 @@
 				profile = normalizeProfile(data);
 				formData = { ...profile };
 				previewUrl = profile.profile_photo_url || '';
+				profilePhotoFileName = getProfilePhotoLabel(profile.profile_photo_url);
 			}
 		} catch (error) {
 			console.error('Error loading profile:', error);
@@ -718,6 +723,7 @@
 		formData = { ...profile };
 		selectedFile = null;
 		previewUrl = profile.profile_photo_url || '';
+		profilePhotoFileName = getProfilePhotoLabel(profile.profile_photo_url);
 	}
 
 	function viewPublicProfile() {
