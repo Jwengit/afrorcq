@@ -67,50 +67,7 @@ function resolveStatusFromVerification(isVerified: boolean, profileStatus: strin
 	return 'free';
 }
 
-async function buildNotificationTicket(
-	adminClient: ReturnType<typeof buildAdminClient>,
-	userId: string,
-	subject: string
-): Promise<string | null> {
-	const { data: existing } = await adminClient
-		.from('support_tickets')
-		.select('id')
-		.eq('user_id', userId)
-		.eq('subject', subject)
-		.order('created_at', { ascending: false })
-		.limit(1)
-		.maybeSingle();
-
-	if (existing?.id) return existing.id;
-
-	const { data: created } = await adminClient
-		.from('support_tickets')
-		.insert({ user_id: userId, subject, status: 'open', priority: 'normal' })
-		.select('id')
-		.single();
-
-	return created?.id ?? null;
-}
-
 async function notifyMemberActivated(adminClient: ReturnType<typeof buildAdminClient>, userId: string, siteUrl: string) {
-	const dashboardUrl = `${siteUrl}/dashboard`;
-	const message =
-		`<div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">` +
-		`<p style="margin: 0 0 10px;"><strong>Welcome to Hizli! Your account is now verified.</strong></p>` +
-		`<p style="margin: 0 0 12px;">You now have full access to the Hizli community.</p>` +
-		`<p style="margin: 0;"><a href="${dashboardUrl}" style="display:inline-block;padding:9px 14px;border-radius:8px;background:#16a34a;color:#ffffff;text-decoration:none;font-weight:600;">Go to my dashboard</a></p>` +
-		`</div>`;
-
-	const ticketId = await buildNotificationTicket(adminClient, userId, 'Welcome — your account is now verified');
-	if (ticketId) {
-		await adminClient.from('support_messages').insert({
-			ticket_id: ticketId,
-			sender_id: null,
-			sender_role: 'admin',
-			message
-		});
-	}
-
 	const { data: profile } = await adminClient
 		.from('profiles')
 		.select('first_name, email')
@@ -126,24 +83,6 @@ async function notifyMemberActivated(adminClient: ReturnType<typeof buildAdminCl
 }
 
 async function notifyMemberExpired(adminClient: ReturnType<typeof buildAdminClient>, userId: string, siteUrl: string) {
-	const renewUrl = `${siteUrl}/pricing`;
-	const message =
-		`<div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">` +
-		`<p style="margin: 0 0 10px;"><strong>Your Hizli membership has expired.</strong></p>` +
-		`<p style="margin: 0 0 12px;">Renew now to keep full access.</p>` +
-		`<p style="margin: 0;"><a href="${renewUrl}" style="display:inline-block;padding:9px 14px;border-radius:8px;background:#d97706;color:#ffffff;text-decoration:none;font-weight:600;">Renew my membership</a></p>` +
-		`</div>`;
-
-	const ticketId = await buildNotificationTicket(adminClient, userId, 'Your Hizli membership has expired');
-	if (ticketId) {
-		await adminClient.from('support_messages').insert({
-			ticket_id: ticketId,
-			sender_id: null,
-			sender_role: 'admin',
-			message
-		});
-	}
-
 	const { data: profile } = await adminClient
 		.from('profiles')
 		.select('first_name, email')
@@ -221,7 +160,7 @@ async function updateMembership(userId: string, paid: boolean, expiresAtIso: str
 	const wasApproved = (typedProfile.status ?? '').toLowerCase() === 'approved';
 	const isVerifiedNow = Boolean(typedProfile.is_verified) || (paid && wasApproved);
 	const nextStatus = resolveStatusFromVerification(Boolean(typedProfile.is_verified), typedProfile.status ?? '', paid);
-	const siteUrl = (env.PUBLIC_SITE_URL ?? 'http://localhost:5173').replace(/\/$/, '');
+	const siteUrl = (String(env.PUBLIC_SITE_URL ?? '').trim() || 'https://afrorcqvercelapp.vercel.app').replace(/\/$/, '');
 
 	const updatePayload: Record<string, unknown> = {
 		membership_paid: paid,

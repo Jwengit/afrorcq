@@ -6,6 +6,7 @@
 	import { loadRecaptchaScript, type RecaptchaApi } from '$lib/recaptcha';
 
 	let email = '';
+	let dateOfBirth = '';
 	let password = '';
 	let confirmPassword = '';
 	let showPassword = false;
@@ -31,6 +32,24 @@
 
 	function getAuthCallbackUrl() {
 		return `${window.location.origin}/auth/callback`;
+	}
+
+	function isAtLeast18(dateValue: string): boolean {
+		const birthDate = new Date(`${dateValue}T00:00:00`);
+		if (Number.isNaN(birthDate.getTime())) return false;
+
+		const today = new Date();
+		let age = today.getFullYear() - birthDate.getFullYear();
+		const monthDifference = today.getMonth() - birthDate.getMonth();
+
+		if (
+			monthDifference < 0 ||
+			(monthDifference === 0 && today.getDate() < birthDate.getDate())
+		) {
+			age -= 1;
+		}
+
+		return age >= 18;
 	}
 
 	function renderRecaptchaWidget(recaptchaApi: RecaptchaApi) {
@@ -88,6 +107,11 @@ error = 'Passwords do not match';
 return;
 }
 
+if (!dateOfBirth || !isAtLeast18(dateOfBirth)) {
+error = 'You must be at least 18 years old to create an account on Hizli Carpooling.';
+return;
+}
+
 if (!recaptchaToken) {
 error = 'Please complete the reCAPTCHA verification';
 return;
@@ -102,7 +126,8 @@ password,
 options: {
 emailRedirectTo: getAuthCallbackUrl(),
 data: {
-recaptcha_token: recaptchaToken
+recaptcha_token: recaptchaToken,
+date_of_birth: dateOfBirth
 }
 }
 });
@@ -192,6 +217,18 @@ async function signUpWithGoogle() {
 						class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-green-500 focus:border-green-500 focus:z-10 sm:text-sm"
 						placeholder="Email address"
 						bind:value={email}
+					/>
+				</div>
+				<div>
+					<label for="date-of-birth" class="sr-only">Date of birth</label>
+					<input
+						id="date-of-birth"
+						name="date-of-birth"
+						type="date"
+						required
+						max={new Date().toISOString().slice(0, 10)}
+						class="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
+						bind:value={dateOfBirth}
 					/>
 				</div>
 				<div>

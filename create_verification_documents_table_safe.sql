@@ -35,29 +35,6 @@ ALTER TABLE public.verification_documents
   ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
 
-DO $$
-BEGIN
-  IF EXISTS (
-    SELECT 1
-    FROM information_schema.columns
-    WHERE table_schema = 'public'
-      AND table_name = 'verification_documents'
-      AND column_name = 'doc_type'
-  ) THEN
-    EXECUTE 'UPDATE public.verification_documents SET document_type = doc_type WHERE document_type IS NULL';
-  END IF;
-
-  IF EXISTS (
-    SELECT 1
-    FROM information_schema.columns
-    WHERE table_schema = 'public'
-      AND table_name = 'verification_documents'
-      AND column_name = 'type'
-  ) THEN
-    EXECUTE 'UPDATE public.verification_documents SET document_type = type WHERE document_type IS NULL';
-  END IF;
-END $$;
-
 UPDATE public.verification_documents
 SET status = 'pending'
 WHERE status IS NULL;

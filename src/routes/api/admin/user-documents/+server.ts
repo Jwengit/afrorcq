@@ -60,99 +60,33 @@ function buildRejectionInboxMessage(documentTypeLabel: string, note: string | nu
 }
 
 async function notifyRejectedDocument(adminClient: any, userId: string, documentType: string, note: string | null, siteUrl: string) {
-  const subject = 'Action required — document rejected';
-
-  const { data: existingTicket } = await adminClient
-    .from('support_tickets')
-    .select('id')
-    .eq('user_id', userId)
-    .eq('subject', subject)
-    .order('created_at', { ascending: false })
-    .limit(1)
+  const { data: profile } = await adminClient
+    .from('profiles')
+    .select('first_name, email')
+    .eq('id', userId)
     .maybeSingle();
-
-  let ticketId = existingTicket?.id ?? null;
-  if (!ticketId) {
-    const { data: createdTicket } = await adminClient
-      .from('support_tickets')
-      .insert({ user_id: userId, subject, status: 'open', priority: 'high' })
-      .select('id')
-      .single();
-    ticketId = createdTicket?.id ?? null;
-  }
-
-  if (ticketId) {
-    const label = documentType.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-    await adminClient.from('support_messages').insert({
-      ticket_id: ticketId,
-      sender_id: null,
-      sender_role: 'admin',
-      message: buildRejectionInboxMessage(label, note, siteUrl)
+  const memberEmail = (profile?.email ?? '').trim();
+  if (memberEmail) {
+    await sendDocumentRejectedEmail({
+      to: memberEmail,
+      firstName: profile?.first_name,
+      reason: note || 'Please review and upload a new version of your document.'
     });
-
-    const { data: profile } = await adminClient
-      .from('profiles')
-      .select('first_name, email')
-      .eq('id', userId)
-      .maybeSingle();
-    const memberEmail = (profile?.email ?? '').trim();
-    if (memberEmail) {
-      await sendDocumentRejectedEmail({
-        to: memberEmail,
-        firstName: profile?.first_name,
-        reason: note || 'Please review and upload a new version of your document.'
-      });
-    }
   }
 }
 
 async function notifyApprovedMember(adminClient: any, userId: string, siteUrl: string) {
-  const subject = 'Documents verified - complete your membership';
-
-  const { data: existingTicket } = await adminClient
-    .from('support_tickets')
-    .select('id')
-    .eq('user_id', userId)
-    .eq('subject', subject)
-    .order('created_at', { ascending: false })
-    .limit(1)
+  const { data: profile } = await adminClient
+    .from('profiles')
+    .select('first_name, email')
+    .eq('id', userId)
     .maybeSingle();
-
-  let ticketId = existingTicket?.id ?? null;
-  if (!ticketId) {
-    const { data: createdTicket } = await adminClient
-      .from('support_tickets')
-      .insert({
-        user_id: userId,
-        subject,
-        status: 'open',
-        priority: 'normal'
-      })
-      .select('id')
-      .single();
-    ticketId = createdTicket?.id ?? null;
-  }
-
-  if (ticketId) {
-    await adminClient.from('support_messages').insert({
-      ticket_id: ticketId,
-      sender_id: null,
-      sender_role: 'admin',
-      message: buildApprovalInboxMessage(siteUrl)
+  const memberEmail = (profile?.email ?? '').trim();
+  if (memberEmail) {
+    await sendDocumentsVerifiedEmail({
+      to: memberEmail,
+      firstName: profile?.first_name
     });
-
-    const { data: profile } = await adminClient
-      .from('profiles')
-      .select('first_name, email')
-      .eq('id', userId)
-      .maybeSingle();
-    const memberEmail = (profile?.email ?? '').trim();
-    if (memberEmail) {
-      await sendDocumentsVerifiedEmail({
-        to: memberEmail,
-        firstName: profile?.first_name
-      });
-    }
   }
 }
 
@@ -181,8 +115,6 @@ type AdminDocumentRow = {
   id: string;
   user_id: string;
   document_type?: string | null;
-  doc_type?: string | null;
-  type?: string | null;
   file_name: string;
   storage_path: string;
   mime_type: string | null;
@@ -197,16 +129,12 @@ type AdminDocumentRow = {
 
 function resolveRowDocumentType(row: {
   document_type?: string | null;
-  doc_type?: string | null;
-  type?: string | null;
 }): string {
-  return row.document_type ?? row.doc_type ?? row.type ?? 'other';
+  return row.document_type ?? 'other';
 }
 
 type VerificationDocumentStatusRow = {
   document_type?: string | null;
-  doc_type?: string | null;
-  type?: string | null;
   status?: string | null;
 };
 
@@ -347,66 +275,8 @@ export const GET: RequestHandler = async ({ request, url }) => {
         ...doc,
         document_type: resolveRowDocumentType(doc)
       }));
-
-      if (docs.some((doc) => !doc.document_type || doc.document_type === 'other')) {
-        const legacyDocTypeQuery = await adminClient
-          .from('verification_documents')
-          .select('id, doc_type')
-          .eq('user_id', userId);
-
-        if (!legacyDocTypeQuery.error) {
-          const byId = new Map(
-            ((legacyDocTypeQuery.data ?? []) as unknown as Array<{ id: string; doc_type: string | null }>).map((row) => [row.id, row.doc_type])
-          );
-          docs = docs.map((doc) => ({
-            ...doc,
-            document_type: doc.document_type && doc.document_type !== 'other' ? doc.document_type : byId.get(doc.id) || doc.document_type
-          }));
-        }
-
-        const legacyTypeQuery = await adminClient
-          .from('verification_documents')
-          .select('id, doc_type')
-          .eq('user_id', userId);
-
-        if (!legacyTypeQuery.error) {
-          const byId = new Map(
-            ((legacyTypeQuery.data ?? []) as unknown as Array<{ id: string; type: string | null }>).map((row) => [row.id, row.type])
-          );
-          docs = docs.map((doc) => ({
-            ...doc,
-            document_type: doc.document_type && doc.document_type !== 'other' ? doc.document_type : byId.get(doc.id) || doc.document_type || 'other'
-          }));
-        }
-      }
     } else {
-      const fallbackDocTypeQuery = await adminClient
-        .from('verification_documents')
-        .select('id, user_id, doc_type, file_name, storage_path, mime_type, file_size, status, admin_note, reviewed_by, reviewed_at, created_at, updated_at')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
-
-      if (!fallbackDocTypeQuery.error) {
-        docs = ((fallbackDocTypeQuery.data ?? []) as unknown as AdminDocumentRow[]).map((doc) => ({
-          ...doc,
-          document_type: resolveRowDocumentType(doc)
-        }));
-      } else {
-        const fallbackTypeQuery = await adminClient
-          .from('verification_documents')
-          .select('id, user_id, doc_type, file_name, storage_path, mime_type, file_size, status, admin_note, reviewed_by, reviewed_at, created_at, updated_at')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false });
-
-        if (fallbackTypeQuery.error) {
-          return json({ error: fallbackTypeQuery.error.message || 'Failed to load user verification documents.' }, { status: 500 });
-        }
-
-        docs = ((fallbackTypeQuery.data ?? []) as unknown as AdminDocumentRow[]).map((doc) => ({
-          ...doc,
-          document_type: resolveRowDocumentType(doc)
-        }));
-      }
+      return json({ error: primaryQuery.error.message || 'Failed to load user verification documents.' }, { status: 500 });
     }
 
     const documentsWithUrls = await Promise.all(
@@ -469,7 +339,7 @@ export const PATCH: RequestHandler = async ({ request }) => {
 
     const { data: existingDoc, error: existingError } = await adminClient
       .from('verification_documents')
-      .select('id, user_id, status, document_type, doc_type, type')
+      .select('id, user_id, status, document_type')
       .eq('id', documentId)
       .maybeSingle();
 
@@ -525,13 +395,13 @@ export const PATCH: RequestHandler = async ({ request }) => {
           })
           .eq('id', existingDoc.user_id);
 
-        const siteUrl = (env.PUBLIC_SITE_URL ?? 'http://localhost:5173').replace(/\/$/, '');
+        const siteUrl = (String(env.PUBLIC_SITE_URL ?? '').trim() || 'https://afrorcqvercelapp.vercel.app').replace(/\/$/, '');
 
         await notifyApprovedMember(adminClient, existingDoc.user_id, siteUrl);
       }
     } else {
       // Doc rejected: keep profile in 'pending' so the member can re-upload without re-choosing a plan
-      const siteUrl = (env.PUBLIC_SITE_URL ?? 'http://localhost:5173').replace(/\/$/, '');
+      const siteUrl = (String(env.PUBLIC_SITE_URL ?? '').trim() || 'https://afrorcqvercelapp.vercel.app').replace(/\/$/, '');
       const rejectedDocType = resolveRowDocumentType(existingDoc);
       await notifyRejectedDocument(adminClient, existingDoc.user_id, rejectedDocType, note, siteUrl);
     }

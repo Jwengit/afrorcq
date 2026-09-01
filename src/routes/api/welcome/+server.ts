@@ -4,7 +4,6 @@ import { createClient } from '@supabase/supabase-js';
 import { sendWelcomeEmail } from '$lib/email';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
-const WELCOME_TICKET_SUBJECT = 'Welcome to Hizli Carpooling';
 
 function escapeHtml(value: string): string {
 	return value
@@ -83,54 +82,7 @@ export async function POST({ request }) {
 			(user.email?.split('@')[0] as string | undefined) ||
 			'';
 		const firstName = getFirstName(displayName);
-		const safeFirstName = escapeHtml(firstName || 'there');
-		const welcomeInboxMessage = buildWelcomeInboxMessage(safeFirstName);
-
-		let welcomeMessageCreated = false;
 		let welcomeEmailSent = false;
-
-		const { data: existingWelcomeTicket, error: existingTicketError } = await adminClient
-			.from('support_tickets')
-			.select('id')
-			.eq('user_id', userId)
-			.eq('subject', WELCOME_TICKET_SUBJECT)
-			.limit(1)
-			.maybeSingle();
-
-		if (existingTicketError) {
-			console.error('Welcome ticket lookup error:', existingTicketError);
-		}
-
-		if (!existingWelcomeTicket?.id) {
-			const { data: createdTicket, error: createTicketError } = await adminClient
-				.from('support_tickets')
-				.insert({
-					user_id: userId,
-					subject: WELCOME_TICKET_SUBJECT,
-					status: 'open',
-					priority: 'normal'
-				})
-				.select('id')
-				.single();
-
-			if (createTicketError || !createdTicket?.id) {
-				console.error('Welcome ticket creation error:', createTicketError);
-			} else {
-				welcomeMessageCreated = true;
-				const { error: createMessageError } = await adminClient.from('support_messages').insert({
-					ticket_id: createdTicket.id,
-					sender_id: null,
-					sender_role: 'admin',
-					message: welcomeInboxMessage
-				});
-
-				if (createMessageError) {
-					console.error('Welcome inbox message creation error:', createMessageError);
-				}
-			}
-		} else {
-			welcomeMessageCreated = true;
-		}
 
 		if (user.email) {
 			const emailResult = await sendWelcomeEmail({
@@ -146,17 +98,13 @@ export async function POST({ request }) {
 			welcomeEmailSent = true;
 		}
 
-		if (!welcomeMessageCreated && !welcomeEmailSent) {
-			return json({ error: 'No welcome action was performed' }, { status: 500 });
+		if (!welcomeEmailSent) {
+			return json({ error: 'No welcome email was sent' }, { status: 500 });
 		}
 
 		const metadata: Record<string, unknown> = {
 			...existingMetadata
 		};
-
-		if (welcomeMessageCreated) {
-			metadata.welcome_message_sent_at = new Date().toISOString();
-		}
 
 		if (welcomeEmailSent) {
 			metadata.welcome_email_sent_at = new Date().toISOString();

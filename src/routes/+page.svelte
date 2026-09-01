@@ -232,7 +232,7 @@
 				</div>
 				<button
 					type="submit"
-					class="text-white px-4 py-2 rounded-lg font-bold hover:opacity-90 transition flex items-center justify-center gap-2 cursor-pointer h-full"
+					class="w-full sm:w-auto min-h-11 shrink-0 text-white px-5 py-2.5 rounded-lg font-bold hover:opacity-90 transition flex items-center justify-center gap-2 cursor-pointer"
 					style="background-color: #00B050;"
 				>
 					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5 block">
@@ -409,13 +409,6 @@
 							</li>
 						</ul>
 					</div>
-					<a
-						href={currentUser ? '/dashboard' : '/auth/signup'}
-						class="mt-auto inline-flex items-center justify-center w-full text-white px-5 py-2.5 rounded-lg font-semibold transition hover:opacity-90 hover:shadow-[0_8px_16px_rgba(0,176,80,0.24)]"
-						style="background-color: #00B050;"
-					>
-						Get started
-					</a>
 				</div>
 
 				<div

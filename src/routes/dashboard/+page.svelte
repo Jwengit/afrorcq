@@ -114,6 +114,13 @@
 		createdAt: string;
 	};
 
+	type MemberNotification = {
+		id: string;
+		title: string;
+		message: string;
+		created_at: string;
+	};
+
 	type ActivityItem = {
 		id: string;
 		title: string;
@@ -168,6 +175,7 @@
 	let adminInboxLoading = false;
 	let adminInboxError = '';
 	let adminInboxMessages: AdminInboxMessage[] = [];
+	let memberNotifications: AdminInboxMessage[] = [];
 	let deletingAdminMessageId: string | null = null;
 	let supportReplyDrafts: Record<string, string> = {};
 	let supportReplySendingTicketId: string | null = null;
@@ -223,8 +231,10 @@
 			await loadAdminInboxMessages();
 		} else {
 			adminInboxMessages = [];
+			memberNotifications = [];
 			adminInboxError = '';
 		}
+		await loadMemberNotifications();
 		loading = false;
 	});
 
@@ -382,7 +392,7 @@
 				})
 			);
 
-			adminInboxMessages = ticketConversations
+			adminInboxMessages = (ticketConversations
 				.flatMap(({ ticket, messages }) =>
 					messages
 						.filter((msg) => (msg.message ?? '').trim().length > 0)
@@ -395,7 +405,8 @@
 							message: msg.message,
 							createdAt: msg.created_at
 						}))
-				)
+				) as AdminInboxMessage[])
+				.concat(memberNotifications)
 				.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 				.slice(0, 20);
 		} catch (error) {
@@ -403,6 +414,38 @@
 			adminInboxMessages = [];
 		} finally {
 			adminInboxLoading = false;
+		}
+	}
+
+	async function loadMemberNotifications() {
+		if (!currentUser) return;
+
+		try {
+			const token = await getSessionAccessToken();
+			if (!token) return;
+
+			const response = await fetch('/api/member-notifications', {
+				headers: {
+					Authorization: `Bearer ${token}`
+				}
+			});
+			if (!response.ok) return;
+
+			const payload = await response.json();
+			memberNotifications = ((payload?.notifications ?? []) as MemberNotification[]).map((notification) => ({
+				id: notification.id,
+				ticketId: '',
+				subject: notification.title,
+				status: 'notification',
+				senderRole: 'admin' as const,
+				message: notification.message,
+				createdAt: notification.created_at
+			}));
+			adminInboxMessages = [...adminInboxMessages.filter((message) => message.ticketId), ...memberNotifications]
+				.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+				.slice(0, 20);
+		} catch {
+			memberNotifications = [];
 		}
 	}
 
@@ -419,12 +462,18 @@
 				return;
 			}
 
-			const response = await fetch(`/api/support/tickets?messageId=${encodeURIComponent(messageId)}`, {
+			const message = adminInboxMessages.find((item) => item.id === messageId);
+			const response = await fetch(
+				message?.ticketId
+					? `/api/support/tickets?messageId=${encodeURIComponent(messageId)}`
+					: `/api/member-notifications?notificationId=${encodeURIComponent(messageId)}`,
+				{
 				method: 'DELETE',
 				headers: {
 					Authorization: `Bearer ${token}`
 				}
-			});
+				}
+			);
 
 			const payload = await response.json();
 			if (!response.ok) {
@@ -1510,7 +1559,10 @@
 					{#if canUseVerifiedFeatures(memberStatus)}
 						<button
 							type="button"
-							on:click={loadAdminInboxMessages}
+							on:click={async () => {
+								await loadAdminInboxMessages();
+								await loadMemberNotifications();
+							}}
 							disabled={adminInboxLoading}
 							class="px-3 py-2 rounded-md border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
 						>
@@ -1565,7 +1617,9 @@
 										{deletingAdminMessageId === msg.id ? 'Deleting...' : 'Delete'}
 									</button>
 								</div>
-								{#if isReplyBlocked(msg.status)}
+								{#if msg.status === 'notification'}
+									<p class="mt-2 text-xs text-gray-500">This is an informational notification.</p>
+								{:else if isReplyBlocked(msg.status)}
 									<p class="mt-2 text-xs text-gray-500">Replies are disabled because this ticket is {msg.status}.</p>
 								{:else}
 									<div class="mt-3 space-y-2">

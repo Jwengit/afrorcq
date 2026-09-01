@@ -1,7 +1,8 @@
 import { env } from '$env/dynamic/private';
 import { Resend } from 'resend';
 
-const HIZLI_BASE_URL = 'https://hizli-carpooling.com';
+const HIZLI_BASE_URL =
+	(String(env.PUBLIC_SITE_URL ?? '').trim() || 'https://afrorcqvercelapp.vercel.app').replace(/\/$/, '');
 const HIZLI_DASHBOARD_URL = `${HIZLI_BASE_URL}/dashboard`;
 const HIZLI_PROFILE_URL = `${HIZLI_BASE_URL}/profile`;
 const HIZLI_PRICING_URL = `${HIZLI_BASE_URL}/pricing`;

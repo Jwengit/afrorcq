@@ -10,8 +10,6 @@ const BUCKET = 'verification-documents';
 type DocumentRow = {
   id: string;
   document_type?: string | null;
-  doc_type?: string | null;
-  type?: string | null;
   file_name: string;
   storage_path: string;
   mime_type: string | null;
@@ -30,7 +28,7 @@ function isStatusConstraintError(message: string | undefined): boolean {
 }
 
 function normalizeDocumentType(row: DocumentRow): string {
-  return row.document_type ?? row.doc_type ?? row.type ?? 'other';
+  return row.document_type ?? 'other';
 }
 
 function createApiClient(token: string) {
@@ -72,6 +70,15 @@ async function notifyDocumentsUnderReview(
   });
 }
 
+async function createDocumentsSubmittedNotification(adminClient: any, userId: string) {
+  await adminClient.from('member_notifications').insert({
+    user_id: userId,
+    type: 'documents_submitted',
+    title: 'Documents submitted',
+    message: "Your documents have been submitted and are under review. We'll notify you within 24-48 hours."
+  });
+}
+
 async function tryInsertDocumentRecord(
   adminClient: unknown,
   input: {
@@ -93,8 +100,6 @@ async function tryInsertDocumentRecord(
     {
       user_id: input.userId,
       document_type: input.documentType,
-      doc_type: input.documentType,
-      type: input.documentType,
       file_name: input.fileName,
       file_url: input.storagePath,
       storage_path: input.storagePath,
@@ -104,7 +109,6 @@ async function tryInsertDocumentRecord(
     {
       user_id: input.userId,
       document_type: input.documentType,
-      doc_type: input.documentType,
       file_name: input.fileName,
       file_url: input.storagePath,
       storage_path: input.storagePath,
@@ -114,7 +118,6 @@ async function tryInsertDocumentRecord(
     {
       user_id: input.userId,
       document_type: input.documentType,
-      type: input.documentType,
       file_name: input.fileName,
       file_url: input.storagePath,
       storage_path: input.storagePath,
@@ -123,7 +126,7 @@ async function tryInsertDocumentRecord(
     },
     {
       user_id: input.userId,
-      doc_type: input.documentType,
+      document_type: input.documentType,
       file_name: input.fileName,
       file_url: input.storagePath,
       storage_path: input.storagePath,
@@ -132,7 +135,7 @@ async function tryInsertDocumentRecord(
     },
     {
       user_id: input.userId,
-      type: input.documentType,
+      document_type: input.documentType,
       file_name: input.fileName,
       file_url: input.storagePath,
       storage_path: input.storagePath,
@@ -244,66 +247,8 @@ export const GET: RequestHandler = async ({ request }) => {
         ...doc,
         document_type: normalizeDocumentType(doc)
       }));
-
-      if (docs.some((doc) => !doc.document_type || doc.document_type === 'other')) {
-        const legacyDocTypeQuery = await adminClient
-          .from('verification_documents')
-          .select('id, doc_type')
-          .eq('user_id', user.id);
-
-        if (!legacyDocTypeQuery.error) {
-          const byId = new Map(
-            ((legacyDocTypeQuery.data ?? []) as unknown as Array<{ id: string; doc_type: string | null }>).map((row) => [row.id, row.doc_type])
-          );
-          docs = docs.map((doc) => ({
-            ...doc,
-            document_type: doc.document_type && doc.document_type !== 'other' ? doc.document_type : byId.get(doc.id) || doc.document_type
-          }));
-        }
-
-        const legacyTypeQuery = await adminClient
-          .from('verification_documents')
-          .select('id, doc_type')
-          .eq('user_id', user.id);
-
-        if (!legacyTypeQuery.error) {
-          const byId = new Map(
-            ((legacyTypeQuery.data ?? []) as unknown as Array<{ id: string; type: string | null }>).map((row) => [row.id, row.type])
-          );
-          docs = docs.map((doc) => ({
-            ...doc,
-            document_type: doc.document_type && doc.document_type !== 'other' ? doc.document_type : byId.get(doc.id) || doc.document_type || 'other'
-          }));
-        }
-      }
     } else {
-      const fallbackDocTypeQuery = await adminClient
-        .from('verification_documents')
-        .select('id, doc_type, file_name, storage_path, mime_type, file_size, status, admin_note, reviewed_at, created_at')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-
-      if (!fallbackDocTypeQuery.error) {
-        docs = ((fallbackDocTypeQuery.data ?? []) as unknown as DocumentRow[]).map((doc) => ({
-          ...doc,
-          document_type: normalizeDocumentType(doc)
-        }));
-      } else {
-        const fallbackTypeQuery = await adminClient
-          .from('verification_documents')
-          .select('id, doc_type, file_name, storage_path, mime_type, file_size, status, admin_note, reviewed_at, created_at')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false });
-
-        if (fallbackTypeQuery.error) {
-          return json({ error: fallbackTypeQuery.error.message || 'Failed to load verification documents.' }, { status: 500 });
-        }
-
-        docs = ((fallbackTypeQuery.data ?? []) as unknown as DocumentRow[]).map((doc) => ({
-          ...doc,
-          document_type: normalizeDocumentType(doc)
-        }));
-      }
+      return json({ error: primaryQuery.error.message || 'Failed to load verification documents.' }, { status: 500 });
     }
 
     let documents = docs ?? [];
@@ -394,6 +339,7 @@ export const POST: RequestHandler = async ({ request }) => {
         .update({ is_verified: false, updated_at: new Date().toISOString() })
         .eq('id', user.id);
 
+      await createDocumentsSubmittedNotification(adminClient, user.id);
 		await notifyDocumentsUnderReview(adminClient, user.id, user.email ?? null);
 
       return json({ success: true });
@@ -428,6 +374,7 @@ export const POST: RequestHandler = async ({ request }) => {
       .update({ is_verified: false, updated_at: new Date().toISOString() })
       .eq('id', user.id);
 
+	await createDocumentsSubmittedNotification(adminClient, user.id);
 	await notifyDocumentsUnderReview(adminClient, user.id, user.email ?? null);
 
     return json({ success: true });
