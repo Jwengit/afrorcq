@@ -36,6 +36,7 @@
 		average_rating: number | null;
 		created_at: string | null;
 		profile_photo_url?: string | null;
+		profile_photo_status?: 'pending' | 'approved' | 'rejected' | null;
 		has_profile?: boolean;
 	};
 
@@ -955,6 +956,13 @@
 				status === 'approved'
 					? 'Profile photo approved successfully.'
 					: 'Profile photo rejected successfully.';
+			selectedProfile = {
+				...selectedProfile,
+				profile_photo_status: status
+			};
+			users = users.map((user) =>
+				user.id === profileId ? { ...user, profile_photo_status: status } : user
+			);
 		} catch {
 			usersActionMessage = 'Unable to update profile photo status.';
 		} finally {

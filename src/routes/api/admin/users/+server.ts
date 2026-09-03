@@ -14,6 +14,7 @@ type ProfileRow = {
 	phone_number: string | null;
 	gender: string | null;
 	profile_photo_url?: string | null;
+	profile_photo_status?: 'pending' | 'approved' | 'rejected' | null;
 	is_admin: boolean | null;
 	is_verified: boolean | null;
 	user_status?: string | null;
@@ -22,11 +23,11 @@ type ProfileRow = {
 };
 
 const PROFILE_SELECT_WITH_RATING =
-	'id, public_id, first_name, last_name, email, phone_number, gender, profile_photo_url, is_admin, is_verified, user_status, average_rating, created_at';
+	'id, public_id, first_name, last_name, email, phone_number, gender, profile_photo_url, profile_photo_status, is_admin, is_verified, user_status, average_rating, created_at';
 const PROFILE_SELECT_WITHOUT_RATING =
-	'id, public_id, first_name, last_name, email, phone_number, gender, profile_photo_url, is_admin, is_verified, user_status, created_at';
+	'id, public_id, first_name, last_name, email, phone_number, gender, profile_photo_url, profile_photo_status, is_admin, is_verified, user_status, created_at';
 const PROFILE_SELECT_BASE =
-	'id, first_name, last_name, email, phone_number, gender, profile_photo_url, is_admin, is_verified, user_status, created_at';
+	'id, first_name, last_name, email, phone_number, gender, profile_photo_url, profile_photo_status, is_admin, is_verified, user_status, created_at';
 
 function resolveVerificationLabel(isVerified: boolean): 'Verified' | 'Unverified' {
 	return isVerified ? 'Verified' : 'Unverified';
@@ -250,6 +251,7 @@ export const GET: RequestHandler = async ({ request }) => {
 				phone_number: profile?.phone_number ?? null,
 				gender: profile?.gender ?? null,
 				profile_photo_url: profile?.profile_photo_url ?? null,
+				profile_photo_status: profile?.profile_photo_status ?? null,
 				is_admin: profile?.is_admin ?? false,
 				is_verified: profileVerified,
 				email_confirmed: emailConfirmed,

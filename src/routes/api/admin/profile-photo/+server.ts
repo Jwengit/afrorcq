@@ -60,13 +60,28 @@ export const PATCH: RequestHandler = async ({ request }) => {
     if (!profile) return json({ error: 'Profile not found' }, { status: 404 });
     if (!profile.profile_photo_url) return json({ error: 'Profile photo not found' }, { status: 400 });
 
-    const { error: updateError } = await adminClient
+    const { data: updatedProfile, error: updateError } = await adminClient
       .from('profiles')
       .update({ profile_photo_status: status, updated_at: new Date().toISOString() })
-      .eq('id', userId);
+      .eq('id', userId)
+      .select('id, profile_photo_status')
+      .single();
 
-    if (updateError) return json({ error: updateError.message }, { status: 500 });
-    return json({ success: true, status });
+    if (updateError) {
+      console.error('Profile photo status update error:', updateError);
+      return json({ error: updateError.message }, { status: 500 });
+    }
+
+    if (!updatedProfile || updatedProfile.profile_photo_status !== status) {
+      console.error('Profile photo status was not persisted:', {
+        userId,
+        expectedStatus: status,
+        updatedProfile
+      });
+      return json({ error: 'Profile photo status was not persisted.' }, { status: 500 });
+    }
+
+    return json({ success: true, status: updatedProfile.profile_photo_status });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal server error';
     return json({ error: message }, { status: 500 });

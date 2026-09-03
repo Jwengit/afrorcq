@@ -2,6 +2,7 @@ import { json, type RequestHandler } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
 import { sendDocumentsUnderReviewEmail } from '$lib/email';
+import { buildVerificationDocumentInsertPayload, resolveExistingDocumentType } from '$lib/verification-documents';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -28,7 +29,7 @@ function isStatusConstraintError(message: string | undefined): boolean {
 }
 
 function normalizeDocumentType(row: DocumentRow): string {
-  return row.document_type ?? 'other';
+  return resolveExistingDocumentType(row);
 }
 
 function createApiClient(token: string) {
@@ -96,69 +97,23 @@ async function tryInsertDocumentRecord(
     };
   };
 
+  const payload = buildVerificationDocumentInsertPayload({
+    userId: input.userId,
+    documentType: input.documentType,
+    fileName: input.fileName,
+    storagePath: input.storagePath,
+    mimeType: input.mimeType,
+    fileSize: input.fileSize
+  });
+
   const variants: Array<Record<string, unknown>> = [
-    {
-      user_id: input.userId,
-      document_type: input.documentType,
-      file_name: input.fileName,
-      file_url: input.storagePath,
-      storage_path: input.storagePath,
-      mime_type: input.mimeType,
-      file_size: input.fileSize
-    },
-    {
-      user_id: input.userId,
-      document_type: input.documentType,
-      file_name: input.fileName,
-      file_url: input.storagePath,
-      storage_path: input.storagePath,
-      mime_type: input.mimeType,
-      file_size: input.fileSize
-    },
-    {
-      user_id: input.userId,
-      document_type: input.documentType,
-      file_name: input.fileName,
-      file_url: input.storagePath,
-      storage_path: input.storagePath,
-      mime_type: input.mimeType,
-      file_size: input.fileSize
-    },
-    {
-      user_id: input.userId,
-      document_type: input.documentType,
-      file_name: input.fileName,
-      file_url: input.storagePath,
-      storage_path: input.storagePath,
-      mime_type: input.mimeType,
-      file_size: input.fileSize
-    },
-    {
-      user_id: input.userId,
-      document_type: input.documentType,
-      file_name: input.fileName,
-      file_url: input.storagePath,
-      storage_path: input.storagePath,
-      mime_type: input.mimeType,
-      file_size: input.fileSize
-    },
-    {
-      user_id: input.userId,
-      document_type: input.documentType,
-      file_name: input.fileName,
-      file_url: input.storagePath,
-      storage_path: input.storagePath,
-      mime_type: input.mimeType,
-      file_size: input.fileSize
-    },
-    {
-      user_id: input.userId,
-      document_type: input.documentType,
-      file_name: input.fileName,
-      storage_path: input.storagePath,
-      mime_type: input.mimeType,
-      file_size: input.fileSize
-    }
+    payload,
+    { ...payload, file_url: input.storagePath },
+    { ...payload, file_url: input.storagePath, document_type: input.documentType, doc_type: input.documentType },
+    { ...payload, status: 'pending' },
+    { ...payload, status: 'Pending' },
+    { ...payload, status: 'pending', file_url: input.storagePath },
+    { ...payload, status: 'pending', document_type: input.documentType, doc_type: input.documentType }
   ];
 
   const statusVariants = ['pending', 'Pending'];

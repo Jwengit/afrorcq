@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS public.verification_documents (
 ALTER TABLE public.verification_documents
   ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   ADD COLUMN IF NOT EXISTS document_type TEXT,
+  ADD COLUMN IF NOT EXISTS doc_type TEXT,
   ADD COLUMN IF NOT EXISTS file_url TEXT,
   ADD COLUMN IF NOT EXISTS file_name TEXT,
   ADD COLUMN IF NOT EXISTS storage_path TEXT,
@@ -34,6 +35,14 @@ ALTER TABLE public.verification_documents
   ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP WITH TIME ZONE,
   ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+
+UPDATE public.verification_documents
+SET doc_type = document_type
+WHERE doc_type IS NULL AND document_type IS NOT NULL;
+
+UPDATE public.verification_documents
+SET document_type = doc_type
+WHERE document_type IS NULL AND doc_type IS NOT NULL;
 
 UPDATE public.verification_documents
 SET status = 'pending'
