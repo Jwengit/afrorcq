@@ -356,7 +356,7 @@ export const PATCH: RequestHandler = async ({ request }) => {
 			if (value) {
 				const { data: profileForVerification, error: profileForVerificationError } = await adminClient
 					.from('profiles')
-					.select('profile_photo_status')
+					.select('profile_photo_status, profile_photo_url, first_name, last_name, gender')
 					.eq('id', userId)
 					.maybeSingle();
 
@@ -374,6 +374,11 @@ export const PATCH: RequestHandler = async ({ request }) => {
 						{ status: 400 }
 					);
 				}
+
+				payload.profile_photo_url = profileForVerification?.profile_photo_url ?? null;
+				payload.first_name = profileForVerification?.first_name ?? firstName;
+				payload.last_name = profileForVerification?.last_name ?? lastName;
+				payload.gender = profileForVerification?.gender ?? null;
 			}
 
 			payload.status = resolveVerificationLabel(value);
@@ -483,4 +488,4 @@ export const DELETE: RequestHandler = async ({ request }) => {
 		const message = error instanceof Error ? error.message : 'Internal server error';
 		return json({ error: message }, { status: 500 });
 	}
-};
+}
