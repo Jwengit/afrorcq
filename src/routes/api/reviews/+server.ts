@@ -187,31 +187,7 @@ return json({ error: 'Missing user_id parameter' }, { status: 400 });
 
 const authHeader = request.headers.get('authorization');
 const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-if (!token) {
-return json(
-{ error: 'This feature is available for verified members only. Upgrade your plan to unlock full access.' },
-{ status: 403 }
-);
-}
-
-const authClient = createClient(supabaseUrl, supabaseKey);
-const {
-data: { user },
-error: userError
-} = await authClient.auth.getUser(token);
-
-if (userError || !user) {
-return json({ error: 'Unauthorized' }, { status: 401 });
-}
-
-const client = getAuthedClient(token);
-const requesterStatus = await getUserMemberStatus(client, user.id);
-if (!canUseVerifiedFeatures(requesterStatus)) {
-return json(
-{ error: 'This feature is available for verified members only. Upgrade your plan to unlock full access.' },
-{ status: 403 }
-);
-}
+const client = token ? getAuthedClient(token) : createClient(supabaseUrl, supabaseKey);
 
 const { data: reviews, error } = await client
 .from('reviews')
@@ -219,6 +195,7 @@ const { data: reviews, error } = await client
 'id,rating,comment,status,created_at,reviewer_id,ride_id'
 )
 .eq('reviewee_id', userId)
+.eq('status', 'approved')
 .order('created_at', { ascending: false });
 
 if (error) {
