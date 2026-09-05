@@ -9,8 +9,8 @@ LANGUAGE sql
 IMMUTABLE
 AS $$
   SELECT CASE
-    WHEN lower(coalesce(raw_type, '')) IN ('identity', 'id_card') THEN 'identity_card'
-    WHEN lower(coalesce(raw_type, '')) IN ('license', 'driving_license') THEN 'driver_license_front'
+    WHEN lower(coalesce(raw_type, '')) IN ('identity', 'id_card', 'identity_card_front', 'identity_card_back') THEN 'identity_card'
+    WHEN lower(coalesce(raw_type, '')) IN ('license', 'driving_license', 'driver_license_front', 'driver_license_back') THEN 'driver_license'
     WHEN lower(coalesce(raw_type, '')) = 'insurance_proof' THEN 'insurance'
     WHEN lower(coalesce(raw_type, '')) IN ('registration', 'vehicle_papers') THEN 'vehicle_registration'
     ELSE lower(coalesce(raw_type, ''))
@@ -47,8 +47,7 @@ BEGIN
 
   IF p_is_driver THEN
     RETURN (
-      'driver_license_front' = ANY(approved_types)
-      AND 'driver_license_back' = ANY(approved_types)
+      'driver_license' = ANY(approved_types)
       AND 'insurance' = ANY(approved_types)
       AND 'vehicle_registration' = ANY(approved_types)
     );
@@ -58,19 +57,18 @@ BEGIN
 END;
 $$;
 
--- Drivers must have all three approved driver documents before publishing rides.
+-- Drivers must have all required approved driver documents before publishing rides.
 CREATE OR REPLACE FUNCTION public.driver_has_required_verification_docs(p_user_id UUID)
 RETURNS BOOLEAN
 LANGUAGE sql
 STABLE
 AS $$
-  SELECT COUNT(DISTINCT public.normalize_verification_document_type(document_type)) = 4
+  SELECT COUNT(DISTINCT public.normalize_verification_document_type(document_type)) = 3
   FROM public.verification_documents
   WHERE user_id = p_user_id
     AND lower(coalesce(status, '')) = 'approved'
     AND public.normalize_verification_document_type(document_type) IN (
-      'driver_license_front',
-      'driver_license_back',
+      'driver_license',
       'insurance',
       'vehicle_registration'
     );
@@ -194,7 +192,7 @@ BEGIN
   END IF;
 
   IF public.driver_has_required_verification_docs(NEW.driver_id) IS NOT TRUE THEN
-    RAISE EXCEPTION 'Driver must have approved driver license front and back, insurance, and vehicle registration before publishing a ride.'
+    RAISE EXCEPTION 'Driver must have approved driver license, insurance, and vehicle registration before publishing a ride.'
       USING ERRCODE = '23514';
   END IF;
 
