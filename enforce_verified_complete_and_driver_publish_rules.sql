@@ -10,7 +10,7 @@ IMMUTABLE
 AS $$
   SELECT CASE
     WHEN lower(coalesce(raw_type, '')) IN ('identity', 'id_card') THEN 'identity_card'
-    WHEN lower(coalesce(raw_type, '')) IN ('license', 'driving_license') THEN 'driver_license'
+    WHEN lower(coalesce(raw_type, '')) IN ('license', 'driving_license') THEN 'driver_license_front'
     WHEN lower(coalesce(raw_type, '')) = 'insurance_proof' THEN 'insurance'
     WHEN lower(coalesce(raw_type, '')) IN ('registration', 'vehicle_papers') THEN 'vehicle_registration'
     ELSE lower(coalesce(raw_type, ''))
@@ -47,7 +47,8 @@ BEGIN
 
   IF p_is_driver THEN
     RETURN (
-      'driver_license' = ANY(approved_types)
+      'driver_license_front' = ANY(approved_types)
+      AND 'driver_license_back' = ANY(approved_types)
       AND 'insurance' = ANY(approved_types)
       AND 'vehicle_registration' = ANY(approved_types)
     );
@@ -55,6 +56,24 @@ BEGIN
 
   RETURN TRUE;
 END;
+$$;
+
+-- Drivers must have all three approved driver documents before publishing rides.
+CREATE OR REPLACE FUNCTION public.driver_has_required_verification_docs(p_user_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT COUNT(DISTINCT public.normalize_verification_document_type(document_type)) = 4
+  FROM public.verification_documents
+  WHERE user_id = p_user_id
+    AND lower(coalesce(status, '')) = 'approved'
+    AND public.normalize_verification_document_type(document_type) IN (
+      'driver_license_front',
+      'driver_license_back',
+      'insurance',
+      'vehicle_registration'
+    );
 $$;
 
 -- Enforce "verified implies complete" whenever profiles are inserted or updated.
@@ -89,9 +108,9 @@ BEGIN
         USING ERRCODE = '23514';
     END IF;
 
-    NEW.status := 'Verified';
-  ELSIF NEW.status = 'Verified' THEN
-    NEW.status := 'Unverified';
+    NEW.status := 'verified';
+  ELSIF lower(coalesce(NEW.status, '')) = 'verified' THEN
+    NEW.status := 'free';
   END IF;
 
   RETURN NEW;
@@ -118,7 +137,7 @@ EXECUTE FUNCTION public.enforce_verified_requires_complete_profile();
 UPDATE public.profiles p
 SET
   is_verified = FALSE,
-  status = CASE WHEN p.status = 'Verified' THEN 'Unverified' ELSE p.status END,
+  status = CASE WHEN lower(coalesce(p.status, '')) = 'verified' THEN 'free' ELSE p.status END,
   updated_at = NOW()
 WHERE
   coalesce(p.is_verified, FALSE) = TRUE
@@ -148,6 +167,7 @@ CREATE POLICY "Drivers can publish rides" ON public.rides
         AND coalesce(nullif(btrim(p.car_make), ''), NULL) IS NOT NULL
         AND p.car_year IS NOT NULL
         AND coalesce(nullif(btrim(p.plate_number), ''), NULL) IS NOT NULL
+        AND public.driver_has_required_verification_docs(p.id)
     )
   );
 
@@ -170,6 +190,11 @@ BEGIN
 
   IF coalesce(has_car_info, FALSE) IS NOT TRUE THEN
     RAISE EXCEPTION 'Driver must complete car_make, car_year, and plate_number before publishing a ride.'
+      USING ERRCODE = '23514';
+  END IF;
+
+  IF public.driver_has_required_verification_docs(NEW.driver_id) IS NOT TRUE THEN
+    RAISE EXCEPTION 'Driver must have approved driver license front and back, insurance, and vehicle registration before publishing a ride.'
       USING ERRCODE = '23514';
   END IF;
 

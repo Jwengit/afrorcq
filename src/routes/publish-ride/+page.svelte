@@ -8,7 +8,6 @@
 	import { supabase } from '$lib/supabaseClient';
 	import {
 		resolveMemberStatus,
-		canUseVerifiedFeatures,
 		hasPendingReviewBlock,
 		type MemberStatus,
 	} from '$lib/membershipAccess';
@@ -28,7 +27,8 @@
 
 	type MissingRequirement =
 		| 'car_info'
-		| 'driver_license'
+		| 'driver_license_front'
+		| 'driver_license_back'
 		| 'insurance'
 		| 'vehicle_registration';
 
@@ -147,7 +147,6 @@
 			membershipPaid: profile?.membership_paid,
 			membershipExpiresAt: profile?.membership_expires_at
 		});
-		const canUseVerified = canUseVerifiedFeatures(memberStatus);
 		reviewPendingBlocked = hasPendingReviewBlock({
 			status: profile?.status,
 			isVerified: profile?.is_verified,
@@ -167,10 +166,10 @@
 			missingRequirements.push('car_info');
 		}
 
-		// Check driver documents (driver_license, insurance, vehicle_registration)
-		const DRIVER_DOCS: MissingRequirement[] = ['driver_license', 'insurance', 'vehicle_registration'];
+		// Check driver documents (license front/back, insurance, vehicle registration)
+		const DRIVER_DOCS: MissingRequirement[] = ['driver_license_front', 'driver_license_back', 'insurance', 'vehicle_registration'];
 
-		if (currentUser && canUseVerified) {
+		if (currentUser) {
 			const { data: docs, error: docsError } = await supabase
 				.from('verification_documents')
 				.select('document_type, status')
@@ -192,15 +191,17 @@
 						missingRequirements.push(docType);
 					}
 				}
+			} else {
+				missingRequirements.push(...DRIVER_DOCS);
 			}
 		}
 
 		const missingDriverDocs = missingRequirements.filter((requirement) => requirement !== 'car_info');
 		const missingCarInfo = missingRequirements.includes('car_info');
 
-		needsDriverDocumentsOnly = canUseVerified && !missingCarInfo && missingDriverDocs.length > 0;
+		needsDriverDocumentsOnly = !missingCarInfo && missingDriverDocs.length > 0;
 
-		allowedToPublish = !reviewPendingBlocked && !missingCarInfo && (!canUseVerified || missingDriverDocs.length === 0);
+		allowedToPublish = !reviewPendingBlocked && !missingCarInfo && missingDriverDocs.length === 0;
 
 		if (!isFemaleDriver) {
 			form.girlsOnly = false;
@@ -351,8 +352,11 @@
 							{#if missingRequirements.includes('car_info')}
 								<li>Car information (make, year, and plate number) — complete in your profile</li>
 							{/if}
-							{#if missingRequirements.includes('driver_license')}
-								<li>Driver license document — upload and get it approved in your profile</li>
+							{#if missingRequirements.includes('driver_license_front')}
+								<li>Driver license (front) — upload and get it approved in your profile</li>
+							{/if}
+							{#if missingRequirements.includes('driver_license_back')}
+								<li>Driver license (back) — upload and get it approved in your profile</li>
 							{/if}
 							{#if missingRequirements.includes('insurance')}
 								<li>Insurance proof — upload and get it approved in your profile</li>

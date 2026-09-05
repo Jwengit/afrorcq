@@ -16,7 +16,8 @@ const STUDENT_EXTRA_DOCUMENT_TYPES = [
 ] as const;
 
 const DRIVER_REQUIRED_DOCUMENT_TYPES = [
-  'driver_license',
+  'driver_license_front',
+  'driver_license_back',
   'insurance',
   'vehicle_registration'
 ] as const;
@@ -94,7 +95,7 @@ function normalizeDocumentType(value: string | null | undefined): string {
   const normalized = (value || '').trim().toLowerCase();
 
   if (normalized === 'identity' || normalized === 'id_card') return 'identity_card';
-  if (normalized === 'license' || normalized === 'driving_license') return 'driver_license';
+  if (normalized === 'license' || normalized === 'driving_license') return 'driver_license_front';
   if (normalized === 'insurance_proof') return 'insurance';
   if (normalized === 'registration' || normalized === 'vehicle_papers') return 'vehicle_registration';
 

@@ -100,12 +100,15 @@
 	let selectedDocumentFile: File | null = null;
 	let documentFileName = 'Choose a file';
 	let documentFileInput: HTMLInputElement;
+	let driverDocumentFileInput: HTMLInputElement;
+	let driverDocumentType = 'driver_license_front';
 
 	const documentTypeOptions = [
 		{ value: 'identity_card_front', label: 'Proof of ID (front)' },
 		{ value: 'identity_card_back', label: 'Proof of ID (back)' },
 		{ value: 'student_id', label: 'Student ID' },
-		{ value: 'driver_license', label: 'Driver license' },
+		{ value: 'driver_license_front', label: 'Driver license (front)' },
+		{ value: 'driver_license_back', label: 'Driver license (back)' },
 		{ value: 'proof_of_address', label: 'Proof of address' },
 		{ value: 'insurance', label: 'Insurance proof' },
 		{ value: 'vehicle_registration', label: 'Vehicle registration' },
@@ -118,6 +121,8 @@
 		identity_card: 'Proof of ID',
 		student_id: 'Student ID',
 		driver_license: 'Driver license',
+		driver_license_front: 'Driver license (front)',
+		driver_license_back: 'Driver license (back)',
 		proof_of_address: 'Proof of address',
 		insurance: 'Insurance proof',
 		vehicle_registration: 'Vehicle registration',
@@ -138,7 +143,7 @@
 		: (['identity_card_front', 'identity_card_back', 'proof_of_address'] as const);
 
 	$: docStatusByType = new Map(
-		(['identity_card_front', 'identity_card_back', 'student_id', 'proof_of_address', 'driver_license', 'insurance', 'vehicle_registration'] as const).map(
+		(['identity_card_front', 'identity_card_back', 'student_id', 'proof_of_address', 'driver_license_front', 'driver_license_back', 'insurance', 'vehicle_registration'] as const).map(
 			(type) => {
 				const docs = verificationDocuments.filter(
 					(d) => normalizeVerificationDocumentType(d.document_type) === type
@@ -152,14 +157,14 @@
 	);
 
 	$: allRequiredDocsUploaded = (planRequiredDocTypes as readonly string[]).every((type) => {
-		const status = docStatusByType.get(type as 'identity_card_front' | 'identity_card_back' | 'student_id' | 'proof_of_address' | 'driver_license' | 'insurance' | 'vehicle_registration');
+		const status = docStatusByType.get(type as 'identity_card_front' | 'identity_card_back' | 'student_id' | 'proof_of_address' | 'driver_license_front' | 'driver_license_back' | 'insurance' | 'vehicle_registration');
 		return status === 'pending' || status === 'approved';
 	});
 
 	$: isProfileStatusPending = (profile.status ?? '').toLowerCase() === 'pending';
 
 	const baseRequiredDocumentTypes = ['identity_card_front', 'identity_card_back', 'student_id', 'proof_of_address'] as const;
-	const driverOnlyDocumentTypes = ['driver_license', 'insurance', 'vehicle_registration'] as const;
+	const driverOnlyDocumentTypes = ['driver_license_front', 'driver_license_back', 'insurance', 'vehicle_registration'] as const;
 	const allKnownRequiredTypes = [...baseRequiredDocumentTypes, ...driverOnlyDocumentTypes] as const;
 
 	type RequiredVerificationDocumentType = (typeof allKnownRequiredTypes)[number];
@@ -168,7 +173,7 @@
 		const normalized = (value || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
 		if (normalized === 'identity' || normalized === 'id_card') return 'identity_card';
 		if (normalized === 'studentid') return 'student_id';
-		if (normalized === 'license' || normalized === 'driving_license') return 'driver_license';
+		if (normalized === 'license' || normalized === 'driving_license') return 'driver_license_front';
 		if (normalized === 'insurance_proof') return 'insurance';
 		if (normalized === 'registration' || normalized === 'vehicle_papers') return 'vehicle_registration';
 		return normalized;
@@ -640,6 +645,7 @@
 			selectedDocumentFile = null;
 			documentFileName = 'Choose a file';
 			if (documentFileInput) documentFileInput.value = '';
+			if (driverDocumentFileInput) driverDocumentFileInput.value = '';
 			await loadVerificationDocuments();
 		} catch (error) {
 			documentsError = error instanceof Error ? error.message : 'Unable to upload document.';
@@ -1505,7 +1511,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 						</div>
 					{/each}
 
-					<p class="text-xs text-slate-400 pt-1">Driver's license &amp; vehicle insurance are optional here — they'll be required when you publish a ride.</p>
+					<p class="text-xs text-slate-400 pt-1">Identity documents are required for account verification.</p>
 
 					{#if !profile.profile_photo_url}
 						<div class="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -1513,6 +1519,47 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 							<span><strong>Profile photo required.</strong> Add a profile photo before submitting for review — it's mandatory for verification.</span>
 						</div>
 					{/if}
+				</div>
+
+				<div class="mt-6 border-t border-slate-200 pt-6">
+					<div>
+						<h3 class="text-sm font-semibold text-slate-700 uppercase tracking-wide">Driver Documents</h3>
+						<p class="text-sm text-slate-600 mt-1">Upload the documents required to publish rides as a driver.</p>
+					</div>
+					<div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+						<select
+							bind:value={driverDocumentType}
+							on:change={() => (selectedDocumentType = driverDocumentType)}
+							class="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+						>
+							{#each documentTypeOptions.filter(opt => (driverOnlyDocumentTypes as readonly string[]).includes(opt.value)) as option (option.value)}
+								<option value={option.value}>{option.label}</option>
+							{/each}
+						</select>
+						<div class="relative">
+							<label class="block px-3 py-2 text-sm text-emerald-700 bg-emerald-100 rounded-md font-semibold cursor-pointer hover:bg-emerald-200 text-center">
+								{documentFileName}
+								<input
+									bind:this={driverDocumentFileInput}
+									type="file"
+									accept=".pdf,.png,.jpg,.jpeg,.webp"
+									on:change={handleVerificationDocumentSelect}
+									class="hidden"
+								/>
+							</label>
+						</div>
+						<button
+							type="button"
+							on:click={() => {
+								selectedDocumentType = driverDocumentType;
+								uploadVerificationDocument();
+							}}
+							disabled={!selectedDocumentFile || uploadingDocument}
+							class="px-4 py-2 rounded-md bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
+						>
+							{uploadingDocument ? 'Uploading...' : 'Upload driver document'}
+						</button>
+					</div>
 				</div>
 
 				<!-- Submit for review -->

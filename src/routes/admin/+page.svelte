@@ -103,6 +103,8 @@
 	const documentTypeLabelMap: Record<string, string> = {
 		identity_card: 'Identity card',
 		driver_license: 'Driver license',
+		driver_license_front: 'Driver license (front)',
+		driver_license_back: 'Driver license (back)',
 		proof_of_address: 'Proof of address',
 		insurance: 'Insurance proof',
 		vehicle_registration: 'Vehicle registration',
@@ -1705,6 +1707,18 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 		const normalized = (value || 'other').trim().toLowerCase().replace(/[\s-]+/g, '_');
 		return documentTypeLabelMap[normalized] || normalized.replaceAll('_', ' ');
 	}
+	function normalizedDocumentType(value: string | null | undefined): string {
+		const normalized = (value || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+		if (normalized === 'license' || normalized === 'driving_license') return 'driver_license_front';
+		if (normalized === 'insurance_proof') return 'insurance';
+		if (normalized === 'registration' || normalized === 'vehicle_papers') return 'vehicle_registration';
+		return normalized;
+	}
+
+	$: driverProfileDocuments = profileDocuments.filter((doc) =>
+		['driver_license', 'driver_license_front', 'driver_license_back', 'insurance', 'vehicle_registration'].includes(normalizedDocumentType(doc.document_type))
+	);
+	$: identityProfileDocuments = profileDocuments.filter((doc) => !driverProfileDocuments.includes(doc));
 
 	function closeProfileModal() {
 		showProfileModal = false;
@@ -5617,9 +5631,17 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 						{:else if profileDocuments.length === 0}
 							<p class="text-sm text-gray-500 italic">No documents uploaded.</p>
 						{:else}
-							<div class="space-y-2">
-								{#each profileDocuments as doc}
-									<div class="border border-gray-200 rounded-lg p-3">
+							<div class="space-y-5">
+								{#each [
+									{ title: 'Identity Documents', documents: identityProfileDocuments },
+									{ title: 'Driver Documents', documents: driverProfileDocuments }
+								] as group}
+									{#if group.documents.length > 0}
+										<div>
+											<h4 class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">{group.title}</h4>
+											<div class="space-y-2">
+												{#each group.documents as doc}
+													<div class="border border-gray-200 rounded-lg p-3">
 										<div class="flex items-start justify-between gap-3">
 											<div>
 												<p class="text-sm font-semibold text-gray-900">{documentTypeLabel(doc.document_type)}</p>
@@ -5659,7 +5681,11 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 												</button>
 											</div>
 										</div>
-									</div>
+													</div>
+												{/each}
+											</div>
+										</div>
+									{/if}
 								{/each}
 							</div>
 						{/if}
