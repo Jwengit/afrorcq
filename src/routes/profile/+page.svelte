@@ -18,6 +18,7 @@
 		zip_code: string;
 		car_make: string;
 		car_year: string;
+		color: string;
 		insurance_company: string;
 		plate_number: string;
 		proof_of_resident_type: string;
@@ -63,6 +64,7 @@
 		zip_code: '',
 		car_make: '',
 		car_year: '',
+		color: '',
 		insurance_company: '',
 		plate_number: '',
 		proof_of_resident_type: '',
@@ -104,6 +106,9 @@
 	let driverDocumentType = 'driver_license_front';
 	let selectedDriverDocumentFile: File | null = null;
 	let driverDocumentFileName = 'Choose a file';
+	let driverDocumentsVisible = false;
+
+	const profileDocumentTypes = ['identity_card_front', 'identity_card_back', 'proof_of_address'] as const;
 
 	const documentTypeOptions = [
 		{ value: 'identity_card_front', label: 'Proof of ID (front)' },
@@ -158,7 +163,20 @@
 		)
 	);
 
-	$: allRequiredDocsUploaded = (planRequiredDocTypes as readonly string[]).every((type) => {
+	function latestDocumentForType(documentType: string): VerificationDocument | null {
+		return verificationDocuments
+			.filter((document) => normalizeVerificationDocumentType(document.document_type) === documentType)
+			.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] ?? null;
+	}
+
+	$: profileUploadedCount = profileDocumentTypes.filter((type) => latestDocumentForType(type)).length;
+	$: profileApprovedCount = profileDocumentTypes.filter((type) => docStatusByType.get(type) === 'approved').length;
+	$: driverUploadedCount = driverOnlyDocumentTypes.filter((type) => latestDocumentForType(type)).length;
+	$: driverApprovedCount = driverOnlyDocumentTypes.filter((type) => docStatusByType.get(type) === 'approved').length;
+	$: hasDriverDocuments = driverUploadedCount > 0;
+	$: showDriverDocuments = driverDocumentsVisible || hasDriverDocuments;
+
+	$: allRequiredDocsUploaded = profileDocumentTypes.every((type) => {
 		const status = docStatusByType.get(type as 'identity_card_front' | 'identity_card_back' | 'student_id' | 'proof_of_address' | 'driver_license_front' | 'driver_license_back' | 'insurance' | 'vehicle_registration');
 		return status === 'pending' || status === 'approved';
 	});
@@ -197,7 +215,7 @@
 		Boolean(profile.first_name && profile.last_name && profile.gender) &&
 		missingRequiredDocumentTypes.length === 0;
 
-	$: isDriver = Boolean(profile.plate_number || profile.car_make);
+	$: isDriver = Boolean(profile.color || profile.car_make);
 
 	$: requiredVerificationDocumentTypes = profile.membership_plan
 		? (planRequiredDocTypes as readonly string[])
@@ -418,6 +436,7 @@
 			zip_code: (data?.zip_code as string) ?? '',
 			car_make: (data?.car_make as string) ?? '',
 			car_year: data?.car_year ? String(data.car_year) : '',
+			color: (data?.color as string) ?? '',
 			insurance_company: (data?.insurance_company as string) ?? '',
 			plate_number: (data?.plate_number as string) ?? '',
 			proof_of_resident_type: (data?.proof_of_resident_type as string) ?? '',
@@ -612,9 +631,16 @@
 		documentsError = '';
 	}
 
-	async function uploadVerificationDocument(isDriverDocument = false) {
-		const file = isDriverDocument ? selectedDriverDocumentFile : selectedDocumentFile;
-		const documentType = isDriverDocument ? driverDocumentType : selectedDocumentType;
+	async function uploadChecklistDocument(documentType: string, event: Event) {
+		const target = event.target as HTMLInputElement;
+		const file = target.files?.[0] ?? null;
+		if (!file) return;
+
+		await uploadVerificationDocument(file, documentType);
+		target.value = '';
+	}
+
+	async function uploadVerificationDocument(file: File, documentType: string) {
 		if (!currentUser || !file) return;
 
 		if (file.size > 10 * 1024 * 1024) {
@@ -652,15 +678,6 @@
 			}
 
 			documentsMessage = 'Document uploaded';
-			if (isDriverDocument) {
-				selectedDriverDocumentFile = null;
-				driverDocumentFileName = 'Choose a file';
-				if (driverDocumentFileInput) driverDocumentFileInput.value = '';
-			} else {
-				selectedDocumentFile = null;
-				documentFileName = 'Choose a file';
-				if (documentFileInput) documentFileInput.value = '';
-			}
 			await loadVerificationDocuments();
 		} catch (error) {
 			documentsError = error instanceof Error ? error.message : 'Unable to upload document.';
@@ -807,8 +824,7 @@
 			const trimmedAddress = formData.address.trim();
 			const trimmedZipCode = formData.zip_code.trim();
 			const trimmedCarMake = formData.car_make.trim();
-			const trimmedInsuranceCompany = formData.insurance_company.trim();
-			const trimmedPlateNumber = formData.plate_number.trim();
+			const trimmedColor = formData.color.trim();
 			const trimmedProofOfResidentType = formData.proof_of_resident_type.trim();
 			const parsedCarYear = Number.parseInt(formData.car_year, 10);
 			const carYear = Number.isNaN(parsedCarYear) ? null : parsedCarYear;
@@ -860,8 +876,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 					zip_code: trimmedZipCode || null,
 					car_make: trimmedCarMake || null,
 					car_year: carYear,
-					insurance_company: trimmedInsuranceCompany || null,
-					plate_number: trimmedPlateNumber || null,
+					color: trimmedColor || null,
 					proof_of_resident_type: trimmedProofOfResidentType || null,
 					gender: formData.gender,
 					bio: formData.bio.trim() || null,
@@ -885,8 +900,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 					zip_code: trimmedZipCode,
 					car_make: trimmedCarMake,
 					car_year: carYear ? String(carYear) : '',
-					insurance_company: trimmedInsuranceCompany,
-					plate_number: trimmedPlateNumber,
+					color: trimmedColor,
 					proof_of_resident_type: trimmedProofOfResidentType,
 					gender: formData.gender,
 					bio: formData.bio.trim(),
@@ -1190,16 +1204,8 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 									<p class="text-gray-600">{profile.car_year || 'Not provided'}</p>
 								</div>
 								<div>
-									<h5 class="font-medium text-gray-900 mb-2">Insurance Company</h5>
-									<p class="text-gray-600">{profile.insurance_company || 'Not provided'}</p>
-								</div>
-								<div>
-									<h5 class="font-medium text-gray-900 mb-2">Plate Number</h5>
-									<p class="text-gray-600">{profile.plate_number || 'Not provided'}</p>
-								</div>
-								<div class="md:col-span-2">
-									<h5 class="font-medium text-gray-900 mb-2">Proof of Resident Type</h5>
-									<p class="text-gray-600">{profile.proof_of_resident_type || 'Not provided'}</p>
+									<h5 class="font-medium text-gray-900 mb-2">Color</h5>
+									<p class="text-gray-600">{profile.color || 'Not provided'}</p>
 								</div>
 							</div>
 						</div>
@@ -1452,37 +1458,16 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 								</div>
 
 								<div>
-									<label for="insurance_company" class="block text-sm font-medium text-gray-700 mb-2">Insurance Company</label>
+									<label for="color" class="block text-sm font-medium text-gray-700 mb-2">Color</label>
 									<input
 										type="text"
-										id="insurance_company"
-										bind:value={formData.insurance_company}
+										id="color"
+										bind:value={formData.color}
 										class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
-										placeholder="Enter insurance company"
+										placeholder="Enter car color"
 									/>
 								</div>
 
-								<div>
-									<label for="plate_number" class="block text-sm font-medium text-gray-700 mb-2">Plate Number</label>
-									<input
-										type="text"
-										id="plate_number"
-										bind:value={formData.plate_number}
-										class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
-										placeholder="Enter plate number"
-									/>
-								</div>
-
-								<div class="md:col-span-2">
-									<label for="proof_of_resident_type" class="block text-sm font-medium text-gray-700 mb-2">Proof of Resident Type</label>
-									<input
-										type="text"
-										id="proof_of_resident_type"
-										bind:value={formData.proof_of_resident_type}
-										class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
-										placeholder="Enter proof type (e.g. utility bill, residence permit)"
-									/>
-								</div>
 							</div>
 						</div>
 
@@ -1508,27 +1493,37 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 						<h3 class="text-base font-semibold text-slate-900">Profile Documents</h3>
 						<p class="text-sm text-slate-600 mt-1">Upload the documents required to verify your profile.</p>
 					</div>
-					<h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Required documents</h4>
-					{#each planRequiredDocTypes as type}
-						{@const docStatus = docStatusByType.get(type) ?? 'missing'}
-						<div class="flex items-center justify-between rounded-lg border px-4 py-3 {docStatus === 'approved' ? 'border-emerald-200 bg-emerald-50' : docStatus === 'rejected' ? 'border-red-200 bg-red-50' : docStatus === 'pending' ? 'border-amber-200 bg-amber-50' : 'border-gray-200 bg-gray-50'}">
-							<div class="flex items-center gap-3">
-								{#if docStatus === 'approved'}
-									<span class="text-emerald-600 text-lg">✓</span>
-								{:else if docStatus === 'rejected'}
-									<span class="text-red-500 text-lg">✗</span>
-								{:else if docStatus === 'pending'}
-									<span class="text-amber-500 text-lg">⏳</span>
-								{:else}
-									<span class="text-gray-400 text-lg">○</span>
-								{/if}
-								<span class="text-sm font-medium text-slate-800">{documentTypeLabel(type)}</span>
+					<div class="flex items-center justify-between">
+						<h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Required documents</h4>
+						<span class="text-xs font-semibold text-slate-600">{profileApprovedCount}/3 documents validated</span>
+					</div>
+					<div class="space-y-2">
+						{#each profileDocumentTypes as type (type)}
+							{@const docStatus = docStatusByType.get(type) ?? 'missing'}
+							{@const document = latestDocumentForType(type)}
+							<div class="flex items-center justify-between gap-3 rounded-lg border px-4 py-3 {docStatus === 'approved' ? 'border-emerald-200 bg-emerald-50' : docStatus === 'pending' ? 'border-amber-200 bg-amber-50' : docStatus === 'rejected' ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-white'}">
+								<div class="flex min-w-0 items-center gap-3">
+									<span class="text-lg {docStatus === 'approved' ? 'text-emerald-600' : docStatus === 'pending' ? 'text-amber-500' : docStatus === 'rejected' ? 'text-red-500' : 'text-gray-400'}">{docStatus === 'approved' ? '✓' : docStatus === 'pending' ? '⏳' : docStatus === 'rejected' ? '✗' : '○'}</span>
+									<span class="text-sm font-medium text-slate-800">{documentTypeLabel(type)}</span>
+								</div>
+								<div class="flex shrink-0 items-center gap-2">
+									<span class="rounded-full px-2.5 py-1 text-xs font-semibold {docStatus === 'approved' ? 'bg-emerald-100 text-emerald-700' : docStatus === 'pending' ? 'bg-amber-100 text-amber-700' : docStatus === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'}">{docStatus === 'approved' ? 'Validated' : docStatus === 'pending' ? 'Pending' : docStatus === 'rejected' ? 'Rejected' : 'Not uploaded'}</span>
+									{#if document?.signed_url}
+										<a href={document.signed_url} target="_blank" rel="noopener noreferrer" class="text-xs font-medium text-blue-700 hover:underline">Open</a>
+									{/if}
+									{#if document?.status === 'pending'}
+										<button type="button" on:click={() => deleteVerificationDocument(document)} class="text-xs font-medium text-red-600 hover:underline">Delete</button>
+									{/if}
+									{#if docStatus === 'missing' || docStatus === 'rejected'}
+										<label class="cursor-pointer rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">
+											Upload
+											<input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" class="hidden" on:change={(event) => uploadChecklistDocument(type, event)} />
+										</label>
+									{/if}
+								</div>
 							</div>
-							<span class="text-xs font-semibold px-2 py-1 rounded-full {docStatus === 'approved' ? 'bg-emerald-100 text-emerald-700' : docStatus === 'rejected' ? 'bg-red-100 text-red-700' : docStatus === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}">
-								{docStatus === 'approved' ? 'Validated' : docStatus === 'rejected' ? 'Rejected — re-upload' : docStatus === 'pending' ? 'Uploaded' : 'To upload'}
-							</span>
-						</div>
-					{/each}
+						{/each}
+					</div>
 
 					<p class="text-xs text-slate-400 pt-1">Identity documents are required for account verification.</p>
 
@@ -1540,80 +1535,48 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 					{/if}
 				</div>
 
-				<div class="mt-5 rounded-xl border border-emerald-200 bg-emerald-50/60 p-5">
-					<div>
-						<h3 class="text-base font-semibold text-slate-900">Driver Documents</h3>
-						<p class="text-sm text-slate-600 mt-1">Upload the documents required to publish rides as a driver.</p>
-					</div>
-					<div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-						<select
-							bind:value={driverDocumentType}
-							on:change={() => (selectedDocumentType = driverDocumentType)}
-							class="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
-						>
-							{#each documentTypeOptions.filter(opt => (driverOnlyDocumentTypes as readonly string[]).includes(opt.value)) as option (option.value)}
-								<option value={option.value}>{option.label}</option>
-							{/each}
-						</select>
-						<div class="relative">
-							<label class="block px-3 py-2 text-sm text-emerald-700 bg-emerald-100 rounded-md font-semibold cursor-pointer hover:bg-emerald-200 text-center">
-								{driverDocumentFileName}
-								<input
-									bind:this={driverDocumentFileInput}
-									type="file"
-									accept=".pdf,.png,.jpg,.jpeg,.webp"
-									on:change={(event) => handleVerificationDocumentSelect(event, true)}
-									class="hidden"
-								/>
-							</label>
+				{#if !showDriverDocuments}
+					<button type="button" on:click={() => (driverDocumentsVisible = true)} class="mt-5 w-full rounded-xl border border-dashed border-emerald-300 bg-emerald-50/50 px-5 py-4 text-left hover:bg-emerald-50">
+						<span class="block text-sm font-semibold text-emerald-800">I want to become a driver</span>
+						<span class="mt-1 block text-xs text-emerald-700">Upload documents to publish rides.</span>
+					</button>
+				{:else}
+					<div class="mt-5 rounded-xl border border-emerald-200 bg-emerald-50/60 p-5">
+						<div class="flex items-start justify-between gap-3">
+							<div>
+								<h3 class="text-base font-semibold text-slate-900">Driver Documents</h3>
+								<p class="mt-1 text-sm text-slate-600">Upload the documents required to publish rides as a driver.</p>
+							</div>
+							<span class="shrink-0 text-xs font-semibold text-slate-600">{driverApprovedCount}/4 validated</span>
 						</div>
-						<button
-							type="button"
-							on:click={() => uploadVerificationDocument(true)}
-							disabled={!selectedDriverDocumentFile || uploadingDocument}
-							class="px-4 py-2 rounded-md bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
-						>
-							{uploadingDocument ? 'Uploading...' : 'Upload driver document'}
-						</button>
+						<div class="mt-4 space-y-2">
+							{#each driverOnlyDocumentTypes as type (type)}
+								{@const docStatus = docStatusByType.get(type) ?? 'missing'}
+								{@const document = latestDocumentForType(type)}
+								<div class="flex items-center justify-between gap-3 rounded-lg border px-4 py-3 {docStatus === 'approved' ? 'border-emerald-200 bg-emerald-50' : docStatus === 'pending' ? 'border-amber-200 bg-amber-50' : docStatus === 'rejected' ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-white'}">
+									<div class="flex min-w-0 items-center gap-3">
+										<span class="text-lg {docStatus === 'approved' ? 'text-emerald-600' : docStatus === 'pending' ? 'text-amber-500' : docStatus === 'rejected' ? 'text-red-500' : 'text-gray-400'}">{docStatus === 'approved' ? '✓' : docStatus === 'pending' ? '⏳' : docStatus === 'rejected' ? '✗' : '○'}</span>
+										<span class="text-sm font-medium text-slate-800">{documentTypeLabel(type)}</span>
+									</div>
+									<div class="flex shrink-0 items-center gap-2">
+										<span class="rounded-full px-2.5 py-1 text-xs font-semibold {docStatus === 'approved' ? 'bg-emerald-100 text-emerald-700' : docStatus === 'pending' ? 'bg-amber-100 text-amber-700' : docStatus === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'}">{docStatus === 'approved' ? 'Validated' : docStatus === 'pending' ? 'Pending' : docStatus === 'rejected' ? 'Rejected' : 'Not uploaded'}</span>
+										{#if document?.signed_url}<a href={document.signed_url} target="_blank" rel="noopener noreferrer" class="text-xs font-medium text-blue-700 hover:underline">Open</a>{/if}
+										{#if document?.status === 'pending'}<button type="button" on:click={() => deleteVerificationDocument(document)} class="text-xs font-medium text-red-600 hover:underline">Delete</button>{/if}
+										{#if docStatus === 'missing' || docStatus === 'rejected'}
+											<label class="cursor-pointer rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">Upload<input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" class="hidden" on:change={(event) => uploadChecklistDocument(type, event)} /></label>
+										{/if}
+									</div>
+								</div>
+							{/each}
+						</div>
 					</div>
-				</div>
+				{/if}
 
 				{#if !profile.is_verified && missingRequiredDocumentTypes.length > 0}
 					<div class="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
 						Missing required documents: {missingRequiredDocumentTypes.map((docType) => documentTypeLabel(docType)).join(', ')}
 					</div>
 				{/if}
-
-				<div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-					<select
-						bind:value={selectedDocumentType}
-						class="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
-					>
-						{#each documentTypeOptions.filter(opt => (planRequiredDocTypes as readonly string[]).includes(opt.value)) as option (option.value)}
-							<option value={option.value}>{option.label}</option>
-						{/each}
-					</select>
-					<div class="relative">
-						<label class="block px-3 py-2 text-sm text-emerald-700 bg-emerald-100 rounded-md font-semibold cursor-pointer hover:bg-emerald-200 text-center">
-							{documentFileName}
-							<input
-								bind:this={documentFileInput}
-								type="file"
-								accept=".pdf,.png,.jpg,.jpeg,.webp"
-								on:change={handleVerificationDocumentSelect}
-								class="hidden"
-							/>
-						</label>
-					</div>
-					<button
-						type="button"
-						on:click={() => uploadVerificationDocument(false)}
-						disabled={!selectedDocumentFile || uploadingDocument}
-						class="px-4 py-2 rounded-md bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
-					>
-							{uploadingDocument ? 'Uploading...' : 'Upload Profile Documents'}
-					</button>
-				</div>
 
 				<!-- Submit for review -->
 				<div class="mt-5 rounded-xl border border-slate-200 bg-white p-5">
@@ -1653,7 +1616,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 					<p class="mt-3 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2">{documentsMessage}</p>
 				{/if}
 
-				<div class="mt-4 border border-slate-200 rounded-xl overflow-hidden">
+				<div class="hidden mt-4 border border-slate-200 rounded-xl overflow-hidden">
 					{#if documentsLoading}
 						<p class="px-4 py-3 text-sm text-slate-500">Loading documents...</p>
 					{:else if verificationDocuments.length === 0}
@@ -1674,7 +1637,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 									<tr>
 										<td class="px-4 py-3">{documentTypeLabel(doc.document_type)}</td>
 										<td class="px-4 py-3">
-											<p class="font-medium text-slate-900">{doc.file_name}</p>
+											<p class="font-medium text-slate-900">{documentTypeLabel(doc.document_type)}</p>
 											<p class="text-xs text-slate-500">{formatFileSize(doc.file_size)}</p>
 											{#if doc.admin_note}
 												<p class="text-xs text-red-600 mt-1">Admin note: {doc.admin_note}</p>

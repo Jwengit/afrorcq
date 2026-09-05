@@ -16,7 +16,7 @@
 		gender?: string | null;
 		car_make?: string | null;
 		car_year?: string | number | null;
-		plate_number?: string | null;
+		color?: string | null;
 		status?: string | null;
 		is_verified?: boolean | null;
 		membership_paid?: boolean | null;
@@ -130,7 +130,7 @@
 
 		const { data, error } = await supabase
 			.from('profiles')
-			.select('gender, car_make, car_year, plate_number, status, is_verified, membership_paid, membership_expires_at, review_pending, review_pending_ride_id')
+			.select('gender, car_make, car_year, color, status, is_verified, membership_paid, membership_expires_at, review_pending, review_pending_ride_id')
 			.eq('id', userId)
 			.maybeSingle();
 
@@ -160,7 +160,7 @@
 		const hasCarInfo =
 			Boolean((profile?.car_make ?? '').toString().trim()) &&
 			Boolean((profile?.car_year ?? '').toString().trim()) &&
-			Boolean((profile?.plate_number ?? '').toString().trim());
+			Boolean((profile?.color ?? '').toString().trim());
 
 		if (!hasCarInfo) {
 			missingRequirements.push('car_info');

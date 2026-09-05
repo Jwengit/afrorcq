@@ -100,7 +100,7 @@ BEGIN
 
     is_driver :=
       coalesce(nullif(btrim(NEW.car_make), ''), NULL) IS NOT NULL
-      OR coalesce(nullif(btrim(NEW.plate_number), ''), NULL) IS NOT NULL;
+      OR coalesce(nullif(btrim(NEW.color), ''), NULL) IS NOT NULL;
 
     has_required_docs := public.profile_has_required_verification_docs(NEW.id, is_driver);
     IF NOT has_required_docs THEN
@@ -127,7 +127,7 @@ BEFORE INSERT OR UPDATE OF
   gender,
   profile_photo_url,
   car_make,
-  plate_number,
+  color,
   status
 ON public.profiles
 FOR EACH ROW
@@ -149,7 +149,7 @@ WHERE
     OR NOT public.profile_has_required_verification_docs(
       p.id,
       coalesce(nullif(btrim(p.car_make), ''), NULL) IS NOT NULL
-      OR coalesce(nullif(btrim(p.plate_number), ''), NULL) IS NOT NULL
+      OR coalesce(nullif(btrim(p.color), ''), NULL) IS NOT NULL
     )
   );
 
@@ -166,7 +166,7 @@ CREATE POLICY "Drivers can publish rides" ON public.rides
       WHERE p.id = auth.uid()
         AND coalesce(nullif(btrim(p.car_make), ''), NULL) IS NOT NULL
         AND p.car_year IS NOT NULL
-        AND coalesce(nullif(btrim(p.plate_number), ''), NULL) IS NOT NULL
+        AND coalesce(nullif(btrim(p.color), ''), NULL) IS NOT NULL
         AND public.driver_has_required_verification_docs(p.id)
     )
   );
@@ -182,14 +182,14 @@ BEGIN
   SELECT (
     coalesce(nullif(btrim(p.car_make), ''), NULL) IS NOT NULL
     AND p.car_year IS NOT NULL
-    AND coalesce(nullif(btrim(p.plate_number), ''), NULL) IS NOT NULL
+    AND coalesce(nullif(btrim(p.color), ''), NULL) IS NOT NULL
   )
   INTO has_car_info
   FROM public.profiles p
   WHERE p.id = NEW.driver_id;
 
   IF coalesce(has_car_info, FALSE) IS NOT TRUE THEN
-    RAISE EXCEPTION 'Driver must complete car_make, car_year, and plate_number before publishing a ride.'
+    RAISE EXCEPTION 'Driver must complete car_make, car_year, and color before publishing a ride.'
       USING ERRCODE = '23514';
   END IF;
 
