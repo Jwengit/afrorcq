@@ -1,7 +1,11 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
-import { sendDocumentRejectedEmail, sendDocumentsVerifiedEmail } from '$lib/email';
+import {
+  sendDocumentRejectedEmail,
+  sendDocumentsVerifiedEmail,
+  sendDriverDocumentsApprovedEmail
+} from '$lib/email';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -21,6 +25,14 @@ const DRIVER_REQUIRED_DOCUMENT_TYPES = [
   'insurance',
   'vehicle_registration'
 ] as const;
+
+const DRIVER_DOCUMENT_TYPES = new Set<string>([
+  'driver_license',
+  'driver_license_front',
+  'driver_license_back',
+  'insurance',
+  'vehicle_registration'
+]);
 
 function resolveVerificationLabel(isVerified: boolean): 'Verified' | 'Unverified' {
   return isVerified ? 'Verified' : 'Unverified';
@@ -91,6 +103,38 @@ async function notifyApprovedMember(adminClient: any, userId: string, siteUrl: s
   }
 }
 
+async function notifyDriverDocumentsApproved(adminClient: any, userId: string) {
+  const { data: profile } = await adminClient
+    .from('profiles')
+    .select('first_name, email')
+    .eq('id', userId)
+    .maybeSingle();
+  const memberEmail = (profile?.email ?? '').trim();
+  if (memberEmail) {
+    await sendDriverDocumentsApprovedEmail({
+      to: memberEmail,
+      firstName: profile?.first_name
+    });
+  }
+}
+
+async function allDriverDocumentsApproved(adminClient: any, userId: string): Promise<boolean> {
+  const { data, error } = await adminClient
+    .from('verification_documents')
+    .select('document_type, status')
+    .eq('user_id', userId);
+
+  if (error) return false;
+
+  const approvedTypes = new Set(
+    (data ?? [])
+      .filter((doc: { status?: string | null }) => isApprovedStatus(doc.status))
+      .map((doc: { document_type?: string | null }) => normalizeDocumentType(doc.document_type))
+  );
+
+  return DRIVER_REQUIRED_DOCUMENT_TYPES.every((documentType) => approvedTypes.has(documentType));
+}
+
 function normalizeDocumentType(value: string | null | undefined): string {
   const normalized = (value || '').trim().toLowerCase();
 
@@ -100,6 +144,10 @@ function normalizeDocumentType(value: string | null | undefined): string {
   if (normalized === 'registration' || normalized === 'vehicle_papers') return 'vehicle_registration';
 
   return normalized;
+}
+
+function isDriverDocument(value: string | null | undefined): boolean {
+  return DRIVER_DOCUMENT_TYPES.has(normalizeDocumentType(value));
 }
 
 function isApprovedStatus(value: string | null | undefined): boolean {
@@ -383,7 +431,14 @@ export const PATCH: RequestHandler = async ({ request }) => {
       return json({ error: effectiveUpdateError.message }, { status: 500 });
     }
 
-    if (status === 'approved') {
+    const driverDocument = isDriverDocument(existingDoc.document_type);
+    const wasAlreadyApproved = isApprovedStatus(existingDoc.status);
+
+    if (status === 'approved' && driverDocument) {
+      if (!wasAlreadyApproved && await allDriverDocumentsApproved(adminClient, existingDoc.user_id)) {
+        await notifyDriverDocumentsApproved(adminClient, existingDoc.user_id);
+      }
+    } else if (status === 'approved') {
       const allApproved = await shouldMarkProfileVerified(adminClient, existingDoc.user_id);
 
       if (allApproved) {

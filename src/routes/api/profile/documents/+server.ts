@@ -7,6 +7,13 @@ import { buildVerificationDocumentInsertPayload, resolveExistingDocumentType } f
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
 const BUCKET = 'verification-documents';
+const DRIVER_DOCUMENT_TYPES = new Set([
+  'driver_license',
+  'driver_license_front',
+  'driver_license_back',
+  'insurance',
+  'vehicle_registration'
+]);
 
 type DocumentRow = {
   id: string;
@@ -30,6 +37,10 @@ function isStatusConstraintError(message: string | undefined): boolean {
 
 function normalizeDocumentType(row: DocumentRow): string {
   return resolveExistingDocumentType(row);
+}
+
+function isDriverDocument(documentType: string): boolean {
+  return DRIVER_DOCUMENT_TYPES.has(documentType.trim().toLowerCase());
 }
 
 function createApiClient(token: string) {
@@ -289,10 +300,11 @@ export const POST: RequestHandler = async ({ request }) => {
         return json({ error: insertError.message }, { status: 500 });
       }
 
-      await adminClient
-        .from('profiles')
-        .update({ is_verified: false, updated_at: new Date().toISOString() })
-        .eq('id', user.id);
+      const profileUpdate = isDriverDocument(documentType)
+        ? { updated_at: new Date().toISOString() }
+        : { is_verified: false, updated_at: new Date().toISOString() };
+
+      await adminClient.from('profiles').update(profileUpdate).eq('id', user.id);
 
       await createDocumentsSubmittedNotification(adminClient, user.id);
 		await notifyDocumentsUnderReview(adminClient, user.id, user.email ?? null);
@@ -324,10 +336,11 @@ export const POST: RequestHandler = async ({ request }) => {
       return json({ error: error.message }, { status: 500 });
     }
 
-    await adminClient
-      .from('profiles')
-      .update({ is_verified: false, updated_at: new Date().toISOString() })
-      .eq('id', user.id);
+    const profileUpdate = isDriverDocument(documentType)
+      ? { updated_at: new Date().toISOString() }
+      : { is_verified: false, updated_at: new Date().toISOString() };
+
+    await adminClient.from('profiles').update(profileUpdate).eq('id', user.id);
 
 	await createDocumentsSubmittedNotification(adminClient, user.id);
 	await notifyDocumentsUnderReview(adminClient, user.id, user.email ?? null);

@@ -102,6 +102,8 @@
 	let documentFileInput: HTMLInputElement;
 	let driverDocumentFileInput: HTMLInputElement;
 	let driverDocumentType = 'driver_license_front';
+	let selectedDriverDocumentFile: File | null = null;
+	let driverDocumentFileName = 'Choose a file';
 
 	const documentTypeOptions = [
 		{ value: 'identity_card_front', label: 'Proof of ID (front)' },
@@ -596,18 +598,26 @@
 		}
 	}
 
-	function handleVerificationDocumentSelect(event: Event) {
+	function handleVerificationDocumentSelect(event: Event, isDriverDocument = false) {
 		const target = event.target as HTMLInputElement;
-		selectedDocumentFile = target.files?.[0] ?? null;
-		documentFileName = selectedDocumentFile?.name ?? 'Choose a file';
+		const file = target.files?.[0] ?? null;
+		if (isDriverDocument) {
+			selectedDriverDocumentFile = file;
+			driverDocumentFileName = file?.name ?? 'Choose a file';
+		} else {
+			selectedDocumentFile = file;
+			documentFileName = file?.name ?? 'Choose a file';
+		}
 		documentsMessage = '';
 		documentsError = '';
 	}
 
-	async function uploadVerificationDocument() {
-		if (!currentUser || !selectedDocumentFile) return;
+	async function uploadVerificationDocument(isDriverDocument = false) {
+		const file = isDriverDocument ? selectedDriverDocumentFile : selectedDocumentFile;
+		const documentType = isDriverDocument ? driverDocumentType : selectedDocumentType;
+		if (!currentUser || !file) return;
 
-		if (selectedDocumentFile.size > 10 * 1024 * 1024) {
+		if (file.size > 10 * 1024 * 1024) {
 			documentsError = 'Document size must be 10MB or less.';
 			return;
 		}
@@ -624,8 +634,8 @@
 			}
 
 			const formData = new FormData();
-			formData.append('documentType', selectedDocumentType);
-			formData.append('file', selectedDocumentFile);
+			formData.append('documentType', documentType);
+			formData.append('file', file);
 
 			const response = await fetch('/api/profile/documents', {
 				method: 'POST',
@@ -642,10 +652,15 @@
 			}
 
 			documentsMessage = 'Document uploaded';
-			selectedDocumentFile = null;
-			documentFileName = 'Choose a file';
-			if (documentFileInput) documentFileInput.value = '';
-			if (driverDocumentFileInput) driverDocumentFileInput.value = '';
+			if (isDriverDocument) {
+				selectedDriverDocumentFile = null;
+				driverDocumentFileName = 'Choose a file';
+				if (driverDocumentFileInput) driverDocumentFileInput.value = '';
+			} else {
+				selectedDocumentFile = null;
+				documentFileName = 'Choose a file';
+				if (documentFileInput) documentFileInput.value = '';
+			}
 			await loadVerificationDocuments();
 		} catch (error) {
 			documentsError = error instanceof Error ? error.message : 'Unable to upload document.';
@@ -1030,7 +1045,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 						<p class="text-sm text-slate-600 mt-1">Email: {currentUser.email}</p>
 						<p class="text-sm text-slate-600">Status: {accountStatusLabel}</p>
 						<p class="text-sm text-slate-600">Required documents approved: {approvedRequiredCount}/{requiredVerificationDocumentTypes.length}</p>
-						{#if !profile.is_verified && hasPendingRequiredDocuments}
+						{#if !profile.is_verified && isProfileStatusPending && allRequiredDocsUploaded}
 							<p class="text-xs text-amber-700 mt-1">Your documents are being reviewed by admin.</p>
 						{/if}
 						{#if !profile.is_verified && missingRequiredDocumentTypes.length > 0}
@@ -1479,7 +1494,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 			<div id="verification-documents" class="profile-card p-7 mt-6 scroll-mt-28">
 				<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
 					<div>
-						<h2 class="text-xl font-semibold text-slate-900">Document Verification</h2>
+						<h2 class="text-xl font-semibold text-slate-900">Profile Verification</h2>
 						<p class="text-sm text-slate-600 mt-1">Upload the required documents so we can verify your account.</p>
 					</div>
 					<div class="text-sm text-slate-500">
@@ -1488,8 +1503,12 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 				</div>
 
 				<!-- Required documents checklist -->
-				<div class="mt-5 space-y-2">
-					<h3 class="text-sm font-semibold text-slate-700 uppercase tracking-wide">Required documents</h3>
+				<div class="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-5 space-y-3">
+					<div>
+						<h3 class="text-base font-semibold text-slate-900">Profile Documents</h3>
+						<p class="text-sm text-slate-600 mt-1">Upload the documents required to verify your profile.</p>
+					</div>
+					<h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Required documents</h4>
 					{#each planRequiredDocTypes as type}
 						{@const docStatus = docStatusByType.get(type) ?? 'missing'}
 						<div class="flex items-center justify-between rounded-lg border px-4 py-3 {docStatus === 'approved' ? 'border-emerald-200 bg-emerald-50' : docStatus === 'rejected' ? 'border-red-200 bg-red-50' : docStatus === 'pending' ? 'border-amber-200 bg-amber-50' : 'border-gray-200 bg-gray-50'}">
@@ -1521,9 +1540,9 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 					{/if}
 				</div>
 
-				<div class="mt-6 border-t border-slate-200 pt-6">
+				<div class="mt-5 rounded-xl border border-emerald-200 bg-emerald-50/60 p-5">
 					<div>
-						<h3 class="text-sm font-semibold text-slate-700 uppercase tracking-wide">Driver Documents</h3>
+						<h3 class="text-base font-semibold text-slate-900">Driver Documents</h3>
 						<p class="text-sm text-slate-600 mt-1">Upload the documents required to publish rides as a driver.</p>
 					</div>
 					<div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1538,54 +1557,26 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 						</select>
 						<div class="relative">
 							<label class="block px-3 py-2 text-sm text-emerald-700 bg-emerald-100 rounded-md font-semibold cursor-pointer hover:bg-emerald-200 text-center">
-								{documentFileName}
+								{driverDocumentFileName}
 								<input
 									bind:this={driverDocumentFileInput}
 									type="file"
 									accept=".pdf,.png,.jpg,.jpeg,.webp"
-									on:change={handleVerificationDocumentSelect}
+									on:change={(event) => handleVerificationDocumentSelect(event, true)}
 									class="hidden"
 								/>
 							</label>
 						</div>
 						<button
 							type="button"
-							on:click={() => {
-								selectedDocumentType = driverDocumentType;
-								uploadVerificationDocument();
-							}}
-							disabled={!selectedDocumentFile || uploadingDocument}
+							on:click={() => uploadVerificationDocument(true)}
+							disabled={!selectedDriverDocumentFile || uploadingDocument}
 							class="px-4 py-2 rounded-md bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
 						>
 							{uploadingDocument ? 'Uploading...' : 'Upload driver document'}
 						</button>
 					</div>
 				</div>
-
-				<!-- Submit for review -->
-				{#if !profile.is_verified}
-					<div class="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center">
-						{#if isProfileStatusPending}
-							<div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-								⏳ Your documents are under review. We'll notify you once verified. This usually takes 24–48 hours.
-							</div>
-						{:else}
-							<button
-								type="button"
-								on:click={submitForReview}
-								disabled={!allRequiredDocsUploaded || !profile.profile_photo_url || submittingForReview}
-								class="inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50 {allRequiredDocsUploaded && profile.profile_photo_url ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-gray-400'}"
-							>
-								{submittingForReview ? 'Submitting...' : 'Submit for review'}
-							</button>
-							{#if !profile.profile_photo_url}
-								<p class="text-xs text-slate-500">Add a profile photo to enable this button.</p>
-							{:else if !allRequiredDocsUploaded}
-								<p class="text-xs text-slate-500">Upload all required documents above to enable this button.</p>
-							{/if}
-						{/if}
-					</div>
-				{/if}
 
 				{#if !profile.is_verified && missingRequiredDocumentTypes.length > 0}
 					<div class="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
@@ -1616,12 +1607,43 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 					</div>
 					<button
 						type="button"
-						on:click={uploadVerificationDocument}
+						on:click={() => uploadVerificationDocument(false)}
 						disabled={!selectedDocumentFile || uploadingDocument}
 						class="px-4 py-2 rounded-md bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
 					>
-						{uploadingDocument ? 'Uploading...' : 'Upload document'}
+							{uploadingDocument ? 'Uploading...' : 'Upload Profile Documents'}
 					</button>
+				</div>
+
+				<!-- Submit for review -->
+				<div class="mt-5 rounded-xl border border-slate-200 bg-white p-5">
+					{#if !profile.is_verified}
+						{#if isProfileStatusPending && allRequiredDocsUploaded}
+							<div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+								Your documents are being reviewed by admin. We'll notify you once verified.
+							</div>
+						{:else}
+							<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+								<div>
+									<h3 class="text-base font-semibold text-slate-900">Ready to submit?</h3>
+									<p class="text-sm text-slate-600 mt-1">Submit your profile for admin review once all required documents are uploaded.</p>
+								</div>
+								<button
+									type="button"
+									on:click={submitForReview}
+									disabled={!allRequiredDocsUploaded || !profile.profile_photo_url || submittingForReview}
+									class="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50 {allRequiredDocsUploaded && profile.profile_photo_url ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-gray-400'}"
+								>
+									{submittingForReview ? 'Submitting...' : 'Submit for review'}
+								</button>
+							</div>
+							{#if !profile.profile_photo_url}
+								<p class="mt-3 text-xs text-slate-500">Add a profile photo to enable submission.</p>
+							{:else if !allRequiredDocsUploaded}
+								<p class="mt-3 text-xs text-slate-500">Upload all required profile documents above to enable submission.</p>
+							{/if}
+						{/if}
+					{/if}
 				</div>
 
 				{#if documentsError}

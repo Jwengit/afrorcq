@@ -390,6 +390,20 @@ export async function sendDocumentsVerifiedEmail(input: BaseEmailInput): Promise
 	return sendEmail({ ...input, template: buildDocumentsVerifiedEmail(input.firstName) });
 }
 
+export function buildDriverDocumentsApprovedEmail(firstName?: string | null): EmailTemplate {
+	return buildEmailTemplate({
+		firstName,
+		subject: 'Your driver documents have been approved',
+		lines: ['Your driver documents have been approved by our team.'],
+		buttonLabel: 'View my profile',
+		buttonUrl: HIZLI_PROFILE_URL
+	});
+}
+
+export async function sendDriverDocumentsApprovedEmail(input: BaseEmailInput): Promise<string | null> {
+	return sendEmail({ ...input, template: buildDriverDocumentsApprovedEmail(input.firstName) });
+}
+
 // ─── EMAIL 10 — Compte verified (après paiement Stripe) ───
 
 export function buildAccountVerifiedEmail(firstName?: string | null): EmailTemplate {

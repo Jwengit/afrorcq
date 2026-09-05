@@ -5636,9 +5636,11 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 									{ title: 'Identity Documents', documents: identityProfileDocuments },
 									{ title: 'Driver Documents', documents: driverProfileDocuments }
 								] as group}
-									{#if group.documents.length > 0}
-										<div>
-											<h4 class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">{group.title}</h4>
+									<div class="rounded-lg border {group.title === 'Driver Documents' ? 'border-emerald-200 bg-emerald-50/40' : 'border-gray-200 bg-gray-50'} p-3">
+										<h4 class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">{group.title}</h4>
+										{#if group.documents.length === 0}
+											<p class="text-sm text-gray-500 italic">No {group.title.toLowerCase()} uploaded.</p>
+										{:else}
 											<div class="space-y-2">
 												{#each group.documents as doc}
 													<div class="border border-gray-200 rounded-lg p-3">
@@ -5684,8 +5686,8 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 													</div>
 												{/each}
 											</div>
-										</div>
-									{/if}
+										{/if}
+									</div>
 								{/each}
 							</div>
 						{/if}
