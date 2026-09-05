@@ -5,6 +5,14 @@
 	import { resolve } from '$app/paths';
 
 	onMount(async () => {
+		const params = new URLSearchParams(window.location.search);
+		const oauthError = params.get('error_description') || params.get('error');
+
+		if (oauthError) {
+			goto(resolve('/auth/signup?googleError=1'));
+			return;
+		}
+
 		const { data, error } = await supabase.auth.getSession();
 
 		if (error) {
@@ -13,6 +21,13 @@
 		} else if (data.session) {
 			// Check if user is new (created within last 5 minutes)
 			const user = data.session.user;
+
+			if (!user.email) {
+				await supabase.auth.signOut();
+				goto(resolve('/auth/signup?googleError=1'));
+				return;
+			}
+
 			const fullName =
 				(user.user_metadata?.full_name as string | undefined) ||
 				(user.user_metadata?.name as string | undefined) ||

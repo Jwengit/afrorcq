@@ -5,7 +5,7 @@ import { env } from '$env/dynamic/private';
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
 const BUCKET = 'profile-photos';
-const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
+const MAX_SIZE = 2 * 1024 * 1024; // 2 MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
 function getBearerToken(request: Request): string | null {
@@ -50,7 +50,7 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     if (fileValue.size > MAX_SIZE) {
-      return json({ error: 'Photo must be 5MB or less.' }, { status: 400 });
+      return json({ error: 'Photo must be 2MB or less.' }, { status: 400 });
     }
 
     if (!ALLOWED_TYPES.includes(fileValue.type)) {

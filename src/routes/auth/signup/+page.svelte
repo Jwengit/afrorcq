@@ -71,6 +71,10 @@
 	}
 
 	onMount(() => {
+		if (new URLSearchParams(window.location.search).get('googleError') === '1') {
+			error = 'Please sign in to your Google account first before continuing.';
+		}
+
 		if (!RECAPTCHA_SITE_KEY) {
 			error = 'reCAPTCHA is not configured. Please contact support.';
 			return;

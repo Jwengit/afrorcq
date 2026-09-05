@@ -636,7 +636,7 @@
 				return;
 			}
 
-			documentsMessage = 'Document uploaded. It is now pending admin review.';
+			documentsMessage = 'Document uploaded';
 			selectedDocumentFile = null;
 			documentFileName = 'Choose a file';
 			if (documentFileInput) documentFileInput.value = '';
@@ -1240,7 +1240,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 										on:change={handleFileSelect}
 										class="hidden"
 									/>
-									<p class="text-xs text-gray-500 mt-1">JPG, PNG or GIF. Max size 5MB.</p>
+									<p class="text-xs text-gray-500 mt-1">JPG, PNG or GIF. Max size 2MB.</p>
 								</div>
 							</div>
 						</div>
