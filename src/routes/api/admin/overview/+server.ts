@@ -14,6 +14,7 @@ type AuthUserLite = {
 type ProfileLite = {
 	id: string;
 	is_verified: boolean | null;
+	membership_paid: boolean | null;
 };
 
 function getBearerToken(request: Request): string | null {
@@ -172,7 +173,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
 		if (userIds.length > 0) {
 			const { data: profileRows, error: profilesError } = await adminClient
 				.from('profiles')
-				.select('id, is_verified')
+				.select('id, is_verified, membership_paid')
 				.in('id', userIds);
 
 			if (profilesError) {
@@ -192,6 +193,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
 
 		const pendingProfileVerifications = profiles.filter((p) => p.is_verified !== true).length;
 		const accountsToVerify = pendingProfileVerifications + missingProfileCount;
+		const readyToVerify = profiles.filter((p) => p.membership_paid === true && p.is_verified !== true).length;
 
 
 		const [activeRidesRes, completedRidesRes, reservationsInProgressRes, confirmedBookingsWithRideRes] =
@@ -292,7 +294,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
 			supportTicketsToHandle = supportTicketsCount ?? 0;
 		}
 
-		const alertsCount = reportsCount + accountsToVerify + supportTicketsToHandle;
+		const alertsCount = reportsCount + accountsToVerify + supportTicketsToHandle + readyToVerify;
 
 		return json({
 			stats: {
@@ -310,6 +312,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
 					total: alertsCount,
 					reports: reportsCount,
 					accountsToVerify,
+					readyToVerify,
 					supportTickets: supportTicketsToHandle
 				}
 			},

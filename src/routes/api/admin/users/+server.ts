@@ -17,17 +17,19 @@ type ProfileRow = {
 	profile_photo_status?: 'pending' | 'approved' | 'rejected' | null;
 	is_admin: boolean | null;
 	is_verified: boolean | null;
+	membership_paid?: boolean | null;
+	membership_expires_at?: string | null;
 	user_status?: string | null;
 	average_rating?: number | null;
 	created_at: string | null;
 };
 
 const PROFILE_SELECT_WITH_RATING =
-	'id, public_id, first_name, last_name, email, phone_number, gender, profile_photo_url, profile_photo_status, is_admin, is_verified, user_status, average_rating, created_at';
+	'id, public_id, first_name, last_name, email, phone_number, gender, profile_photo_url, profile_photo_status, is_admin, is_verified, membership_paid, membership_expires_at, user_status, average_rating, created_at';
 const PROFILE_SELECT_WITHOUT_RATING =
-	'id, public_id, first_name, last_name, email, phone_number, gender, profile_photo_url, profile_photo_status, is_admin, is_verified, user_status, created_at';
+	'id, public_id, first_name, last_name, email, phone_number, gender, profile_photo_url, profile_photo_status, is_admin, is_verified, membership_paid, membership_expires_at, user_status, created_at';
 const PROFILE_SELECT_BASE =
-	'id, first_name, last_name, email, phone_number, gender, profile_photo_url, profile_photo_status, is_admin, is_verified, user_status, created_at';
+	'id, first_name, last_name, email, phone_number, gender, profile_photo_url, profile_photo_status, is_admin, is_verified, membership_paid, membership_expires_at, user_status, created_at';
 
 function resolveVerificationLabel(isVerified: boolean): 'Verified' | 'Unverified' {
 	return isVerified ? 'Verified' : 'Unverified';
@@ -260,6 +262,8 @@ export const GET: RequestHandler = async ({ request }) => {
 				profile_photo_status: profile?.profile_photo_status ?? null,
 				is_admin: profile?.is_admin ?? false,
 				is_verified: profileVerified,
+				membership_paid: profile?.membership_paid ?? false,
+				membership_expires_at: profile?.membership_expires_at ?? null,
 				email_confirmed: emailConfirmed,
 				account_verified: profileVerified && emailConfirmed,
 				user_status: profile?.user_status ?? 'active',
@@ -308,6 +312,7 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		const field =
 			body.field === 'is_admin' ||
 			body.field === 'is_verified' ||
+			body.field === 'membership_paid' ||
 			body.field === 'email_confirmed' ||
 			body.field === 'gender'
 				? body.field
@@ -334,10 +339,27 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		}
 
 		if (field === 'is_verified' && value === true) {
-			return json(
-				{ error: 'Account verification is completed automatically after confirmed payment.' },
-				{ status: 403 }
-			);
+			const { data: paymentProfile, error: paymentProfileError } = await createClient(supabaseUrl, serviceRoleKey)
+				.from('profiles')
+				.select('membership_paid')
+				.eq('id', userId)
+				.maybeSingle();
+
+			if (paymentProfileError) {
+				return json({ error: paymentProfileError.message }, { status: 500 });
+			}
+			if (!paymentProfile?.membership_paid) {
+				return json({ error: 'Payment must be confirmed before verifying this account.' }, { status: 403 });
+			}
+		}
+
+		if (field === 'membership_paid') {
+			if (adminCheck.email?.toLowerCase() !== 'hizli.carpooling@gmail.com') {
+				return json({ error: 'Only the master admin can simulate payment.' }, { status: 403 });
+			}
+			if (value !== true) {
+				return json({ error: 'Test payment can only be enabled.' }, { status: 400 });
+			}
 		}
 
 		const adminClient = createClient(supabaseUrl, serviceRoleKey);
@@ -373,6 +395,10 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		if (field === 'is_admin' || field === 'is_verified') {
 			payload.first_name = firstName;
 			payload.last_name = lastName;
+		}
+
+		if (field === 'membership_paid') {
+			payload.membership_expires_at = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 		}
 
 		if (field === 'is_verified' && typeof value === 'boolean') {

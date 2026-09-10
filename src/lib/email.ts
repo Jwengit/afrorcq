@@ -393,8 +393,8 @@ export async function sendDocumentsVerifiedEmail(input: BaseEmailInput): Promise
 export function buildDriverDocumentsApprovedEmail(firstName?: string | null): EmailTemplate {
 	return buildEmailTemplate({
 		firstName,
-		subject: 'Your driver documents have been approved',
-		lines: ['Your driver documents have been approved by our team.'],
+		subject: 'Car documents approved',
+		lines: ['Your car documents have been reviewed and approved. You can now publish rides as a driver.'],
 		buttonLabel: 'View my profile',
 		buttonUrl: HIZLI_PROFILE_URL
 	});

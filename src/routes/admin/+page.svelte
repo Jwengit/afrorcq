@@ -30,6 +30,8 @@
 		gender: string | null;
 		is_admin: boolean | null;
 		is_verified: boolean | null;
+		membership_paid?: boolean | null;
+		membership_expires_at?: string | null;
 		email_confirmed?: boolean | null;
 		account_verified?: boolean | null;
 		user_status: string | null;
@@ -502,6 +504,7 @@
 			total: 0,
 			reports: 0,
 			accountsToVerify: 0,
+			readyToVerify: 0,
 			supportTickets: 0
 		}
 	};
@@ -909,9 +912,13 @@
 				? value
 					? 'The account is now admin.'
 					: 'Admin role has been removed.'
+				: field === 'is_verified'
+					? value
+						? 'The account is now verified.'
+						: 'The account is now unverified.'
 				: value
-					? 'The account is now verified.'
-					: 'The account is now unverified.';
+					? 'The account is now updated.'
+					: 'The account is now updated.';
 
 		actionUserId = null;
 	}
@@ -920,6 +927,39 @@
 		const profile = selectedProfile;
 		if (!profile) return;
 		await updateUserFlag(profile, 'is_verified', value);
+	}
+
+	async function simulatePaymentReceived() {
+		const profile = selectedProfile;
+		if (!profile || currentUser?.email?.toLowerCase() !== 'hizli.carpooling@gmail.com') return;
+		if (!confirm(`Simulate payment received for ${profile.email ?? profile.id}?`)) return;
+
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+		if (!session?.access_token) {
+			usersActionMessage = 'Session expired. Please sign in again.';
+			return;
+		}
+
+		const response = await fetch('/api/admin/users', {
+			method: 'PATCH',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${session.access_token}`
+			},
+			body: JSON.stringify({ userId: profile.id, field: 'membership_paid', value: true })
+		});
+		const payload = await response.json();
+		if (!response.ok) {
+			usersActionMessage = payload?.error || 'Unable to simulate payment.';
+			return;
+		}
+
+		const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+		users = users.map((user) => user.id === profile.id ? { ...user, membership_paid: true, membership_expires_at: expiresAt } : user);
+		selectedProfile = { ...profile, membership_paid: true, membership_expires_at: expiresAt };
+		usersActionMessage = 'Test payment marked as received.';
 	}
 
 	async function updateProfilePhotoStatus(status: 'approved' | 'rejected') {
@@ -3585,7 +3625,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 							<!-- Alerts -->
 							<div class="rounded-2xl border border-gray-200 bg-white/90 p-4 shadow-sm">
 								<h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 px-1">Alerts</h3>
-								<div class="grid md:grid-cols-3 gap-4">
+								<div class="grid md:grid-cols-4 gap-4">
 									<div class="rounded-xl border p-5 h-full flex flex-col justify-between shadow-sm {stats.alerts.reports > 0 ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-gray-50'}">
 										<div class="flex items-center justify-between mb-2">
 											<p class="text-sm font-semibold {stats.alerts.reports > 0 ? 'text-red-800' : 'text-gray-600'}">Reports</p>
@@ -3636,6 +3676,20 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 							<div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
 								<div>
 									<h2 class="text-lg font-semibold text-gray-900">User management</h2>
+									<div class="rounded-xl border p-5 h-full flex flex-col justify-between shadow-sm {stats.alerts.readyToVerify > 0 ? 'border-emerald-200 bg-emerald-50' : 'border-gray-200 bg-gray-50'}">
+										<div class="flex items-center justify-between mb-2">
+											<p class="text-sm font-semibold {stats.alerts.readyToVerify > 0 ? 'text-emerald-800' : 'text-gray-600'}">Ready to verify</p>
+											<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold {stats.alerts.readyToVerify > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-600'}">{stats.alerts.readyToVerify}</span>
+										</div>
+										{#if stats.alerts.readyToVerify === 0}
+											<p class="text-xs text-gray-500">No paid accounts are ready.</p>
+										{:else}
+											<p class="text-xs text-emerald-700 mb-2">Paid accounts await final verification.</p>
+											<button type="button" on:click={() => setTab('users')} class="text-xs font-medium text-emerald-700 underline hover:text-emerald-900 cursor-pointer">
+												View users ->
+											</button>
+										{/if}
+									</div>
 									<p class="text-sm text-gray-500">Search by name or email, manage permissions and verification.</p>
 								</div>
 								<div class="flex gap-2">
@@ -3682,9 +3736,21 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 											{#each filteredUsers as adminUser}
 												<tr class="hover:bg-gray-50">
 													<td class="px-4 py-3 align-top">
-														<p class="font-medium text-gray-900">
+														<div class="flex items-start gap-3">
+															<div class="relative shrink-0">
+																{#if adminUser.profile_photo_url}
+																	<img src={adminUser.profile_photo_url} alt="" class="w-10 h-10 object-cover rounded-full border border-gray-200" />
+																{:else}
+																	<div class="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-sm">👤</div>
+																{/if}
+																{#if adminUser.membership_paid}
+																	<span class="absolute -right-1 -bottom-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-green-600 text-[11px] font-bold text-white ring-2 ring-white" title="Payment confirmed">✓</span>
+																{/if}
+															</div>
+															<div>
+																<p class="font-medium text-gray-900">
 															{`${adminUser.first_name ?? ''} ${adminUser.last_name ?? ''}`.trim() || 'No name'}
-														</p>
+																</p>
 														<p class="text-xs text-gray-700">ID #{adminUser.public_id ?? '-'}</p>
 														<p class="text-xs text-gray-500">{adminUser.email ?? 'Email not provided'}</p>
 														{#if adminUser.phone_number}
@@ -3694,6 +3760,8 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 														{#if adminUser.has_profile === false}
 															<p class="text-xs text-amber-600">Missing profile</p>
 														{/if}
+														</div>
+														</div>
 													</td>
 													<td class="px-4 py-3 align-top">
 														<div class="flex flex-col gap-1">
@@ -5485,9 +5553,19 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 						<h3 class="text-sm font-semibold text-gray-900 mb-3">Profile photo</h3>
 						<div class="flex items-center gap-4 mb-3">
 							{#if selectedProfile && selectedProfile.profile_photo_url}
-								<img src={selectedProfile.profile_photo_url} alt="" class="w-20 h-20 object-cover rounded-full border border-gray-200" />
+											<div class="relative shrink-0">
+												<img src={selectedProfile.profile_photo_url} alt="" class="w-20 h-20 object-cover rounded-full border border-gray-200" />
+												{#if selectedProfile.membership_paid}
+													<span class="absolute right-0 bottom-0 inline-flex h-6 w-6 items-center justify-center rounded-full bg-green-600 text-sm font-bold text-white ring-2 ring-white" title="Payment confirmed">✓</span>
+												{/if}
+											</div>
 							{:else}
-								<div class="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center text-xl">👤</div>
+											<div class="relative shrink-0">
+												<div class="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center text-xl">👤</div>
+												{#if selectedProfile?.membership_paid}
+													<span class="absolute right-0 bottom-0 inline-flex h-6 w-6 items-center justify-center rounded-full bg-green-600 text-sm font-bold text-white ring-2 ring-white" title="Payment confirmed">✓</span>
+												{/if}
+											</div>
 							{/if}
 
 							<div class="flex flex-col gap-2">
@@ -5547,7 +5625,15 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 						<div class="space-y-3">
 							<div class="rounded-lg border border-gray-200 p-3">
 								<p class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Verification actions</p>
-								<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+								<div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+									<button
+										type="button"
+										disabled={actionUserId === selectedProfile.id || selectedProfile.is_verified === true || selectedProfile.membership_paid !== true}
+										on:click={() => updateSelectedProfileVerification(true)}
+										class="w-full px-3 py-2 rounded-lg border border-indigo-300 text-indigo-700 bg-indigo-50 text-sm font-medium hover:bg-indigo-100 disabled:opacity-50"
+									>
+										Verify profile
+									</button>
 									<button
 										type="button"
 										disabled={actionUserId === selectedProfile.id || selectedProfile.is_verified !== true}
@@ -5565,6 +5651,20 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 										Confirm email
 									</button>
 								</div>
+								{#if selectedProfile.membership_paid !== true}
+									<p class="mt-2 text-xs text-gray-500">Payment must be confirmed before verification.</p>
+								{/if}
+								{#if currentUser?.email?.toLowerCase() === 'hizli.carpooling@gmail.com'}
+									<!-- TEST ONLY: simulates Stripe payment confirmation for testing before Stripe is live -->
+									<button
+										type="button"
+										disabled={actionUserId === selectedProfile.id || selectedProfile.membership_paid === true}
+										on:click={simulatePaymentReceived}
+										class="mt-2 w-full px-3 py-2 rounded-lg border border-amber-300 text-amber-700 bg-amber-50 text-sm font-medium hover:bg-amber-100 disabled:opacity-50"
+									>
+										Simulate payment received (test)
+									</button>
+								{/if}
 							</div>
 
 							<div class="rounded-lg border border-gray-200 p-3">
