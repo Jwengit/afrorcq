@@ -29,7 +29,10 @@ async function isRequesterAdmin(token: string): Promise<AdminAuth> {
 		return { ok: true, userId: user.id };
 	}
 
-	const { data: profile } = await anonClient
+	const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
+	if (!serviceRoleKey) return { ok: false };
+	const adminClient = createClient(supabaseUrl, serviceRoleKey);
+	const { data: profile } = await adminClient
 		.from('profiles')
 		.select('is_admin')
 		.eq('id', user.id)
