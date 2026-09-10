@@ -14,6 +14,17 @@ const DRIVER_DOCUMENT_TYPES = new Set([
   'insurance',
   'vehicle_registration'
 ]);
+const PROFILE_REQUIRED_DOCUMENT_TYPES = new Set([
+  'identity_card_front',
+  'identity_card_back',
+  'proof_of_address'
+]);
+const CAR_REQUIRED_DOCUMENT_TYPES = new Set([
+  'driver_license_front',
+  'driver_license_back',
+  'insurance',
+  'vehicle_registration'
+]);
 
 type DocumentRow = {
   id: string;
@@ -83,12 +94,55 @@ async function notifyDocumentsUnderReview(
 }
 
 async function createDocumentsSubmittedNotification(adminClient: any, userId: string) {
-  await adminClient.from('member_notifications').insert({
-    user_id: userId,
-    type: 'documents_submitted',
-    title: 'Documents submitted',
-    message: "Your documents have been submitted and are under review. We'll notify you within 24-48 hours."
-  });
+  const { data: documents, error: documentsError } = await adminClient
+    .from('verification_documents')
+    .select('document_type')
+    .eq('user_id', userId);
+
+  if (documentsError) return;
+
+  const submittedTypes = new Set(
+    (documents ?? [])
+      .map((document: { document_type?: string | null }) => (document.document_type ?? '').trim().toLowerCase())
+      .filter(Boolean)
+  );
+
+  const categories = [
+    {
+      types: PROFILE_REQUIRED_DOCUMENT_TYPES,
+      notificationType: 'profile_documents_submitted',
+      title: 'Profile documents submitted',
+      message: 'Your profile documents have been submitted and are under review.'
+    },
+    {
+      types: CAR_REQUIRED_DOCUMENT_TYPES,
+      notificationType: 'car_documents_submitted',
+      title: 'Car documents submitted',
+      message: 'Your car documents have been submitted and are under review.'
+    }
+  ];
+
+  for (const category of categories) {
+    const isComplete = [...category.types].every((documentType) => submittedTypes.has(documentType));
+    if (!isComplete) continue;
+
+    const { data: existingNotification, error: notificationError } = await adminClient
+      .from('member_notifications')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('type', category.notificationType)
+      .limit(1)
+      .maybeSingle();
+
+    if (notificationError || existingNotification) continue;
+
+    await adminClient.from('member_notifications').insert({
+      user_id: userId,
+      type: category.notificationType,
+      title: category.title,
+      message: category.message
+    });
+  }
 }
 
 async function tryInsertDocumentRecord(

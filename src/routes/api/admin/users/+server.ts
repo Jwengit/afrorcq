@@ -333,6 +333,13 @@ export const PATCH: RequestHandler = async ({ request }) => {
 			}
 		}
 
+		if (field === 'is_verified' && value === true) {
+			return json(
+				{ error: 'Account verification is completed automatically after confirmed payment.' },
+				{ status: 403 }
+			);
+		}
+
 		const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
 		if (field === 'email_confirmed') {

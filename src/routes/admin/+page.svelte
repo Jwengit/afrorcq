@@ -5547,15 +5547,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 						<div class="space-y-3">
 							<div class="rounded-lg border border-gray-200 p-3">
 								<p class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Verification actions</p>
-								<div class="grid grid-cols-1 sm:grid-cols-4 gap-2">
-									<button
-										type="button"
-										disabled={actionUserId === selectedProfile.id || selectedProfile.is_verified === true}
-										on:click={() => updateSelectedProfileVerification(true)}
-										class="w-full px-3 py-2 rounded-lg border border-indigo-300 text-indigo-700 bg-indigo-50 text-sm font-medium hover:bg-indigo-100 disabled:opacity-50"
-									>
-										Verify profile
-									</button>
+								<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
 									<button
 										type="button"
 										disabled={actionUserId === selectedProfile.id || selectedProfile.is_verified !== true}
