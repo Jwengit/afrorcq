@@ -5547,7 +5547,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 						<div class="space-y-3">
 							<div class="rounded-lg border border-gray-200 p-3">
 								<p class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Verification actions</p>
-								<div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+								<div class="grid grid-cols-1 sm:grid-cols-4 gap-2">
 									<button
 										type="button"
 										disabled={actionUserId === selectedProfile.id || selectedProfile.is_verified === true}
@@ -5602,6 +5602,27 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 									>
 										{selectedProfile.user_status === 'banned' ? '[Current] ' : ''}Banned
 									</button>
+									{#if currentUser?.email?.toLowerCase() === 'hizli.carpooling@gmail.com'}
+										<button
+											type="button"
+											disabled={actionUserId === selectedProfile.id || selectedProfile.id === currentUser?.id}
+											on:click={async () => {
+												const profile = selectedProfile;
+												if (!profile) return;
+												const nextValue = !Boolean(profile.is_admin);
+												const action = nextValue ? 'Grant' : 'Remove';
+												if (confirm(`${action} admin access to ${profile.email ?? profile.id}?`)) {
+													await updateUserFlag(profile, 'is_admin', nextValue);
+												}
+											}}
+											class="w-full px-3 py-2 rounded-lg border text-sm font-medium {selectedProfile.is_admin ? 'border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100' : 'border-gray-300 text-gray-700 hover:bg-gray-50'} disabled:opacity-50"
+										>
+											{selectedProfile.is_admin ? 'Remove admin' : 'Make admin'}
+										</button>
+										{#if selectedProfile.id === currentUser?.id}
+											<p class="text-xs text-gray-500 sm:col-span-4">You cannot change your own admin status.</p>
+										{/if}
+									{/if}
 								</div>
 							</div>
 

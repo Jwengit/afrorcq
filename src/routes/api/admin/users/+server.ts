@@ -88,7 +88,13 @@ async function isRequesterAdmin(token: string): Promise<{ ok: boolean; userId?: 
 		return { ok: true, userId: user.id, email: user.email ?? undefined };
 	}
 
-	const { data: profile } = await anonClient
+	const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
+	if (!serviceRoleKey) {
+		return { ok: false };
+	}
+
+	const adminClient = createClient(supabaseUrl, serviceRoleKey);
+	const { data: profile } = await adminClient
 		.from('profiles')
 		.select('is_admin')
 		.eq('id', user.id)
@@ -315,6 +321,16 @@ export const PATCH: RequestHandler = async ({ request }) => {
 
 		if (!userId || !field || value === null) {
 			return json({ error: 'Invalid payload' }, { status: 400 });
+		}
+
+		if (field === 'is_admin') {
+			const isMasterAdmin = adminCheck.email?.toLowerCase() === 'hizli.carpooling@gmail.com';
+			if (!isMasterAdmin) {
+				return json({ error: 'Only the master admin can change admin access.' }, { status: 403 });
+			}
+			if (adminCheck.userId === userId) {
+				return json({ error: 'You cannot change your own admin access.' }, { status: 400 });
+			}
 		}
 
 		const adminClient = createClient(supabaseUrl, serviceRoleKey);

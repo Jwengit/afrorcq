@@ -23,7 +23,11 @@ async function isRequesterAdmin(token: string): Promise<boolean> {
   if (userError || !user) return false;
   if ((user.email ?? '').toLowerCase() === 'hizli.carpooling@gmail.com') return true;
 
-  const { data: profile } = await anonClient
+  const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceRoleKey) return false;
+
+  const adminClient = createClient(supabaseUrl, serviceRoleKey);
+  const { data: profile } = await adminClient
     .from('profiles')
     .select('is_admin')
     .eq('id', user.id)
