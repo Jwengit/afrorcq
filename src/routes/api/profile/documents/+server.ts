@@ -1,7 +1,6 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
-import { sendDocumentsUnderReviewEmail } from '$lib/email';
 import { buildVerificationDocumentInsertPayload, resolveExistingDocumentType } from '$lib/verification-documents';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
@@ -14,18 +13,6 @@ const DRIVER_DOCUMENT_TYPES = new Set([
   'insurance',
   'vehicle_registration'
 ]);
-const PROFILE_REQUIRED_DOCUMENT_TYPES = new Set([
-  'identity_card_front',
-  'identity_card_back',
-  'proof_of_address'
-]);
-const CAR_REQUIRED_DOCUMENT_TYPES = new Set([
-  'driver_license_front',
-  'driver_license_back',
-  'insurance',
-  'vehicle_registration'
-]);
-
 type DocumentRow = {
   id: string;
   document_type?: string | null;
@@ -69,80 +56,6 @@ function createApiClient(token: string) {
       }
     }
   });
-}
-
-async function notifyDocumentsUnderReview(
-  adminClient: any,
-  userId: string,
-  fallbackEmail: string | null | undefined
-) {
-  const { data: profile } = await adminClient
-    .from('profiles')
-    .select('first_name, email')
-    .eq('id', userId)
-    .maybeSingle();
-
-  const memberEmail = (profile?.email ?? fallbackEmail ?? '').trim();
-  if (!memberEmail) {
-    return;
-  }
-
-  await sendDocumentsUnderReviewEmail({
-    to: memberEmail,
-    firstName: profile?.first_name
-  });
-}
-
-async function createDocumentsSubmittedNotification(adminClient: any, userId: string) {
-  const { data: documents, error: documentsError } = await adminClient
-    .from('verification_documents')
-    .select('document_type')
-    .eq('user_id', userId);
-
-  if (documentsError) return;
-
-  const submittedTypes = new Set(
-    (documents ?? [])
-      .map((document: { document_type?: string | null }) => (document.document_type ?? '').trim().toLowerCase())
-      .filter(Boolean)
-  );
-
-  const categories = [
-    {
-      types: PROFILE_REQUIRED_DOCUMENT_TYPES,
-      notificationType: 'profile_documents_submitted',
-      title: 'Profile documents submitted',
-      message: 'Your profile documents have been submitted and are under review.'
-    },
-    {
-      types: CAR_REQUIRED_DOCUMENT_TYPES,
-      notificationType: 'car_documents_submitted',
-      title: 'Car documents submitted',
-      message: 'Your car documents have been submitted and are under review.'
-    }
-  ];
-
-  for (const category of categories) {
-    const isComplete = [...category.types].every((documentType) => submittedTypes.has(documentType));
-    if (!isComplete) continue;
-
-    const { data: existingNotification, error: notificationError } = await adminClient
-      .from('member_notifications')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('type', category.notificationType)
-      .limit(1)
-      .maybeSingle();
-
-    if (notificationError || existingNotification) continue;
-
-    await adminClient.from('member_notifications').insert({
-      user_id: userId,
-      type: category.notificationType,
-      title: category.title,
-      message: category.message
-    });
-  }
 }
 
 async function tryInsertDocumentRecord(
@@ -360,9 +273,6 @@ export const POST: RequestHandler = async ({ request }) => {
 
       await adminClient.from('profiles').update(profileUpdate).eq('id', user.id);
 
-      await createDocumentsSubmittedNotification(adminClient, user.id);
-		await notifyDocumentsUnderReview(adminClient, user.id, user.email ?? null);
-
       return json({ success: true });
     }
 
@@ -395,9 +305,6 @@ export const POST: RequestHandler = async ({ request }) => {
       : { is_verified: false, updated_at: new Date().toISOString() };
 
     await adminClient.from('profiles').update(profileUpdate).eq('id', user.id);
-
-	await createDocumentsSubmittedNotification(adminClient, user.id);
-	await notifyDocumentsUnderReview(adminClient, user.id, user.email ?? null);
 
     return json({ success: true });
   } catch (error) {

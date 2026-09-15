@@ -183,6 +183,11 @@
 
 	$: isProfileStatusPending = (profile.status ?? '').toLowerCase() === 'pending';
 
+	$: allDriverDocsUploaded = driverOnlyDocumentTypes.every((type) => {
+		const status = docStatusByType.get(type);
+		return status === 'pending' || status === 'approved';
+	});
+
 	const baseRequiredDocumentTypes = ['identity_card_front', 'identity_card_back', 'student_id', 'proof_of_address'] as const;
 	const driverOnlyDocumentTypes = ['driver_license_front', 'driver_license_back', 'insurance', 'vehicle_registration'] as const;
 	const allKnownRequiredTypes = [...baseRequiredDocumentTypes, ...driverOnlyDocumentTypes] as const;
@@ -608,12 +613,30 @@
 				return;
 			}
 
-			verificationDocuments = (payload?.documents ?? []) as VerificationDocument[];
+					verificationDocuments = (payload?.documents ?? []) as VerificationDocument[];
+			await loadDriverSubmissionState(token);
 		} catch (error) {
 			documentsError = error instanceof Error ? error.message : 'Unable to load verification documents.';
 			verificationDocuments = [];
 		} finally {
 			documentsLoading = false;
+		}
+	}
+
+	async function loadDriverSubmissionState(token: string) {
+		try {
+			const response = await fetch('/api/member-notifications', {
+				headers: {
+					Authorization: `Bearer ${token}`
+				}
+			});
+			if (!response.ok) return;
+
+			const payload = await response.json();
+			const notifications = (payload?.notifications ?? []) as Array<{ type?: string }>;
+			driverDocumentsSubmitted = notifications.some((n) => n.type === 'car_documents_submitted');
+		} catch {
+			// Non-blocking: worst case the submit button stays visible.
 		}
 	}
 
@@ -686,6 +709,24 @@
 		}
 	}
 
+		async function notifySelfSubmission(type: 'profile_documents_submitted' | 'car_documents_submitted') {
+		try {
+			const token = await getSessionAccessToken();
+			if (!token) return;
+
+			await fetch('/api/member-notifications', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`
+				},
+				body: JSON.stringify({ type })
+			});
+		} catch {
+			// Non-blocking: the submission itself already succeeded.
+		}
+	}
+
 	async function submitForReview() {
 		submittingForReview = true;
 		documentsError = '';
@@ -698,10 +739,29 @@
 			if (error) throw error;
 			profile = { ...profile, status: 'pending' };
 			documentsMessage = 'Your documents have been submitted for review. We\'ll notify you once verified.';
+			await notifySelfSubmission('profile_documents_submitted');
 		} catch (err) {
 			documentsError = err instanceof Error ? err.message : 'Unable to submit for review. Please try again.';
 		} finally {
 			submittingForReview = false;
+		}
+	}
+
+	let submittingDriverForReview = false;
+	let driverDocumentsSubmitted = false;
+
+	async function submitDriverDocumentsForReview() {
+		submittingDriverForReview = true;
+		documentsError = '';
+		documentsMessage = '';
+		try {
+			documentsMessage = 'Your car documents have been submitted for review. We\'ll notify you once validated.';
+			driverDocumentsSubmitted = true;
+			await notifySelfSubmission('car_documents_submitted');
+		} catch (err) {
+			documentsError = err instanceof Error ? err.message : 'Unable to submit car documents for review. Please try again.';
+		} finally {
+			submittingDriverForReview = false;
 		}
 	}
 
@@ -1567,8 +1627,28 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 										{/if}
 									</div>
 								</div>
-							{/each}
+														{/each}
 						</div>
+
+						{#if driverApprovedCount < 4}
+							{#if driverDocumentsSubmitted && allDriverDocsUploaded}
+								<div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+									Your car documents are being reviewed by admin. We'll notify you once validated.
+								</div>
+							{:else}
+								<div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+									<p class="text-sm text-slate-600">Submit your car documents once all 4 are uploaded above.</p>
+									<button
+										type="button"
+										on:click={submitDriverDocumentsForReview}
+										disabled={!allDriverDocsUploaded || submittingDriverForReview}
+										class="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50 {allDriverDocsUploaded ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-gray-400'}"
+									>
+										{submittingDriverForReview ? 'Submitting...' : 'Submit for review'}
+									</button>
+								</div>
+							{/if}
+						{/if}
 					</div>
 				{/if}
 

@@ -28,6 +28,53 @@ function getAdminClient() {
   return serviceRoleKey ? createClient(supabaseUrl, serviceRoleKey) : null;
 }
 
+// Notification types that a member is allowed to trigger themselves,
+// each fired exactly once per "Submit for review" click.
+const SELF_TRIGGERED_NOTIFICATIONS: Record<string, { title: string; message: string }> = {
+  profile_documents_submitted: {
+    title: 'Profile documents submitted',
+    message: 'Your profile documents have been submitted and are under review.'
+  },
+  car_documents_submitted: {
+    title: 'Car documents submitted',
+    message: 'Your car documents have been submitted and are under review.'
+  }
+};
+
+export const POST: RequestHandler = async ({ request }) => {
+  try {
+    const token = getBearerToken(request);
+    if (!token) return json({ error: 'Unauthorized' }, { status: 401 });
+
+    const user = await getAuthenticatedUser(token);
+    if (!user) return json({ error: 'Unauthorized' }, { status: 401 });
+
+    const body = await request.json().catch(() => ({}));
+    const type = typeof body?.type === 'string' ? body.type.trim() : '';
+    const definition = SELF_TRIGGERED_NOTIFICATIONS[type];
+
+    if (!definition) {
+      return json({ error: 'Invalid notification type' }, { status: 400 });
+    }
+
+    const adminClient = getAdminClient();
+    if (!adminClient) return json({ error: 'Server configuration error' }, { status: 500 });
+
+    const { error } = await adminClient.from('member_notifications').insert({
+      user_id: user.id,
+      type,
+      title: definition.title,
+      message: definition.message
+    });
+
+    if (error) return json({ error: error.message }, { status: 500 });
+    return json({ success: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Internal server error';
+    return json({ error: message }, { status: 500 });
+  }
+};
+
 export const GET: RequestHandler = async ({ request }) => {
   try {
     const token = getBearerToken(request);
