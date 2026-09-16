@@ -1170,17 +1170,19 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 						<h2 class="text-xl font-semibold text-slate-900">Account Status</h2>
 						<p class="text-sm text-slate-600 mt-1">Email: {currentUser.email}</p>
 						<p class="text-sm text-slate-600">Status: {accountStatusLabel}</p>
-						<p class="text-sm text-slate-600">
-							Plan: {profile.membership_plan === 'student' ? 'Student' : profile.membership_plan === 'standard' ? 'Standard' : 'Not chosen yet'}
-						</p>
-						<p class="text-sm text-slate-600">Required documents approved: {approvedRequiredCount}/{requiredVerificationDocumentTypes.length}</p>
-						{#if !profile.is_verified && isProfileStatusPending && allRequiredDocsUploaded}
-							<p class="text-xs text-amber-700 mt-1">Your documents are being reviewed by admin.</p>
-						{/if}
-						{#if !profile.is_verified && missingRequiredDocumentTypes.length > 0}
-							<p class="text-xs text-slate-600 mt-1">
-								Missing required: {missingRequiredDocumentTypes.map((docType) => documentTypeLabel(docType)).join(', ')}
+						{#if profile.membership_plan}
+							<p class="text-sm text-slate-600">
+								Plan: {profile.membership_plan === 'student' ? 'Student' : 'Standard'}
 							</p>
+							<p class="text-sm text-slate-600">Required documents approved: {approvedRequiredCount}/{requiredVerificationDocumentTypes.length}</p>
+							{#if !profile.is_verified && isProfileStatusPending && allRequiredDocsUploaded}
+								<p class="text-xs text-amber-700 mt-1">Your documents are being reviewed by admin.</p>
+							{/if}
+							{#if !profile.is_verified && missingRequiredDocumentTypes.length > 0}
+								<p class="text-xs text-slate-600 mt-1">
+									Missing required: {missingRequiredDocumentTypes.map((docType) => documentTypeLabel(docType)).join(', ')}
+								</p>
+							{/if}
 						{/if}
 					</div>
 					<div class="text-right">
@@ -1590,7 +1592,8 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 				{/if}
 			</div>
 
-			<!-- Verification Documents -->
+			<!-- Verification Documents (visible uniquement une fois un plan choisi) -->
+			{#if profile.membership_plan}
 			<div id="verification-documents" class="profile-card p-7 mt-6 scroll-mt-28">
 				<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
 					<div>
@@ -1602,37 +1605,6 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 					</div>
 				</div>
 
-				{#if !profile.membership_plan}
-					<!-- Plan selection gate: no document upload happens until a plan is chosen -->
-					<div class="mt-5 rounded-xl border border-emerald-200 bg-emerald-50/60 p-6 text-center">
-						<h3 class="text-base font-semibold text-slate-900 mb-1">Choose your plan to continue</h3>
-						<p class="text-sm text-slate-600 mb-4">
-							Document requirements depend on your plan. Pick one below to start uploading your verification documents.
-						</p>
-						{#if planError}
-							<p class="mb-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">{planError}</p>
-						{/if}
-						<div class="flex flex-col sm:flex-row gap-3 justify-center">
-							<button
-								type="button"
-								disabled={savingPlan}
-								on:click={() => selectMembershipPlan('standard')}
-								class="px-5 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
-							>
-								{savingPlan ? 'Saving...' : 'Standard'}
-							</button>
-							<button
-								type="button"
-								disabled={savingPlan}
-								on:click={() => selectMembershipPlan('student')}
-								class="px-5 py-2.5 rounded-lg border border-emerald-300 text-emerald-700 text-sm font-semibold hover:bg-emerald-100 disabled:opacity-50 cursor-pointer"
-							>
-								{savingPlan ? 'Saving...' : 'Student'}
-							</button>
-						</div>
-						<p class="mt-3 text-xs text-slate-500">Your plan stays locked once chosen, to keep your documents aligned with it.</p>
-					</div>
-				{:else}
 				<!-- Required documents checklist -->
 				<div class="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-5 space-y-3">
 					<div>
@@ -1836,8 +1808,8 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 						</table>
 					{/if}
 				</div>
-				{/if}
 			</div>
+			{/if}
 		</div>
 	</div>
 {:else}
