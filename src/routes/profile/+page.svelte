@@ -90,6 +90,13 @@
 		return photoUrl ? 'Photo already uploaded' : 'No file selected';
 	}
 
+	// Only "student" and "standard" count as a real, chosen plan. Any other
+	// value (including legacy/unrelated data such as "explorer") is treated
+	// the same as no plan chosen yet.
+	function isRealMembershipPlan(value: string | null | undefined): value is 'student' | 'standard' {
+		return value === 'student' || value === 'standard';
+	}
+
 	// Verification documents
 	let documentsLoading = false;
 	let documentsError = '';
@@ -245,7 +252,7 @@
 	$: isDriver = Boolean(profile.color || profile.car_make);
 
 	// While no plan has been chosen, required types never include the Student ID.
-	$: requiredVerificationDocumentTypes = profile.membership_plan
+	$: requiredVerificationDocumentTypes = isRealMembershipPlan(profile.membership_plan)
 		? (planRequiredDocTypes as readonly string[])
 		: (isDriver
 			? (noPlanChosenDriverDocTypes as readonly string[])
@@ -534,7 +541,7 @@
 				}
 
 				data = retry.data;
-			} else if (data && isValidPlan && !data.membership_plan) {
+			} else if (data && isValidPlan && !isRealMembershipPlan(data.membership_plan)) {
 				// Only auto-apply the URL plan if none has been chosen yet.
 				// Once a plan is set, it stays locked to keep documents aligned with it.
 				const { error: updateError } = await supabase
@@ -1170,7 +1177,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 						<h2 class="text-xl font-semibold text-slate-900">Account Status</h2>
 						<p class="text-sm text-slate-600 mt-1">Email: {currentUser.email}</p>
 						<p class="text-sm text-slate-600">Status: {accountStatusLabel}</p>
-						{#if profile.membership_plan}
+						{#if isRealMembershipPlan(profile.membership_plan)}
 							<p class="text-sm text-slate-600">
 								Plan: {profile.membership_plan === 'student' ? 'Student' : 'Standard'}
 							</p>
@@ -1593,7 +1600,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 			</div>
 
 			<!-- Verification Documents (visible uniquement une fois un plan choisi) -->
-			{#if profile.membership_plan}
+			{#if isRealMembershipPlan(profile.membership_plan)}
 			<div id="verification-documents" class="profile-card p-7 mt-6 scroll-mt-28">
 				<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
 					<div>
