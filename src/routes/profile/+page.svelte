@@ -19,6 +19,7 @@
 		car_make: string;
 		car_year: string;
 		color: string;
+		car_model: string;
 		insurance_company: string;
 		plate_number: string;
 		proof_of_resident_type: string;
@@ -65,6 +66,7 @@
 		car_make: '',
 		car_year: '',
 		color: '',
+		car_model: '',
 		insurance_company: '',
 		plate_number: '',
 		proof_of_resident_type: '',
@@ -472,6 +474,7 @@
 			car_make: (data?.car_make as string) ?? '',
 			car_year: data?.car_year ? String(data.car_year) : '',
 			color: (data?.color as string) ?? '',
+			car_model: (data?.car_model as string) ?? '',
 			insurance_company: (data?.insurance_company as string) ?? '',
 			plate_number: (data?.plate_number as string) ?? '',
 			proof_of_resident_type: (data?.proof_of_resident_type as string) ?? '',
@@ -943,6 +946,7 @@
 			const trimmedZipCode = formData.zip_code.trim();
 			const trimmedCarMake = formData.car_make.trim();
 			const trimmedColor = formData.color.trim();
+			const trimmedCarModel = formData.car_model.trim();
 			const trimmedProofOfResidentType = formData.proof_of_resident_type.trim();
 			const parsedCarYear = Number.parseInt(formData.car_year, 10);
 			const carYear = Number.isNaN(parsedCarYear) ? null : parsedCarYear;
@@ -995,6 +999,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 					car_make: trimmedCarMake || null,
 					car_year: carYear,
 					color: trimmedColor || null,
+					car_model: trimmedCarModel || null,
 					proof_of_resident_type: trimmedProofOfResidentType || null,
 					gender: formData.gender,
 					bio: formData.bio.trim() || null,
@@ -1019,6 +1024,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 					car_make: trimmedCarMake,
 					car_year: carYear ? String(carYear) : '',
 					color: trimmedColor,
+					car_model: trimmedCarModel,
 					proof_of_resident_type: trimmedProofOfResidentType,
 					gender: formData.gender,
 					bio: formData.bio.trim(),
@@ -1324,6 +1330,10 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 									<p class="text-gray-600">{profile.car_make || 'Not provided'}</p>
 								</div>
 								<div>
+									<h5 class="font-medium text-gray-900 mb-2">Model</h5>
+									<p class="text-gray-600">{profile.car_model || 'Not provided'}</p>
+								</div>
+								<div>
 									<h5 class="font-medium text-gray-900 mb-2">Year</h5>
 									<p class="text-gray-600">{profile.car_year || 'Not provided'}</p>
 								</div>
@@ -1565,6 +1575,17 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 										bind:value={formData.car_make}
 										class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
 										placeholder="Enter car make"
+									/>
+								</div>
+
+								<div>
+									<label for="car_model" class="block text-sm font-medium text-gray-700 mb-2">Model</label>
+									<input
+										type="text"
+										id="car_model"
+										bind:value={formData.car_model}
+										class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+										placeholder="Enter car model (e.g. Spark)"
 									/>
 								</div>
 
