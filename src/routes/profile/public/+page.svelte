@@ -18,6 +18,8 @@
 		is_verified: boolean;
 		car_make: string;
 		car_year: string;
+		car_model: string;
+		color: string;
 		phone_number: string;
 		date_of_birth: string;
 		city_of_birth: string;
@@ -45,6 +47,8 @@
 		is_verified: false,
 		car_make: '',
 		car_year: '',
+		car_model: '',
+		color: '',
 		phone_number: '',
 		date_of_birth: '',
 		city_of_birth: '',
@@ -81,6 +85,8 @@
 			is_verified: isVerified,
 			car_make: String(data.car_make ?? ''),
 			car_year: data.car_year ? String(data.car_year) : '',
+			car_model: String(data.car_model ?? ''),
+			color: String(data.color ?? ''),
 			phone_number: String(data.phone_number ?? ''),
 			date_of_birth: String(data.date_of_birth ?? ''),
 			city_of_birth: String(data.city_of_birth ?? ''),
@@ -511,6 +517,14 @@
 						<div>
 							<h4 class="font-medium text-slate-900 mb-2">Year</h4>
 							<p class="text-slate-600">{profile.car_year || 'Not provided'}</p>
+						</div>
+						<div>
+							<h4 class="font-medium text-slate-900 mb-2">Model</h4>
+							<p class="text-slate-600">{profile.car_model || 'Not provided'}</p>
+						</div>
+						<div>
+							<h4 class="font-medium text-slate-900 mb-2">Color</h4>
+							<p class="text-slate-600">{profile.color || 'Not provided'}</p>
 						</div>
 					</div>
 				</div>
