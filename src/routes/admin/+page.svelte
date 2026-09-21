@@ -3322,9 +3322,8 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 {:else if accessError}
 	<div class="min-h-screen bg-gray-50 flex items-center justify-center px-4">
 		<div class="max-w-xl w-full bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-			<h1 class="text-xl font-bold text-gray-900 mb-2">Admin access unavailable</h1>
-			<p class="text-sm text-gray-600 mb-4">{accessError}</p>
-			<p class="text-sm text-gray-500 mb-6">Signed-in account: {currentUser?.email ?? 'not detected'}</p>
+			<h1 class="text-xl font-bold text-gray-900 mb-2">Access denied</h1>
+			<p class="text-sm text-gray-600 mb-6">You don't have permission to view this page.</p>
 			<div class="flex gap-3">
 				<a href="/profile" class="px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700">Go to profile</a>
 				<a href="/" class="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50">Back to home</a>

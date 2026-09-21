@@ -14,6 +14,12 @@
 	let recaptchaContainer: HTMLDivElement;
 	let recaptchaWidgetId: number | null = null;
 
+	let showForgotPassword = false;
+	let forgotPasswordEmail = '';
+	let forgotPasswordSending = false;
+	let forgotPasswordMessage = '';
+	let forgotPasswordError = '';
+
 	const RECAPTCHA_SITE_KEY =
 		import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LdQr38pAAAAANn80cqDW86qzuS6xbveg0b57scK';
 
@@ -141,6 +147,50 @@
 		}
 	}
 
+	function openForgotPassword() {
+		showForgotPassword = true;
+		forgotPasswordEmail = email;
+		forgotPasswordMessage = '';
+		forgotPasswordError = '';
+	}
+
+	function closeForgotPassword() {
+		showForgotPassword = false;
+		forgotPasswordMessage = '';
+		forgotPasswordError = '';
+	}
+
+	async function requestPasswordReset() {
+		forgotPasswordError = '';
+		forgotPasswordMessage = '';
+
+		const trimmedEmail = forgotPasswordEmail.trim();
+		if (!trimmedEmail) {
+			forgotPasswordError = 'Please enter your email address.';
+			return;
+		}
+
+		forgotPasswordSending = true;
+
+		try {
+			const response = await fetch('/api/auth/reset-password-request', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ email: trimmedEmail })
+			});
+
+			// The endpoint always returns a generic success message, whether or
+			// not an account exists for this email — this is intentional.
+			await response.json().catch(() => null);
+			forgotPasswordMessage = "If an account exists for that email, we've sent a password reset link.";
+		} catch (err) {
+			forgotPasswordError = 'Something went wrong. Please try again.';
+			console.error('requestPasswordReset error:', err);
+		} finally {
+			forgotPasswordSending = false;
+		}
+	}
+
 </script>
 
 <div class="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -206,6 +256,16 @@
 				</div>
 			</div>
 
+			<div class="text-right -mt-2">
+				<button
+					type="button"
+					on:click={openForgotPassword}
+					class="text-sm font-medium text-primary hover:text-green-700 transition-colors cursor-pointer"
+				>
+					Forgot password?
+				</button>
+			</div>
+
 			{#if error}
 				<div class="text-red-600 text-sm">{error}</div>
 			{/if}
@@ -261,3 +321,66 @@
 		</form>
 	</div>
 </div>
+
+{#if showForgotPassword}
+	<!-- svelte-ignore a11y-click-events-have-key-events -->
+	<!-- svelte-ignore a11y-no-static-element-interactions -->
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4"
+		on:click|self={closeForgotPassword}
+	>
+		<div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-7 relative">
+			<button
+				type="button"
+				on:click={closeForgotPassword}
+				class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 cursor-pointer"
+				aria-label="Close"
+			>
+				<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+				</svg>
+			</button>
+
+			<h2 class="text-xl font-bold text-slate-900 mb-1">Reset your password</h2>
+			<p class="text-slate-600 text-sm mb-4">
+				Enter your email address and we'll send you a link to reset your password.
+			</p>
+
+			<label for="forgot_password_email" class="block text-sm font-medium text-slate-700 mb-1">
+				Email address
+			</label>
+			<input
+				id="forgot_password_email"
+				type="email"
+				bind:value={forgotPasswordEmail}
+				placeholder="you@example.com"
+				class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 mb-3"
+			/>
+
+			{#if forgotPasswordError}
+				<p class="text-red-600 text-sm mb-3">{forgotPasswordError}</p>
+			{/if}
+			{#if forgotPasswordMessage}
+				<p class="text-emerald-700 text-sm mb-3 bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2">{forgotPasswordMessage}</p>
+			{/if}
+
+			<div class="flex gap-3">
+				<button
+					type="button"
+					on:click={closeForgotPassword}
+					class="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer"
+				>
+					Close
+				</button>
+				<button
+					type="button"
+					on:click={requestPasswordReset}
+					disabled={forgotPasswordSending}
+					class="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 disabled:opacity-60 cursor-pointer disabled:cursor-not-allowed"
+				>
+					{forgotPasswordSending ? 'Sending...' : 'Send reset link'}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
