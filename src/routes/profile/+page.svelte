@@ -7,7 +7,7 @@
 	import { onDestroy, onMount, tick } from 'svelte';
 	import type { User } from '@supabase/supabase-js';
 
-	type Profile = {
+		type Profile = {
 		first_name: string;
 		last_name: string;
 		is_verified: boolean;
@@ -20,9 +20,6 @@
 		car_year: string;
 		color: string;
 		car_model: string;
-		insurance_company: string;
-		plate_number: string;
-		proof_of_resident_type: string;
 		gender: string;
 		bio: string;
 		languages: string[];
@@ -482,17 +479,22 @@
 				throw error;
 			}
 
-			if (!data && currentUser) {
+				if (!data && currentUser) {
 				const fallbackFirstName =
 					currentUser.user_metadata?.full_name?.toString()?.split(' ')[0] ||
 					currentUser.user_metadata?.name?.toString()?.split(' ')[0] ||
 					currentUser.email?.split('@')[0] ||
 					'User';
+				const metadataDateOfBirth =
+					typeof currentUser.user_metadata?.date_of_birth === 'string'
+						? currentUser.user_metadata.date_of_birth
+						: null;
 
 				const { error: createError } = await supabase.from('profiles').upsert(
 					{
 						id: currentUserId,
 						first_name: fallbackFirstName,
+						date_of_birth: metadataDateOfBirth,
 						membership_plan: isValidPlan ? planParam : null
 					},
 					{ onConflict: 'id' }
@@ -535,7 +537,20 @@
 					throw retry.error;
 				}
 
-				data = retry.data;
+								data = retry.data;
+			}
+
+			// Backfill date_of_birth from signup metadata for profiles created
+			// before this field was synced automatically.
+			if (data && !data.date_of_birth && currentUser.user_metadata?.date_of_birth) {
+				const metadataDob =
+					typeof currentUser.user_metadata.date_of_birth === 'string'
+						? currentUser.user_metadata.date_of_birth
+						: null;
+				if (metadataDob) {
+					await supabase.from('profiles').update({ date_of_birth: metadataDob }).eq('id', currentUserId);
+					data = { ...data, date_of_birth: metadataDob };
+				}
 			}
 
 			if (data) {

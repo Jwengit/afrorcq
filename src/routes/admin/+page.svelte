@@ -1570,14 +1570,11 @@ pre{background:#f8fafc;border-top:1px solid #e2e8f0;padding:16px;font-size:12px;
 <div class="card">
   <div class="card-header"><span class="section-icon">🚗</span><h2>Vehicle & Documents</h2></div>
   <div class="grid-2">
-    <table>
+     <table>
       ${row('Car make', p?.car_make)}
+      ${row('Car model', p?.car_model)}
       ${row('Car year', p?.car_year)}
-      ${row('Plate number', p?.plate_number)}
-    </table>
-    <table>
-      ${row('Insurance', p?.insurance_company)}
-      ${row('Resident proof type', p?.proof_of_resident_type)}
+      ${row('Color', p?.color)}
     </table>
   </div>
 </div>

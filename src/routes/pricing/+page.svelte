@@ -99,7 +99,7 @@
 		}
 	}
 
-	async function savePlanAndContinue() {
+		async function savePlanAndContinue() {
 		processing = true;
 		errorMessage = '';
 		message = '';
@@ -111,6 +111,22 @@
 
 			if (!user) {
 				goto('/auth/login');
+				return;
+			}
+
+			const { data: existingProfile } = await supabase
+				.from('profiles')
+				.select('membership_plan')
+				.eq('id', user.id)
+				.maybeSingle();
+
+			const alreadyHasPlan =
+				existingProfile?.membership_plan === 'student' || existingProfile?.membership_plan === 'standard';
+
+			// Once a plan is chosen and locked in, don't silently switch it —
+			// just take the member back to their profile.
+			if (alreadyHasPlan) {
+				goto('/profile#verification-documents');
 				return;
 			}
 

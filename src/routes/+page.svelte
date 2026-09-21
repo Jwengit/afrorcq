@@ -122,9 +122,26 @@
 		goto(`/search?${params.toString()}`);
 	}
 
-	function handlePaidPlanGetStarted(plan: 'student' | 'standard') {
+		async function handlePaidPlanGetStarted(plan: 'student' | 'standard') {
 		if (!currentUser) {
 			goto(`/auth/signup?plan=${plan}`);
+			return;
+		}
+
+		// If a plan is already chosen and locked in, clicking any plan button
+		// should never try to silently switch it — just take the member back
+		// to their profile, where the real (already-saved) plan is shown.
+		const { data: existingProfile } = await supabase
+			.from('profiles')
+			.select('membership_plan')
+			.eq('id', currentUser.id)
+			.maybeSingle();
+
+		const alreadyHasPlan =
+			existingProfile?.membership_plan === 'student' || existingProfile?.membership_plan === 'standard';
+
+		if (alreadyHasPlan) {
+			goto('/profile#verification-documents');
 			return;
 		}
 
@@ -245,7 +262,7 @@
 		</div>
 	</section>
 
-	<!-- Most Popular Rides Section -->
+		<!-- Most Popular Rides Section -->
 	<section id="popular-rides" class="py-14 px-4 bg-white">
 		<div class="max-w-7xl mx-auto text-center">
 			<h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Most popular rides</h2>
@@ -257,14 +274,14 @@
 						<button
 							type="button"
 							on:click={() => handlePublishClick('Utah', 'Idaho')}
-							class="bg-white text-gray-900 border border-gray-300 px-6 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition"
+							class="bg-white text-gray-900 border border-gray-300 px-6 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition cursor-pointer"
 						>
 							Post
 						</button>
 						<button
 							type="button"
 							on:click={() => handlePopularRideSearch('Utah', 'Idaho')}
-							class="text-white px-6 py-3 rounded-lg font-bold text-center transition hover:opacity-90"
+							class="text-white px-6 py-3 rounded-lg font-bold text-center transition hover:opacity-90 cursor-pointer"
 							style="background-color: #00B050;"
 						>
 							Search
@@ -278,14 +295,14 @@
 						<button
 							type="button"
 							on:click={() => handlePublishClick('Utah', 'California')}
-							class="bg-white text-gray-900 border border-gray-300 px-6 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition"
+							class="bg-white text-gray-900 border border-gray-300 px-6 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition cursor-pointer"
 						>
 							Post
 						</button>
 						<button
 							type="button"
 							on:click={() => handlePopularRideSearch('Utah', 'California')}
-							class="text-white px-6 py-3 rounded-lg font-bold text-center transition hover:opacity-90"
+							class="text-white px-6 py-3 rounded-lg font-bold text-center transition hover:opacity-90 cursor-pointer"
 							style="background-color: #00B050;"
 						>
 							Search
@@ -299,14 +316,14 @@
 						<button
 							type="button"
 							on:click={() => handlePublishClick('Utah', 'Nevada')}
-							class="bg-white text-gray-900 border border-gray-300 px-6 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition"
+							class="bg-white text-gray-900 border border-gray-300 px-6 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition cursor-pointer"
 						>
 							Post
 						</button>
 						<button
 							type="button"
 							on:click={() => handlePopularRideSearch('Utah', 'Nevada')}
-							class="text-white px-6 py-3 rounded-lg font-bold text-center transition hover:opacity-90"
+							class="text-white px-6 py-3 rounded-lg font-bold text-center transition hover:opacity-90 cursor-pointer"
 							style="background-color: #00B050;"
 						>
 							Search

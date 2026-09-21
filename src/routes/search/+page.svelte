@@ -194,22 +194,7 @@
 			const arrLower = arr.toLowerCase();
 
 			results = ridesWithDrivers.filter((ride) => {
-				const rideDeparture = ride.departure.toLowerCase();
-				const rideArrival = ride.arrival.toLowerCase();
-				const rideTimestamp = Date.parse(ride.ride_date);
-				const isUpcomingRide = Number.isFinite(rideTimestamp) && rideTimestamp >= Date.now();
-
-				let routeMatches = true;
-				if (depLower && arrLower) {
-					routeMatches =
-						rideDeparture.includes(depLower) && rideArrival.includes(arrLower);
-				} else if (depLower) {
-					routeMatches =
-						rideDeparture.includes(depLower) || rideArrival.includes(depLower);
-				} else if (arrLower) {
-					routeMatches =
-						rideDeparture.includes(arrLower) || rideArrival.includes(arrLower);
-				}
+				const rideDeparture = ride.departure.toLowerCase(); const rideArrival = ride.arrival.toLowerCase(); const ridePickup = (ride.pickup ?? '').toLowerCase(); const rideDropoff = (ride.dropoff ?? '').toLowerCase(); const rideTimestamp = Date.parse(ride.ride_date); const isUpcomingRide = Number.isFinite(rideTimestamp) && rideTimestamp >= Date.now(); const matchesDeparture = (query: string) => rideDeparture.includes(query) || ridePickup.includes(query); const matchesArrival = (query: string) => rideArrival.includes(query) || rideDropoff.includes(query); let routeMatches = true; if (depLower && arrLower) { routeMatches = matchesDeparture(depLower) && matchesArrival(arrLower); } else if (depLower) { routeMatches = matchesDeparture(depLower) || matchesArrival(depLower); } else if (arrLower) { routeMatches = matchesDeparture(arrLower) || matchesArrival(arrLower); }
 
 				const dateMatches = !dateFilter
 					? true
