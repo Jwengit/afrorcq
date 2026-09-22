@@ -54,7 +54,15 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		// Don't leak whether the email exists: any lookup/generation failure
 		// (including "user not found") still returns the generic response.
+		// But we still need this logged, otherwise a failure here is
+		// completely invisible — and it happens BEFORE we'd ever attempt
+		// to send the email.
 		if (error || !data) {
+			if (error) {
+				console.error(`[reset-password] generateLink failed for ${email}:`, error.message);
+			} else {
+				console.error(`[reset-password] generateLink returned no data for ${email}`);
+			}
 			return genericResponse;
 		}
 
@@ -69,11 +77,20 @@ export const POST: RequestHandler = async ({ request }) => {
 			.eq('id', data.user?.id ?? '')
 			.maybeSingle();
 
-		await sendPasswordResetEmail({
+		const emailId = await sendPasswordResetEmail({
 			to: email,
 			firstName: profile?.first_name,
 			resetUrl: recoveryLink
 		});
+
+		// sendPasswordResetEmail returns null on ANY failure (missing API key,
+		// unverified domain, Resend error, etc.) without throwing. We still
+		// return the generic response to the client (no account-enumeration
+		// leak), but we need this logged server-side or the failure is
+		// completely invisible.
+		if (!emailId) {
+			console.error(`[reset-password] email send failed for ${email}`);
+		}
 
 		return genericResponse;
 	} catch (error) {

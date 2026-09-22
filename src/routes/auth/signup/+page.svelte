@@ -143,7 +143,7 @@ error = signUpError.message;
 } else {
 if (data.user?.id) {
 try {
-await fetch('/api/send-welcome', {
+ await fetch('/api/welcome', {
 method: 'POST',
 headers: { 'Content-Type': 'application/json' },
 body: JSON.stringify({

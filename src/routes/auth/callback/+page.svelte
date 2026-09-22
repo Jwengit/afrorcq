@@ -104,9 +104,10 @@
 			.maybeSingle();
 
 		if (!existingProfile) {
-			const { error: profileInsertError } = await supabase.from('profiles').insert({
+						const { error: profileInsertError } = await supabase.from('profiles').insert({
 				id: user.id,
-				first_name: fallbackFirstName
+				first_name: fallbackFirstName,
+				membership_plan: null
 			});
 
 			if (profileInsertError) {
@@ -116,7 +117,7 @@
 
 		// Backend endpoint is idempotent and creates the internal welcome message only once.
 		try {
-			await fetch('/api/welcome', {
+					await fetch('/api/welcome', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({

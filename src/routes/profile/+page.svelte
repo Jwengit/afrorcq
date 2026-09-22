@@ -20,6 +20,7 @@
 		car_year: string;
 		color: string;
 		car_model: string;
+		proof_of_resident_type: string;
 		gender: string;
 		bio: string;
 		languages: string[];
@@ -64,8 +65,6 @@
 		car_year: '',
 		color: '',
 		car_model: '',
-		insurance_company: '',
-		plate_number: '',
 		proof_of_resident_type: '',
 		gender: '',
 		bio: '',
@@ -225,7 +224,7 @@
 		? (planRequiredDocTypes as readonly string[])
 		: (isDriver
 			? allKnownRequiredTypes
-			: baseRequiredDocumentTypes);
+			: ([] as readonly string[]));
 
 	$: approvedRequiredDocumentTypes = new Set(
 		verificationDocuments
@@ -442,8 +441,6 @@
 			car_year: data?.car_year ? String(data.car_year) : '',
 			color: (data?.color as string) ?? '',
 			car_model: (data?.car_model as string) ?? '',
-			insurance_company: (data?.insurance_company as string) ?? '',
-			plate_number: (data?.plate_number as string) ?? '',
 			proof_of_resident_type: (data?.proof_of_resident_type as string) ?? '',
 			bio: (data?.bio as string) ?? '',
 			gender: data?.gender ?? '',
@@ -1139,7 +1136,9 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 						<h2 class="text-xl font-semibold text-slate-900">Account Status</h2>
 						<p class="text-sm text-slate-600 mt-1">Email: {currentUser.email}</p>
 						<p class="text-sm text-slate-600">Status: {accountStatusLabel}</p>
-						<p class="text-sm text-slate-600">Required documents approved: {approvedRequiredCount}/{requiredVerificationDocumentTypes.length}</p>
+						{#if requiredVerificationDocumentTypes.length > 0}
+							<p class="text-sm text-slate-600">Required documents approved: {approvedRequiredCount}/{requiredVerificationDocumentTypes.length}</p>
+						{/if}
 						{#if !profile.is_verified && isProfileStatusPending && allRequiredDocsUploaded}
 							<p class="text-xs text-amber-700 mt-1">Your documents are being reviewed by admin.</p>
 						{/if}
@@ -1572,6 +1571,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 			</div>
 
 			<!-- Verification Documents -->
+			{#if profile.membership_plan || showDriverDocuments}
 			<div id="verification-documents" class="profile-card p-7 mt-6 scroll-mt-28">
 				<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
 					<div>
@@ -1787,6 +1787,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 					{/if}
 				</div>
 			</div>
+			{/if}
 		</div>
 	</div>
 {:else}
