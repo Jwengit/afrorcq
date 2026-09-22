@@ -50,10 +50,27 @@
 	}
 
 	onMount(async () => {
+		// Read this FIRST, synchronously, before any await. Supabase-js can
+		// process and strip the recovery info from the URL hash as soon as it
+		// detects a session — if we check after an `await`, we're often too
+		// late and the info is already gone.
+		const cameFromRecoveryLink = linkIsPasswordRecovery();
+
+		// Belt-and-suspenders: Supabase also fires a dedicated PASSWORD_RECOVERY
+		// event when a session comes from a recovery link. Registering this
+		// listener synchronously, before any await, means we won't miss it
+		// even if the URL was already stripped by the time we read it above.
+		const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
+			if (event === 'PASSWORD_RECOVERY') {
+				isRecovery = true;
+			}
+		});
+
 		const params = new URLSearchParams(window.location.search);
 		const oauthError = params.get('error_description') || params.get('error');
 
 		if (oauthError) {
+			authListener.subscription.unsubscribe();
 			goto(resolve('/auth/signup?googleError=1'));
 			return;
 		}
@@ -62,21 +79,26 @@
 
 		if (error) {
 			console.error('Error getting session:', error);
+			authListener.subscription.unsubscribe();
 			goto(resolve('/auth/login'));
 			return;
 		}
 
 		if (!data.session) {
+			authListener.subscription.unsubscribe();
 			goto(resolve('/auth/login'));
 			return;
 		}
 
 		// Password-reset links land here too. Instead of signing the person
 		// straight into their profile, ask them to set a new password first.
-		if (linkIsPasswordRecovery()) {
+		if (cameFromRecoveryLink || isRecovery) {
 			isRecovery = true;
+			authListener.subscription.unsubscribe();
 			return;
 		}
+
+		authListener.subscription.unsubscribe();
 
 		// Check if user is new (created within last 5 minutes)
 		const user = data.session.user;

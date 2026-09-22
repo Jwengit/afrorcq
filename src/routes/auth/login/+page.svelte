@@ -173,7 +173,7 @@
 		forgotPasswordSending = true;
 
 		try {
-			const response = await fetch('/api/auth/reset-password-request', {
+			const response = await fetch('/auth/reset-password-request', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ email: trimmedEmail })
