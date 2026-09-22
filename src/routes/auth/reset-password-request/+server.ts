@@ -3,6 +3,14 @@ import { createClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
 import { sendPasswordResetEmail } from '$lib/email';
 
+// Force the Node.js runtime for this route. The 'resend' package and the
+// Supabase admin client rely on Node APIs that aren't guaranteed to work on
+// Vercel's Edge runtime — this is a likely cause of a 500 that only happens
+// in production and never locally (local `npm run dev` always runs Node).
+export const config = {
+	runtime: 'nodejs20.x'
+};
+
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 
 function getOrigin(): string {
