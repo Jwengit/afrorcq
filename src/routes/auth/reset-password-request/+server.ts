@@ -27,7 +27,7 @@ function getOrigin(): string {
 // Public, self-service "forgot password" endpoint. Always returns a generic
 // success response, whether or not the email exists, so this can't be used
 // to check which addresses have an account (basic account-enumeration guard).
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, url }) => {
 	const genericResponse = json({
 		success: true,
 		message: 'If an account exists for that email, a password reset link has been sent.'
@@ -52,11 +52,11 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-		const { data, error } = await adminClient.auth.admin.generateLink({
+			const { data, error } = await adminClient.auth.admin.generateLink({
 			type: 'recovery',
 			email,
 			options: {
-				redirectTo: `${getOrigin()}/auth/callback`
+				redirectTo: `${url.origin}/auth/callback`
 			}
 		});
 
@@ -74,10 +74,10 @@ export const POST: RequestHandler = async ({ request }) => {
 			return genericResponse;
 		}
 
-		const recoveryLink =
+				const recoveryLink =
 			typeof data?.properties?.action_link === 'string'
 				? data.properties.action_link
-				: `${getOrigin()}/auth/login`;
+				: `${url.origin}/auth/login`;
 
 		const { data: profile } = await adminClient
 			.from('profiles')

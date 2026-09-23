@@ -55,6 +55,7 @@ let driverName = 'Driver';
 let driverIsVerifiedMember = false;
 let currentMemberStatus: MemberStatus = 'free';
 let currentUserGender = '';
+let existingBooking: { id: string; status: string; seats_booked: number } | null = null;
 
 $: bookingTotalAmount = ride ? ride.price * bookingSeats : 0;
 
@@ -144,6 +145,19 @@ onMount(async () => {
 		}) === 'verified' &&
 		Boolean(typedDriver?.profile_photo_url?.trim());
 
+	if (currentUser && currentUser.id !== ride.driver_id) {
+		const { data: bookingData } = await supabase
+			.from('bookings')
+			.select('id, status, seats_booked')
+			.eq('ride_id', ride.id)
+			.eq('passenger_id', currentUser.id)
+			.order('created_at', { ascending: false })
+			.limit(1)
+			.maybeSingle();
+
+		existingBooking = bookingData ?? null;
+	}
+
 	loading = false;
 });
 	async function createBooking() {
@@ -167,19 +181,31 @@ onMount(async () => {
 		errorMessage = '';
 		successMessage = '';
 
-		const { error } = await supabase.from('bookings').insert({
-			ride_id: ride.id,
-			passenger_id: currentUser.id,
-			seats_booked: bookingSeats,
-			status: 'Pending'
-		});
-
-		if (error) {
-			errorMessage = error.message || 'Unable to submit booking.';
+		const token = await getSessionAccessToken();
+		if (!token) {
+			errorMessage = 'Session expired. Please sign in again.';
 			processingBooking = false;
 			return;
 		}
 
+		const response = await fetch('/api/bookings/create', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${token}`
+			},
+			body: JSON.stringify({ rideId: ride.id, seats: bookingSeats })
+		});
+
+		const payload = await response.json().catch(() => null);
+
+		if (!response.ok) {
+			errorMessage = payload?.error || 'Unable to submit booking.';
+			processingBooking = false;
+			return;
+		}
+
+		existingBooking = payload?.booking ?? null;
 		ride = { ...ride, seats: Math.max(0, ride.seats - bookingSeats) };
 		successMessage = 'Booking request sent successfully. It is now awaiting driver confirmation.';
 		processingBooking = false;
@@ -259,12 +285,14 @@ onMount(async () => {
 {:else}
 	<div class="min-h-screen bg-gray-50 py-10 px-4 sm:px-6 lg:px-8">
 		<div class="max-w-2xl mx-auto">
+			{#if !existingBooking}
 			<button
 				on:click={goBackToSearchResults}
 				class="mb-6 inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900"
 			>
 				← Back to search results
 			</button>
+		{/if}
 
 			<div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 sm:p-8">
 				<h1 class="text-3xl font-bold text-gray-900">{ride.departure} to {ride.arrival}</h1>
@@ -304,7 +332,19 @@ onMount(async () => {
 				{#if errorMessage}<div class="mt-6 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{errorMessage}</div>{/if}
 				{#if successMessage}<div class="mt-6 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700">{successMessage}</div>{/if}
 
-				{#if currentUser && currentUser.id !== ride.driver_id && ride.girls_only && !canAccessGirlsOnlyRides(currentMemberStatus, currentUserGender)}
+				{#if currentUser && currentUser.id !== ride.driver_id && existingBooking}
+					<div class="mt-8 space-y-2 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-4">
+						<h2 class="text-lg font-semibold text-gray-900">Your booking</h2>
+						<p class="text-sm text-gray-700">Status: <strong>{existingBooking.status}</strong></p>
+						<p class="text-sm text-gray-700">
+							Seats booked: <strong>{existingBooking.seats_booked}</strong>
+						</p>
+						<p class="text-sm text-gray-700">
+							Total: <strong>${(ride.price * existingBooking.seats_booked).toFixed(2)}</strong> USD
+						</p>
+						<p class="text-sm text-emerald-700">No online payment is required. Members arrange payment directly between each other.</p>
+					</div>
+				{:else if currentUser && currentUser.id !== ride.driver_id && ride.girls_only && !canAccessGirlsOnlyRides(currentMemberStatus, currentUserGender)}
 					<div class="mt-8 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
 						<p>{VERIFIED_ONLY_MESSAGE}</p>
 						<a href="/pricing" class="mt-2 inline-flex items-center rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700">Upgrade now</a>
