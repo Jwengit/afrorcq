@@ -7,7 +7,7 @@
 	import { onDestroy, onMount, tick } from 'svelte';
 	import type { User } from '@supabase/supabase-js';
 
-		type Profile = {
+	type Profile = {
 		first_name: string;
 		last_name: string;
 		is_verified: boolean;
@@ -19,7 +19,8 @@
 		car_make: string;
 		car_year: string;
 		color: string;
-		car_model: string;
+		insurance_company: string;
+		plate_number: string;
 		proof_of_resident_type: string;
 		gender: string;
 		bio: string;
@@ -64,7 +65,8 @@
 		car_make: '',
 		car_year: '',
 		color: '',
-		car_model: '',
+		insurance_company: '',
+		plate_number: '',
 		proof_of_resident_type: '',
 		gender: '',
 		bio: '',
@@ -88,6 +90,13 @@
 		return photoUrl ? 'Photo already uploaded' : 'No file selected';
 	}
 
+	// Only "student" and "standard" count as a real, chosen plan. Any other
+	// value (including legacy/unrelated data such as "explorer") is treated
+	// the same as no plan chosen yet.
+	function isRealMembershipPlan(value: string | null | undefined): value is 'student' | 'standard' {
+		return value === 'student' || value === 'standard';
+	}
+
 	// Verification documents
 	let documentsLoading = false;
 	let documentsError = '';
@@ -106,7 +115,15 @@
 	let driverDocumentFileName = 'Choose a file';
 	let driverDocumentsVisible = false;
 
-	const profileDocumentTypes = ['identity_card_front', 'identity_card_back', 'proof_of_address'] as const;
+	// Plan selection state
+	let savingPlan = false;
+	let planError = '';
+
+	// The visible "Profile Documents" checklist changes depending on the chosen plan:
+	// identity + address for everyone, plus a Student ID when the plan is "student".
+	$: profileDocumentTypes = profile.membership_plan === 'student'
+		? (['identity_card_front', 'identity_card_back', 'student_id', 'proof_of_address'] as const)
+		: (['identity_card_front', 'identity_card_back', 'proof_of_address'] as const);
 
 	const documentTypeOptions = [
 		{ value: 'identity_card_front', label: 'Proof of ID (front)' },
@@ -146,6 +163,20 @@
 	$: planRequiredDocTypes = profile.membership_plan === 'student'
 		? (['identity_card_front', 'identity_card_back', 'student_id', 'proof_of_address'] as const)
 		: (['identity_card_front', 'identity_card_back', 'proof_of_address'] as const);
+
+	// Fallback list used ONLY while no plan has been chosen yet (the document
+	// section itself is hidden in that state, so this rarely renders, but it
+	// must never silently require the Student ID before a plan is picked).
+	const noPlanChosenDocTypes = ['identity_card_front', 'identity_card_back', 'proof_of_address'] as const;
+	const noPlanChosenDriverDocTypes = [
+		'identity_card_front',
+		'identity_card_back',
+		'proof_of_address',
+		'driver_license_front',
+		'driver_license_back',
+		'insurance',
+		'vehicle_registration'
+	] as const;
 
 	$: docStatusByType = new Map(
 		(['identity_card_front', 'identity_card_back', 'student_id', 'proof_of_address', 'driver_license_front', 'driver_license_back', 'insurance', 'vehicle_registration'] as const).map(
@@ -220,11 +251,12 @@
 
 	$: isDriver = Boolean(profile.color || profile.car_make);
 
-	$: requiredVerificationDocumentTypes = profile.membership_plan
+	// While no plan has been chosen, required types never include the Student ID.
+	$: requiredVerificationDocumentTypes = isRealMembershipPlan(profile.membership_plan)
 		? (planRequiredDocTypes as readonly string[])
 		: (isDriver
-			? allKnownRequiredTypes
-			: ([] as readonly string[]));
+			? (noPlanChosenDriverDocTypes as readonly string[])
+			: (noPlanChosenDocTypes as readonly string[]));
 
 	$: approvedRequiredDocumentTypes = new Set(
 		verificationDocuments
@@ -440,14 +472,16 @@
 			car_make: (data?.car_make as string) ?? '',
 			car_year: data?.car_year ? String(data.car_year) : '',
 			color: (data?.color as string) ?? '',
-			car_model: (data?.car_model as string) ?? '',
+			insurance_company: (data?.insurance_company as string) ?? '',
+			plate_number: (data?.plate_number as string) ?? '',
 			proof_of_resident_type: (data?.proof_of_resident_type as string) ?? '',
 			bio: (data?.bio as string) ?? '',
 			gender: data?.gender ?? '',
 			languages: normalizeOptionSelections(data?.languages, languageOptions),
 			ride_preferences: normalizeOptionSelections(data?.ride_preferences, ridePreferenceOptions),
 			profile_photo_url: (data?.profile_photo_url as string) ?? '',
-			status: isVerified ? 'Verified' : data?.status ?? 'Unverified'
+			status: isVerified ? 'Verified' : data?.status ?? 'Unverified',
+			membership_plan: (data?.membership_plan as string | null | undefined) ?? null
 		};
 	}
 
@@ -476,22 +510,17 @@
 				throw error;
 			}
 
-				if (!data && currentUser) {
+			if (!data && currentUser) {
 				const fallbackFirstName =
 					currentUser.user_metadata?.full_name?.toString()?.split(' ')[0] ||
 					currentUser.user_metadata?.name?.toString()?.split(' ')[0] ||
 					currentUser.email?.split('@')[0] ||
 					'User';
-				const metadataDateOfBirth =
-					typeof currentUser.user_metadata?.date_of_birth === 'string'
-						? currentUser.user_metadata.date_of_birth
-						: null;
 
 				const { error: createError } = await supabase.from('profiles').upsert(
 					{
 						id: currentUserId,
 						first_name: fallbackFirstName,
-						date_of_birth: metadataDateOfBirth,
 						membership_plan: isValidPlan ? planParam : null
 					},
 					{ onConflict: 'id' }
@@ -512,8 +541,9 @@
 				}
 
 				data = retry.data;
-			} else if (data && isValidPlan && data.membership_plan !== planParam) {
-				// Update plan if URL parameter is valid and different from current
+			} else if (data && isValidPlan && !isRealMembershipPlan(data.membership_plan)) {
+				// Only auto-apply the URL plan if none has been chosen yet.
+				// Once a plan is set, it stays locked to keep documents aligned with it.
 				const { error: updateError } = await supabase
 					.from('profiles')
 					.update({ membership_plan: planParam })
@@ -534,20 +564,7 @@
 					throw retry.error;
 				}
 
-								data = retry.data;
-			}
-
-			// Backfill date_of_birth from signup metadata for profiles created
-			// before this field was synced automatically.
-			if (data && !data.date_of_birth && currentUser.user_metadata?.date_of_birth) {
-				const metadataDob =
-					typeof currentUser.user_metadata.date_of_birth === 'string'
-						? currentUser.user_metadata.date_of_birth
-						: null;
-				if (metadataDob) {
-					await supabase.from('profiles').update({ date_of_birth: metadataDob }).eq('id', currentUserId);
-					data = { ...data, date_of_birth: metadataDob };
-				}
+				data = retry.data;
 			}
 
 			if (data) {
@@ -562,6 +579,32 @@
 		} finally {
 			await loadVerificationDocuments();
 			loading = false;
+		}
+	}
+
+	// Locks in the member's plan choice. Once chosen, this stays fixed so the
+	// uploaded documents always stay aligned with the selected plan — changing
+	// plan after documents were submitted must go through support/admin.
+	async function selectMembershipPlan(plan: 'student' | 'standard') {
+		if (!currentUser || savingPlan || profile.membership_plan) return;
+
+		savingPlan = true;
+		planError = '';
+
+		try {
+			const { error } = await supabase
+				.from('profiles')
+				.update({ membership_plan: plan, updated_at: new Date().toISOString() })
+				.eq('id', currentUser.id);
+
+			if (error) throw error;
+
+			profile = { ...profile, membership_plan: plan };
+			formData = { ...formData, membership_plan: plan };
+		} catch (error) {
+			planError = error instanceof Error ? error.message : 'Unable to save your plan. Please try again.';
+		} finally {
+			savingPlan = false;
 		}
 	}
 
@@ -628,7 +671,7 @@
 				return;
 			}
 
-			verificationDocuments = (payload?.documents ?? []) as VerificationDocument[];
+					verificationDocuments = (payload?.documents ?? []) as VerificationDocument[];
 			await loadDriverSubmissionState(token);
 		} catch (error) {
 			documentsError = error instanceof Error ? error.message : 'Unable to load verification documents.';
@@ -724,7 +767,7 @@
 		}
 	}
 
-	async function notifySelfSubmission(type: 'profile_documents_submitted' | 'car_documents_submitted') {
+		async function notifySelfSubmission(type: 'profile_documents_submitted' | 'car_documents_submitted') {
 		try {
 			const token = await getSessionAccessToken();
 			if (!token) return;
@@ -900,7 +943,6 @@
 			const trimmedZipCode = formData.zip_code.trim();
 			const trimmedCarMake = formData.car_make.trim();
 			const trimmedColor = formData.color.trim();
-			const trimmedCarModel = formData.car_model.trim();
 			const trimmedProofOfResidentType = formData.proof_of_resident_type.trim();
 			const parsedCarYear = Number.parseInt(formData.car_year, 10);
 			const carYear = Number.isNaN(parsedCarYear) ? null : parsedCarYear;
@@ -953,7 +995,6 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 					car_make: trimmedCarMake || null,
 					car_year: carYear,
 					color: trimmedColor || null,
-					car_model: trimmedCarModel || null,
 					proof_of_resident_type: trimmedProofOfResidentType || null,
 					gender: formData.gender,
 					bio: formData.bio.trim() || null,
@@ -978,14 +1019,14 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 					car_make: trimmedCarMake,
 					car_year: carYear ? String(carYear) : '',
 					color: trimmedColor,
-					car_model: trimmedCarModel,
 					proof_of_resident_type: trimmedProofOfResidentType,
 					gender: formData.gender,
 					bio: formData.bio.trim(),
 					languages: sanitizedLanguages,
 					ride_preferences: sanitizedRidePreferences,
 					profile_photo_url: photoUrl,
-					status: profile.status
+					status: profile.status,
+					membership_plan: profile.membership_plan
 				});
 				formData = { ...profile };
 				previewUrl = photoUrl || '';
@@ -1136,16 +1177,19 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 						<h2 class="text-xl font-semibold text-slate-900">Account Status</h2>
 						<p class="text-sm text-slate-600 mt-1">Email: {currentUser.email}</p>
 						<p class="text-sm text-slate-600">Status: {accountStatusLabel}</p>
-						{#if requiredVerificationDocumentTypes.length > 0}
-							<p class="text-sm text-slate-600">Required documents approved: {approvedRequiredCount}/{requiredVerificationDocumentTypes.length}</p>
-						{/if}
-						{#if !profile.is_verified && isProfileStatusPending && allRequiredDocsUploaded}
-							<p class="text-xs text-amber-700 mt-1">Your documents are being reviewed by admin.</p>
-						{/if}
-						{#if !profile.is_verified && missingRequiredDocumentTypes.length > 0}
-							<p class="text-xs text-slate-600 mt-1">
-								Missing required: {missingRequiredDocumentTypes.map((docType) => documentTypeLabel(docType)).join(', ')}
+						{#if isRealMembershipPlan(profile.membership_plan)}
+							<p class="text-sm text-slate-600">
+								Plan: {profile.membership_plan === 'student' ? 'Student' : 'Standard'}
 							</p>
+							<p class="text-sm text-slate-600">Required documents approved: {approvedRequiredCount}/{requiredVerificationDocumentTypes.length}</p>
+							{#if !profile.is_verified && isProfileStatusPending && allRequiredDocsUploaded}
+								<p class="text-xs text-amber-700 mt-1">Your documents are being reviewed by admin.</p>
+							{/if}
+							{#if !profile.is_verified && missingRequiredDocumentTypes.length > 0}
+								<p class="text-xs text-slate-600 mt-1">
+									Missing required: {missingRequiredDocumentTypes.map((docType) => documentTypeLabel(docType)).join(', ')}
+								</p>
+							{/if}
 						{/if}
 					</div>
 					<div class="text-right">
@@ -1282,10 +1326,6 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 								<div>
 									<h5 class="font-medium text-gray-900 mb-2">Year</h5>
 									<p class="text-gray-600">{profile.car_year || 'Not provided'}</p>
-								</div>
-								<div>
-									<h5 class="font-medium text-gray-900 mb-2">Model</h5>
-									<p class="text-gray-600">{profile.car_model || 'Not provided'}</p>
 								</div>
 								<div>
 									<h5 class="font-medium text-gray-900 mb-2">Color</h5>
@@ -1542,17 +1582,6 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 								</div>
 
 								<div>
-									<label for="car_model" class="block text-sm font-medium text-gray-700 mb-2">Model</label>
-									<input
-										type="text"
-										id="car_model"
-										bind:value={formData.car_model}
-										class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
-										placeholder="e.g. Spark"
-									/>
-								</div>
-
-								<div>
 									<label for="color" class="block text-sm font-medium text-gray-700 mb-2">Color</label>
 									<input
 										type="text"
@@ -1570,8 +1599,8 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 				{/if}
 			</div>
 
-			<!-- Verification Documents -->
-			{#if profile.membership_plan || showDriverDocuments}
+			<!-- Verification Documents (visible uniquement une fois un plan choisi) -->
+			{#if isRealMembershipPlan(profile.membership_plan)}
 			<div id="verification-documents" class="profile-card p-7 mt-6 scroll-mt-28">
 				<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
 					<div>
@@ -1591,7 +1620,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 					</div>
 					<div class="flex items-center justify-between">
 						<h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Required documents</h4>
-						<span class="text-xs font-semibold text-slate-600">{profileApprovedCount}/3 documents validated</span>
+						<span class="text-xs font-semibold text-slate-600">{profileApprovedCount}/{profileDocumentTypes.length} documents validated</span>
 					</div>
 					<div class="space-y-2">
 						{#each profileDocumentTypes as type (type)}
@@ -1663,7 +1692,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 										{/if}
 									</div>
 								</div>
-							{/each}
+														{/each}
 						</div>
 
 						{#if driverApprovedCount < 4}
