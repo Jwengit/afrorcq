@@ -6,6 +6,14 @@ import { buildVerificationDocumentInsertPayload, resolveExistingDocumentType } f
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
 const BUCKET = 'verification-documents';
+const ALLOWED_DOCUMENT_EXTENSIONS = new Set(['jpg', 'jpeg', 'png']);
+const ALLOWED_DOCUMENT_MIME_TYPES = new Set(['image/jpeg', 'image/png']);
+
+function isAllowedDocumentFile(fileName: string, mimeType: string): boolean {
+  const extension = fileName.split('.').pop()?.toLowerCase() ?? '';
+  const mimeOk = !mimeType || ALLOWED_DOCUMENT_MIME_TYPES.has(mimeType);
+  return ALLOWED_DOCUMENT_EXTENSIONS.has(extension) && mimeOk;
+}
 const DRIVER_DOCUMENT_TYPES = new Set([
   'driver_license',
   'driver_license_front',
@@ -238,6 +246,10 @@ export const POST: RequestHandler = async ({ request }) => {
         return json({ error: 'Invalid payload' }, { status: 400 });
       }
 
+      if (!isAllowedDocumentFile(fileValue.name, fileValue.type || '')) {
+        return json({ error: 'Only JPG, JPEG or PNG images are accepted.' }, { status: 400 });
+      }
+
       if (fileValue.size > 10 * 1024 * 1024) {
         return json({ error: 'Document size must be 10MB or less.' }, { status: 400 });
       }
@@ -285,6 +297,10 @@ export const POST: RequestHandler = async ({ request }) => {
 
     if (!documentType || !fileName || !storagePath || !storagePath.startsWith(`${user.id}/`)) {
       return json({ error: 'Invalid payload' }, { status: 400 });
+    }
+
+    if (!isAllowedDocumentFile(fileName, mimeType || '')) {
+      return json({ error: 'Only JPG, JPEG or PNG images are accepted.' }, { status: 400 });
     }
 
     const error = await tryInsertDocumentRecord(adminClient, {

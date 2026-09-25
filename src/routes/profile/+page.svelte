@@ -90,13 +90,6 @@
 		return photoUrl ? 'Photo already uploaded' : 'No file selected';
 	}
 
-	// Only "student" and "standard" count as a real, chosen plan. Any other
-	// value (including legacy/unrelated data such as "explorer") is treated
-	// the same as no plan chosen yet.
-	function isRealMembershipPlan(value: string | null | undefined): value is 'student' | 'standard' {
-		return value === 'student' || value === 'standard';
-	}
-
 	// Verification documents
 	let documentsLoading = false;
 	let documentsError = '';
@@ -115,15 +108,7 @@
 	let driverDocumentFileName = 'Choose a file';
 	let driverDocumentsVisible = false;
 
-	// Plan selection state
-	let savingPlan = false;
-	let planError = '';
-
-	// The visible "Profile Documents" checklist changes depending on the chosen plan:
-	// identity + address for everyone, plus a Student ID when the plan is "student".
-	$: profileDocumentTypes = profile.membership_plan === 'student'
-		? (['identity_card_front', 'identity_card_back', 'student_id', 'proof_of_address'] as const)
-		: (['identity_card_front', 'identity_card_back', 'proof_of_address'] as const);
+	const profileDocumentTypes = ['identity_card_front', 'identity_card_back', 'proof_of_address'] as const;
 
 	const documentTypeOptions = [
 		{ value: 'identity_card_front', label: 'Proof of ID (front)' },
@@ -164,29 +149,13 @@
 		? (['identity_card_front', 'identity_card_back', 'student_id', 'proof_of_address'] as const)
 		: (['identity_card_front', 'identity_card_back', 'proof_of_address'] as const);
 
-	// Fallback list used ONLY while no plan has been chosen yet (the document
-	// section itself is hidden in that state, so this rarely renders, but it
-	// must never silently require the Student ID before a plan is picked).
-	const noPlanChosenDocTypes = ['identity_card_front', 'identity_card_back', 'proof_of_address'] as const;
-	const noPlanChosenDriverDocTypes = [
-		'identity_card_front',
-		'identity_card_back',
-		'proof_of_address',
-		'driver_license_front',
-		'driver_license_back',
-		'insurance',
-		'vehicle_registration'
-	] as const;
-
 	$: docStatusByType = new Map(
 		(['identity_card_front', 'identity_card_back', 'student_id', 'proof_of_address', 'driver_license_front', 'driver_license_back', 'insurance', 'vehicle_registration'] as const).map(
 			(type) => {
-				const docs = verificationDocuments.filter(
-					(d) => normalizeVerificationDocumentType(d.document_type) === type
-				);
-				if (docs.length === 0) return [type, 'missing'] as const;
-				if (docs.some((d) => d.status === 'approved')) return [type, 'approved'] as const;
-				if (docs.some((d) => d.status === 'rejected')) return [type, 'rejected'] as const;
+				const latest = latestDocumentForType(type);
+				if (!latest) return [type, 'missing'] as const;
+				if (latest.status === 'approved') return [type, 'approved'] as const;
+				if (latest.status === 'rejected') return [type, 'rejected'] as const;
 				return [type, 'pending'] as const;
 			}
 		)
@@ -251,12 +220,11 @@
 
 	$: isDriver = Boolean(profile.color || profile.car_make);
 
-	// While no plan has been chosen, required types never include the Student ID.
-	$: requiredVerificationDocumentTypes = isRealMembershipPlan(profile.membership_plan)
+	$: requiredVerificationDocumentTypes = profile.membership_plan
 		? (planRequiredDocTypes as readonly string[])
 		: (isDriver
-			? (noPlanChosenDriverDocTypes as readonly string[])
-			: (noPlanChosenDocTypes as readonly string[]));
+			? allKnownRequiredTypes
+			: baseRequiredDocumentTypes);
 
 	$: approvedRequiredDocumentTypes = new Set(
 		verificationDocuments
@@ -480,8 +448,7 @@
 			languages: normalizeOptionSelections(data?.languages, languageOptions),
 			ride_preferences: normalizeOptionSelections(data?.ride_preferences, ridePreferenceOptions),
 			profile_photo_url: (data?.profile_photo_url as string) ?? '',
-			status: isVerified ? 'Verified' : data?.status ?? 'Unverified',
-			membership_plan: (data?.membership_plan as string | null | undefined) ?? null
+			status: isVerified ? 'Verified' : data?.status ?? 'Unverified'
 		};
 	}
 
@@ -541,9 +508,8 @@
 				}
 
 				data = retry.data;
-			} else if (data && isValidPlan && !isRealMembershipPlan(data.membership_plan)) {
-				// Only auto-apply the URL plan if none has been chosen yet.
-				// Once a plan is set, it stays locked to keep documents aligned with it.
+			} else if (data && isValidPlan && data.membership_plan !== planParam) {
+				// Update plan if URL parameter is valid and different from current
 				const { error: updateError } = await supabase
 					.from('profiles')
 					.update({ membership_plan: planParam })
@@ -579,32 +545,6 @@
 		} finally {
 			await loadVerificationDocuments();
 			loading = false;
-		}
-	}
-
-	// Locks in the member's plan choice. Once chosen, this stays fixed so the
-	// uploaded documents always stay aligned with the selected plan — changing
-	// plan after documents were submitted must go through support/admin.
-	async function selectMembershipPlan(plan: 'student' | 'standard') {
-		if (!currentUser || savingPlan || profile.membership_plan) return;
-
-		savingPlan = true;
-		planError = '';
-
-		try {
-			const { error } = await supabase
-				.from('profiles')
-				.update({ membership_plan: plan, updated_at: new Date().toISOString() })
-				.eq('id', currentUser.id);
-
-			if (error) throw error;
-
-			profile = { ...profile, membership_plan: plan };
-			formData = { ...formData, membership_plan: plan };
-		} catch (error) {
-			planError = error instanceof Error ? error.message : 'Unable to save your plan. Please try again.';
-		} finally {
-			savingPlan = false;
 		}
 	}
 
@@ -671,7 +611,7 @@
 				return;
 			}
 
-					verificationDocuments = (payload?.documents ?? []) as VerificationDocument[];
+			verificationDocuments = (payload?.documents ?? []) as VerificationDocument[];
 			await loadDriverSubmissionState(token);
 		} catch (error) {
 			documentsError = error instanceof Error ? error.message : 'Unable to load verification documents.';
@@ -721,8 +661,22 @@
 		target.value = '';
 	}
 
+	const ALLOWED_DOCUMENT_EXTENSIONS = ['jpg', 'jpeg', 'png'];
+	const ALLOWED_DOCUMENT_MIME_TYPES = ['image/jpeg', 'image/png'];
+
+	function isAllowedDocumentFile(file: File): boolean {
+		const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
+		const mimeOk = !file.type || ALLOWED_DOCUMENT_MIME_TYPES.includes(file.type);
+		return ALLOWED_DOCUMENT_EXTENSIONS.includes(extension) && mimeOk;
+	}
+
 	async function uploadVerificationDocument(file: File, documentType: string) {
 		if (!currentUser || !file) return;
+
+		if (!isAllowedDocumentFile(file)) {
+			documentsError = 'Only JPG, JPEG or PNG images are accepted.';
+			return;
+		}
 
 		if (file.size > 10 * 1024 * 1024) {
 			documentsError = 'Document size must be 10MB or less.';
@@ -759,7 +713,27 @@
 			}
 
 			documentsMessage = 'Document uploaded';
-			await loadVerificationDocuments();
+
+			// Reflect the new document immediately so the checklist updates without
+			// waiting on signed-URL generation for every document; the background
+			// refresh below replaces this with the authoritative server record.
+			verificationDocuments = [
+				...verificationDocuments,
+				{
+					id: `temp-${Date.now()}`,
+					document_type: documentType,
+					file_name: file.name,
+					storage_path: '',
+					mime_type: file.type || null,
+					file_size: file.size,
+					status: 'pending',
+					admin_note: null,
+					reviewed_at: null,
+					created_at: new Date().toISOString(),
+					signed_url: null
+				}
+			];
+			void loadVerificationDocuments();
 		} catch (error) {
 			documentsError = error instanceof Error ? error.message : 'Unable to upload document.';
 		} finally {
@@ -767,7 +741,7 @@
 		}
 	}
 
-		async function notifySelfSubmission(type: 'profile_documents_submitted' | 'car_documents_submitted') {
+	async function notifySelfSubmission(type: 'profile_documents_submitted' | 'car_documents_submitted') {
 		try {
 			const token = await getSessionAccessToken();
 			if (!token) return;
@@ -1025,8 +999,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 					languages: sanitizedLanguages,
 					ride_preferences: sanitizedRidePreferences,
 					profile_photo_url: photoUrl,
-					status: profile.status,
-					membership_plan: profile.membership_plan
+					status: profile.status
 				});
 				formData = { ...profile };
 				previewUrl = photoUrl || '';
@@ -1177,19 +1150,14 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 						<h2 class="text-xl font-semibold text-slate-900">Account Status</h2>
 						<p class="text-sm text-slate-600 mt-1">Email: {currentUser.email}</p>
 						<p class="text-sm text-slate-600">Status: {accountStatusLabel}</p>
-						{#if isRealMembershipPlan(profile.membership_plan)}
-							<p class="text-sm text-slate-600">
-								Plan: {profile.membership_plan === 'student' ? 'Student' : 'Standard'}
+						<p class="text-sm text-slate-600">Required documents approved: {approvedRequiredCount}/{requiredVerificationDocumentTypes.length}</p>
+						{#if !profile.is_verified && isProfileStatusPending && allRequiredDocsUploaded}
+							<p class="text-xs text-amber-700 mt-1">Your documents are being reviewed by admin.</p>
+						{/if}
+						{#if !profile.is_verified && missingRequiredDocumentTypes.length > 0}
+							<p class="text-xs text-slate-600 mt-1">
+								Missing required: {missingRequiredDocumentTypes.map((docType) => documentTypeLabel(docType)).join(', ')}
 							</p>
-							<p class="text-sm text-slate-600">Required documents approved: {approvedRequiredCount}/{requiredVerificationDocumentTypes.length}</p>
-							{#if !profile.is_verified && isProfileStatusPending && allRequiredDocsUploaded}
-								<p class="text-xs text-amber-700 mt-1">Your documents are being reviewed by admin.</p>
-							{/if}
-							{#if !profile.is_verified && missingRequiredDocumentTypes.length > 0}
-								<p class="text-xs text-slate-600 mt-1">
-									Missing required: {missingRequiredDocumentTypes.map((docType) => documentTypeLabel(docType)).join(', ')}
-								</p>
-							{/if}
 						{/if}
 					</div>
 					<div class="text-right">
@@ -1599,8 +1567,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 				{/if}
 			</div>
 
-			<!-- Verification Documents (visible uniquement une fois un plan choisi) -->
-			{#if isRealMembershipPlan(profile.membership_plan)}
+			<!-- Verification Documents -->
 			<div id="verification-documents" class="profile-card p-7 mt-6 scroll-mt-28">
 				<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
 					<div>
@@ -1620,7 +1587,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 					</div>
 					<div class="flex items-center justify-between">
 						<h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Required documents</h4>
-						<span class="text-xs font-semibold text-slate-600">{profileApprovedCount}/{profileDocumentTypes.length} documents validated</span>
+						<span class="text-xs font-semibold text-slate-600">{profileApprovedCount}/3 documents validated</span>
 					</div>
 					<div class="space-y-2">
 						{#each profileDocumentTypes as type (type)}
@@ -1642,7 +1609,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 									{#if docStatus === 'missing' || docStatus === 'rejected'}
 										<label class="cursor-pointer rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">
 											Upload
-											<input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" class="hidden" on:change={(event) => uploadChecklistDocument(type, event)} />
+											<input type="file" accept=".jpg,.jpeg,.png" class="hidden" on:change={(event) => uploadChecklistDocument(type, event)} />
 										</label>
 									{/if}
 								</div>
@@ -1688,11 +1655,11 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 										{#if document?.signed_url}<a href={document.signed_url} target="_blank" rel="noopener noreferrer" class="text-xs font-medium text-blue-700 hover:underline">Open</a>{/if}
 										{#if document?.status === 'pending'}<button type="button" on:click={() => deleteVerificationDocument(document)} class="text-xs font-medium text-red-600 hover:underline">Delete</button>{/if}
 										{#if docStatus === 'missing' || docStatus === 'rejected'}
-											<label class="cursor-pointer rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">Upload<input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" class="hidden" on:change={(event) => uploadChecklistDocument(type, event)} /></label>
+											<label class="cursor-pointer rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">Upload<input type="file" accept=".jpg,.jpeg,.png" class="hidden" on:change={(event) => uploadChecklistDocument(type, event)} /></label>
 										{/if}
 									</div>
 								</div>
-														{/each}
+							{/each}
 						</div>
 
 						{#if driverApprovedCount < 4}
@@ -1816,7 +1783,6 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 					{/if}
 				</div>
 			</div>
-			{/if}
 		</div>
 	</div>
 {:else}
