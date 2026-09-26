@@ -108,6 +108,20 @@
 	let driverDocumentFileName = 'Choose a file';
 	let driverDocumentsVisible = false;
 
+	// Reviews received from other members
+	type ReceivedReview = {
+		id: string;
+		rating: number;
+		comment: string | null;
+		created_at: string;
+		reviewer_profile: { first_name: string | null; last_name: string | null } | null;
+		ride: { departure: string | null; arrival: string | null; ride_date: string | null } | null;
+	};
+
+	let receivedReviews: ReceivedReview[] = [];
+	let reviewsSectionLoading = false;
+	let reviewsSectionError = '';
+
 	const profileDocumentTypes = ['identity_card_front', 'identity_card_back', 'proof_of_address'] as const;
 
 	const documentTypeOptions = [
@@ -544,6 +558,7 @@
 			profileError = error instanceof Error ? error.message : 'Unable to load profile.';
 		} finally {
 			await loadVerificationDocuments();
+			await loadReceivedReviews();
 			loading = false;
 		}
 	}
@@ -618,6 +633,46 @@
 			verificationDocuments = [];
 		} finally {
 			documentsLoading = false;
+		}
+	}
+
+	async function loadReceivedReviews() {
+		if (!currentUser) {
+			receivedReviews = [];
+			return;
+		}
+
+		reviewsSectionLoading = true;
+		reviewsSectionError = '';
+
+		try {
+			const token = await getSessionAccessToken();
+			if (!token) {
+				reviewsSectionError = 'Session expired. Please sign in again.';
+				receivedReviews = [];
+				return;
+			}
+
+			const response = await fetch('/api/profile/reviews', {
+				method: 'GET',
+				headers: {
+					Authorization: `Bearer ${token}`
+				}
+			});
+
+			const payload = await response.json();
+			if (!response.ok) {
+				reviewsSectionError = payload?.error || 'Unable to load reviews.';
+				receivedReviews = [];
+				return;
+			}
+
+			receivedReviews = (payload?.reviews ?? []) as ReceivedReview[];
+		} catch (error) {
+			reviewsSectionError = error instanceof Error ? error.message : 'Unable to load reviews.';
+			receivedReviews = [];
+		} finally {
+			reviewsSectionLoading = false;
 		}
 	}
 
@@ -1300,6 +1355,35 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 									<p class="text-gray-600">{profile.color || 'Not provided'}</p>
 								</div>
 							</div>
+						</div>
+
+						<div class="border-t border-slate-200 pt-6">
+							<h4 class="text-lg font-semibold text-slate-900 mb-4">Reviews received</h4>
+							{#if reviewsSectionLoading}
+								<p class="text-sm text-slate-500">Loading reviews...</p>
+							{:else if reviewsSectionError}
+								<p class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">{reviewsSectionError}</p>
+							{:else if receivedReviews.length === 0}
+								<p class="text-sm text-slate-600">No reviews yet.</p>
+							{:else}
+								<div class="space-y-3">
+									{#each receivedReviews as review (review.id)}
+										<div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+											<div class="flex items-center justify-between">
+												<p class="text-sm font-semibold text-slate-900">{review.rating}/5</p>
+												<p class="text-xs text-slate-500">{new Date(review.created_at).toLocaleDateString('en-US')}</p>
+											</div>
+											<p class="text-sm text-slate-700 mt-2">{review.comment || 'No comment'}</p>
+											<p class="text-xs text-slate-500 mt-2">
+												By {review.reviewer_profile?.first_name ?? 'A member'} {review.reviewer_profile?.last_name ?? ''}
+												{#if review.ride}
+													— {review.ride.departure ?? '-'} → {review.ride.arrival ?? '-'}
+												{/if}
+											</p>
+										</div>
+									{/each}
+								</div>
+							{/if}
 						</div>
 
 					</div>

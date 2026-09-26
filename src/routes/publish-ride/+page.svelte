@@ -128,6 +128,8 @@
 		errorMessage = '';
 		missingRequirements = [];
 
+		await supabase.rpc('refresh_review_pending_for_member', { p_user_id: userId });
+
 		const { data, error } = await supabase
 			.from('profiles')
 			.select('gender, car_make, car_year, color, status, is_verified, membership_paid, membership_expires_at, review_pending, review_pending_ride_id')

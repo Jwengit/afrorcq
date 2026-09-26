@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import ReviewForm from '$lib/components/ReviewForm.svelte';
+	import ReviewsSection from '$lib/components/ReviewsSection.svelte';
 	import { onMount, tick } from 'svelte';
 	import { supabase } from '$lib/supabaseClient';
 	import {
@@ -653,6 +654,8 @@
 	}
 
 	async function loadDriverEligibility(userId: string) {
+		await supabase.rpc('refresh_review_pending_for_member', { p_user_id: userId });
+
 		const { data, error } = await supabase
 			.from('profiles')
 			.select('gender, status, is_verified, membership_paid, membership_expires_at, review_pending, review_pending_ride_id')
@@ -1389,6 +1392,12 @@
 							Leave a review
 						</button>
 					</div>
+				</section>
+			{/if}
+
+			{#if memberStatus === 'verified' && currentUser}
+				<section class="rounded-lg border border-slate-200 bg-white px-4 py-4">
+					<ReviewsSection userId={currentUser.id} />
 				</section>
 			{/if}
 

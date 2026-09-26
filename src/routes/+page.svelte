@@ -41,6 +41,8 @@
 			return false;
 		}
 
+		await supabase.rpc('refresh_review_pending_for_member', { p_user_id: currentUser.id });
+
 		const { data: profile, error } = await supabase
 			.from('profiles')
 			.select('status, is_verified, membership_paid, membership_expires_at, review_pending')
@@ -122,7 +124,7 @@
 		goto(`/search?${params.toString()}`);
 	}
 
-		async function handlePaidPlanGetStarted(plan: 'student' | 'standard') {
+	async function handlePaidPlanGetStarted(plan: 'student' | 'standard') {
 		if (!currentUser) {
 			goto(`/auth/signup?plan=${plan}`);
 			return;
@@ -262,7 +264,7 @@
 		</div>
 	</section>
 
-		<!-- Most Popular Rides Section -->
+	<!-- Most Popular Rides Section -->
 	<section id="popular-rides" class="py-14 px-4 bg-white">
 		<div class="max-w-7xl mx-auto text-center">
 			<h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Most popular rides</h2>
@@ -281,7 +283,7 @@
 						<button
 							type="button"
 							on:click={() => handlePopularRideSearch('Utah', 'Idaho')}
-							class="text-white px-6 py-3 rounded-lg font-bold text-center transition hover:opacity-90 cursor-pointer"
+							class="text-white px-6 py-3 rounded-lg font-bold text-center transition hover:opacity-90"
 							style="background-color: #00B050;"
 						>
 							Search
@@ -302,7 +304,7 @@
 						<button
 							type="button"
 							on:click={() => handlePopularRideSearch('Utah', 'California')}
-							class="text-white px-6 py-3 rounded-lg font-bold text-center transition hover:opacity-90 cursor-pointer"
+							class="text-white px-6 py-3 rounded-lg font-bold text-center transition hover:opacity-90"
 							style="background-color: #00B050;"
 						>
 							Search
@@ -323,7 +325,7 @@
 						<button
 							type="button"
 							on:click={() => handlePopularRideSearch('Utah', 'Nevada')}
-							class="text-white px-6 py-3 rounded-lg font-bold text-center transition hover:opacity-90 cursor-pointer"
+							class="text-white px-6 py-3 rounded-lg font-bold text-center transition hover:opacity-90"
 							style="background-color: #00B050;"
 						>
 							Search
