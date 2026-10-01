@@ -1397,6 +1397,7 @@
 					<p class="text-sm mt-1 {accountUserStatus === 'banned' ? 'text-red-800' : 'text-amber-800'}">You cannot publish or book rides while this status is active. Contact support if you believe this is a mistake.</p>
 				</section>
 			{/if}
+				{#if reviewPendingBlocked}
 				<section class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
 					<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 						<p class="text-sm text-amber-900">You have a pending review. Please rate your last trip before booking or posting a new ride.</p>
