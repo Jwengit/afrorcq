@@ -8,7 +8,7 @@ import { sendPasswordResetEmail } from '$lib/email';
 // Vercel's Edge runtime — this is a likely cause of a 500 that only happens
 // in production and never locally (local `npm run dev` always runs Node).
 export const config = {
-	runtime: 'nodejs20.x'
+	runtime: 'nodejs24.x'
 };
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
