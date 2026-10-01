@@ -220,6 +220,12 @@
 		return allKnownRequiredTypes.includes(value as RequiredVerificationDocumentType);
 	}
 
+	function normalizeVerificationDocumentStatus(value: string | null | undefined): VerificationDocument['status'] {
+		const normalized = (value || '').trim().toLowerCase();
+		if (normalized === 'approved' || normalized === 'rejected') return normalized;
+		return 'pending';
+	}
+
 	function isApprovedVerificationStatus(value: string | null | undefined): boolean {
 		return (value || '').trim().toLowerCase() === 'approved';
 	}
@@ -590,6 +596,10 @@
 		return 'Pending review';
 	}
 
+	function isUploadingVerificationDocument(document: VerificationDocument | null): boolean {
+		return document?.id.startsWith('uploading-') ?? false;
+	}
+
 	function documentTypeLabel(value: string | null | undefined): string {
 		const normalized = (value || 'other').trim().toLowerCase().replace(/[\s-]+/g, '_');
 		return documentTypeLabelMap[normalized] || normalized.replaceAll('_', ' ');
@@ -626,7 +636,10 @@
 				return;
 			}
 
-			verificationDocuments = (payload?.documents ?? []) as VerificationDocument[];
+			verificationDocuments = (payload?.documents ?? []).map((document: VerificationDocument) => ({
+				...document,
+				status: normalizeVerificationDocumentStatus(document.status)
+			}));
 			await loadDriverSubmissionState(token);
 		} catch (error) {
 			documentsError = error instanceof Error ? error.message : 'Unable to load verification documents.';
@@ -727,6 +740,8 @@
 
 	async function uploadVerificationDocument(file: File, documentType: string) {
 		if (!currentUser || !file) return;
+		documentsError = '';
+		documentsMessage = '';
 
 		if (!isAllowedDocumentFile(file)) {
 			documentsError = 'Only JPG, JPEG or PNG images are accepted.';
@@ -739,8 +754,7 @@
 		}
 
 		uploadingDocument = true;
-		documentsError = '';
-		documentsMessage = '';
+		let temporaryDocumentId: string | null = null;
 
 		try {
 			const token = await getSessionAccessToken();
@@ -752,30 +766,11 @@
 			const formData = new FormData();
 			formData.append('documentType', documentType);
 			formData.append('file', file);
-
-			const response = await fetch('/api/profile/documents', {
-				method: 'POST',
-				headers: {
-					Authorization: `Bearer ${token}`
-				},
-				body: formData
-			});
-
-			const payload = await response.json();
-			if (!response.ok) {
-				documentsError = payload?.error || 'Unable to register document upload.';
-				return;
-			}
-
-			documentsMessage = 'Document uploaded';
-
-			// Reflect the new document immediately so the checklist updates without
-			// waiting on signed-URL generation for every document; the background
-			// refresh below replaces this with the authoritative server record.
+			temporaryDocumentId = `uploading-${Date.now()}`;
 			verificationDocuments = [
 				...verificationDocuments,
 				{
-					id: `temp-${Date.now()}`,
+					id: temporaryDocumentId,
 					document_type: documentType,
 					file_name: file.name,
 					storage_path: '',
@@ -788,8 +783,28 @@
 					signed_url: null
 				}
 			];
+
+			const response = await fetch('/api/profile/documents', {
+				method: 'POST',
+				headers: {
+					Authorization: `Bearer ${token}`
+				},
+				body: formData
+			});
+
+			const payload = await response.json();
+			if (!response.ok || payload?.success !== true) {
+				verificationDocuments = verificationDocuments.filter((document) => document.id !== temporaryDocumentId);
+				documentsError = payload?.error || 'Unable to register document upload.';
+				return;
+			}
+
+			documentsMessage = 'Document uploaded';
 			void loadVerificationDocuments();
 		} catch (error) {
+			if (temporaryDocumentId) {
+				verificationDocuments = verificationDocuments.filter((document) => document.id !== temporaryDocumentId);
+			}
 			documentsError = error instanceof Error ? error.message : 'Unable to upload document.';
 		} finally {
 			uploadingDocument = false;
@@ -1635,6 +1650,9 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 						Accepted: PDF, PNG, JPG, JPEG, WEBP (max 10MB)
 					</div>
 				</div>
+				{#if documentsError}
+					<p role="alert" aria-live="assertive" class="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{documentsError}</p>
+				{/if}
 
 				<!-- Required documents checklist -->
 				<div class="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-5 space-y-3">
@@ -1650,17 +1668,18 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 						{#each profileDocumentTypes as type (type)}
 							{@const docStatus = docStatusByType.get(type) ?? 'missing'}
 							{@const document = latestDocumentForType(type)}
+							{@const documentUploading = isUploadingVerificationDocument(document)}
 							<div class="flex items-center justify-between gap-3 rounded-lg border px-4 py-3 {docStatus === 'approved' ? 'border-emerald-200 bg-emerald-50' : docStatus === 'pending' ? 'border-amber-200 bg-amber-50' : docStatus === 'rejected' ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-white'}">
 								<div class="flex min-w-0 items-center gap-3">
 									<span class="text-lg {docStatus === 'approved' ? 'text-emerald-600' : docStatus === 'pending' ? 'text-amber-500' : docStatus === 'rejected' ? 'text-red-500' : 'text-gray-400'}">{docStatus === 'approved' ? '✓' : docStatus === 'pending' ? '⏳' : docStatus === 'rejected' ? '✗' : '○'}</span>
 									<span class="text-sm font-medium text-slate-800">{documentTypeLabel(type)}</span>
 								</div>
 								<div class="flex shrink-0 items-center gap-2">
-									<span class="rounded-full px-2.5 py-1 text-xs font-semibold {docStatus === 'approved' ? 'bg-emerald-100 text-emerald-700' : docStatus === 'pending' ? 'bg-amber-100 text-amber-700' : docStatus === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'}">{docStatus === 'approved' ? 'Validated' : docStatus === 'pending' ? 'Pending' : docStatus === 'rejected' ? 'Rejected' : 'Not uploaded'}</span>
+									<span class="rounded-full px-2.5 py-1 text-xs font-semibold {docStatus === 'approved' ? 'bg-emerald-100 text-emerald-700' : docStatus === 'pending' ? 'bg-amber-100 text-amber-700' : docStatus === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'}">{documentUploading ? 'Uploading...' : docStatus === 'approved' ? 'Validated' : docStatus === 'pending' ? 'Pending' : docStatus === 'rejected' ? 'Rejected' : 'Not uploaded'}</span>
 									{#if document?.signed_url}
 										<a href={document.signed_url} target="_blank" rel="noopener noreferrer" class="text-xs font-medium text-blue-700 hover:underline">Open</a>
 									{/if}
-									{#if document?.status === 'pending'}
+									{#if document?.status === 'pending' && !documentUploading}
 										<button type="button" on:click={() => deleteVerificationDocument(document)} class="text-xs font-medium text-red-600 hover:underline">Delete</button>
 									{/if}
 									{#if docStatus === 'missing' || docStatus === 'rejected'}
@@ -1702,15 +1721,16 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 							{#each driverOnlyDocumentTypes as type (type)}
 								{@const docStatus = docStatusByType.get(type) ?? 'missing'}
 								{@const document = latestDocumentForType(type)}
+								{@const documentUploading = isUploadingVerificationDocument(document)}
 								<div class="flex items-center justify-between gap-3 rounded-lg border px-4 py-3 {docStatus === 'approved' ? 'border-emerald-200 bg-emerald-50' : docStatus === 'pending' ? 'border-amber-200 bg-amber-50' : docStatus === 'rejected' ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-white'}">
 									<div class="flex min-w-0 items-center gap-3">
 										<span class="text-lg {docStatus === 'approved' ? 'text-emerald-600' : docStatus === 'pending' ? 'text-amber-500' : docStatus === 'rejected' ? 'text-red-500' : 'text-gray-400'}">{docStatus === 'approved' ? '✓' : docStatus === 'pending' ? '⏳' : docStatus === 'rejected' ? '✗' : '○'}</span>
 										<span class="text-sm font-medium text-slate-800">{documentTypeLabel(type)}</span>
 									</div>
 									<div class="flex shrink-0 items-center gap-2">
-										<span class="rounded-full px-2.5 py-1 text-xs font-semibold {docStatus === 'approved' ? 'bg-emerald-100 text-emerald-700' : docStatus === 'pending' ? 'bg-amber-100 text-amber-700' : docStatus === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'}">{docStatus === 'approved' ? 'Validated' : docStatus === 'pending' ? 'Pending' : docStatus === 'rejected' ? 'Rejected' : 'Not uploaded'}</span>
+										<span class="rounded-full px-2.5 py-1 text-xs font-semibold {docStatus === 'approved' ? 'bg-emerald-100 text-emerald-700' : docStatus === 'pending' ? 'bg-amber-100 text-amber-700' : docStatus === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'}">{documentUploading ? 'Uploading...' : docStatus === 'approved' ? 'Validated' : docStatus === 'pending' ? 'Pending' : docStatus === 'rejected' ? 'Rejected' : 'Not uploaded'}</span>
 										{#if document?.signed_url}<a href={document.signed_url} target="_blank" rel="noopener noreferrer" class="text-xs font-medium text-blue-700 hover:underline">Open</a>{/if}
-										{#if document?.status === 'pending'}<button type="button" on:click={() => deleteVerificationDocument(document)} class="text-xs font-medium text-red-600 hover:underline">Delete</button>{/if}
+										{#if document?.status === 'pending' && !documentUploading}<button type="button" on:click={() => deleteVerificationDocument(document)} class="text-xs font-medium text-red-600 hover:underline">Delete</button>{/if}
 										{#if docStatus === 'missing' || docStatus === 'rejected'}
 											<label class="cursor-pointer rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">Upload<input type="file" accept=".jpg,.jpeg,.png" class="hidden" on:change={(event) => uploadChecklistDocument(type, event)} /></label>
 										{/if}
@@ -1730,7 +1750,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 									<button
 										type="button"
 										on:click={submitDriverDocumentsForReview}
-										disabled={!allDriverDocsUploaded || submittingDriverForReview}
+										disabled={!allDriverDocsUploaded || uploadingDocument || submittingDriverForReview}
 										class="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50 {allDriverDocsUploaded ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-gray-400'}"
 									>
 										{submittingDriverForReview ? 'Submitting...' : 'Submit for review'}
@@ -1763,7 +1783,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 								<button
 									type="button"
 									on:click={submitForReview}
-									disabled={!allRequiredDocsUploaded || !profile.profile_photo_url || submittingForReview}
+									disabled={!allRequiredDocsUploaded || uploadingDocument || !profile.profile_photo_url || submittingForReview}
 									class="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50 {allRequiredDocsUploaded && profile.profile_photo_url ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-gray-400'}"
 								>
 									{submittingForReview ? 'Submitting...' : 'Submit for review'}
@@ -1778,9 +1798,6 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 					{/if}
 				</div>
 
-				{#if documentsError}
-					<p class="mt-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">{documentsError}</p>
-				{/if}
 				{#if documentsMessage}
 					<p class="mt-3 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2">{documentsMessage}</p>
 				{/if}
