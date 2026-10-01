@@ -459,3 +459,49 @@ export async function sendDashboardMessageNotificationEmail(input: {
 	console.log('Dashboard message notification — activity center only, email skipped.');
 	return null;
 }
+// ─── EMAIL 12 — Compte suspendu ───
+
+export function buildAccountSuspendedEmail(input: { firstName?: string | null; suspendedUntil: string; reason?: string | null }): EmailTemplate {
+	const untilDate = new Date(input.suspendedUntil).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+	const lines = [
+		`Your Hizli Carpooling account has been temporarily suspended until ${untilDate}.`,
+		...(input.reason ? [`Reason: ${input.reason}`] : []),
+		'During this period, you can still log in, but you will not be able to publish or book rides.',
+		'If you believe this is a mistake, please contact our support team.',
+		'The Hizli Team'
+	];
+	return buildEmailTemplate({
+		firstName: input.firstName,
+		subject: 'Your Hizli Carpooling account has been suspended',
+		lines,
+		buttonLabel: 'Go to my dashboard',
+		buttonUrl: HIZLI_DASHBOARD_URL
+	});
+}
+
+export async function sendAccountSuspendedEmail(input: { to: string; firstName?: string | null; suspendedUntil: string; reason?: string | null }): Promise<string | null> {
+	return sendEmail({ to: input.to, firstName: input.firstName, template: buildAccountSuspendedEmail(input) });
+}
+
+// ─── EMAIL 13 — Compte banni ───
+
+export function buildAccountBannedEmail(input: { firstName?: string | null; reason?: string | null }): EmailTemplate {
+	const lines = [
+		'Your Hizli Carpooling account has been permanently banned.',
+		...(input.reason ? [`Reason: ${input.reason}`] : []),
+		'You will no longer be able to publish or book rides on our platform.',
+		'If you believe this is a mistake, please contact our support team.',
+		'The Hizli Team'
+	];
+	return buildEmailTemplate({
+		firstName: input.firstName,
+		subject: 'Your Hizli Carpooling account has been banned',
+		lines,
+		buttonLabel: 'Contact support',
+		buttonUrl: HIZLI_BASE_URL
+	});
+}
+
+export async function sendAccountBannedEmail(input: { to: string; firstName?: string | null; reason?: string | null }): Promise<string | null> {
+	return sendEmail({ to: input.to, firstName: input.firstName, template: buildAccountBannedEmail(input) });
+}

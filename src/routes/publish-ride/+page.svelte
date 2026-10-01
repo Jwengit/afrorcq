@@ -23,6 +23,8 @@
 		membership_expires_at?: string | null;
 		review_pending?: boolean | null;
 		review_pending_ride_id?: string | null;
+		user_status?: string | null;
+		suspended_until?: string | null;
 	};
 
 	type MissingRequirement =
@@ -53,6 +55,8 @@
 	let memberStatus: MemberStatus = 'free';
 	let needsDriverDocumentsOnly = false;
 	let reviewPendingBlocked = false;
+	let accountBlocked = false;
+	let accountBlockedReason = '';
 	let errorMessage = '';
 	let successMessage = '';
 
@@ -132,8 +136,7 @@
 
 		const { data, error } = await supabase
 			.from('profiles')
-			.select('gender, car_make, car_year, color, status, is_verified, membership_paid, membership_expires_at, review_pending, review_pending_ride_id')
-			.eq('id', userId)
+			.select('gender, car_make, car_year, color, status, is_verified, membership_paid, membership_expires_at, review_pending, review_pending_ride_id, user_status, suspended_until')			.eq('id', userId)
 			.maybeSingle();
 
 		if (error) {
@@ -156,7 +159,13 @@
 			membershipExpiresAt: profile?.membership_expires_at,
 			reviewPending: profile?.review_pending
 		});
-		isFemaleDriver = (profile?.gender ?? '').toLowerCase() === 'female';
+			accountBlocked = profile?.user_status === 'suspended' || profile?.user_status === 'banned';
+		accountBlockedReason =
+			profile?.user_status === 'banned'
+				? 'Your account has been banned. You cannot publish rides.'
+				: profile?.user_status === 'suspended'
+					? `Your account is suspended${profile?.suspended_until ? ` until ${new Date(profile.suspended_until).toLocaleDateString()}` : ''}. You cannot publish rides during this period.`
+					: '';	isFemaleDriver = (profile?.gender ?? '').toLowerCase() === 'female';
 
 		// Check car information
 		const hasCarInfo =
@@ -203,7 +212,7 @@
 
 		needsDriverDocumentsOnly = !missingCarInfo && missingDriverDocs.length > 0;
 
-		allowedToPublish = !reviewPendingBlocked && !missingCarInfo && missingDriverDocs.length === 0;
+			allowedToPublish = !accountBlocked && !reviewPendingBlocked && !missingCarInfo && missingDriverDocs.length === 0;	allowedToPublish = !reviewPendingBlocked && !missingCarInfo && missingDriverDocs.length === 0;
 
 		if (!isFemaleDriver) {
 			form.girlsOnly = false;
@@ -218,7 +227,9 @@
 
 	async function submitRide() {
 		if (!currentUser || !allowedToPublish) {
-			if (reviewPendingBlocked) {
+			if (accountBlocked) {
+				errorMessage = accountBlockedReason;
+			} else if (reviewPendingBlocked) {
 				errorMessage = 'You have a pending review. Please rate your last trip before booking or posting a new ride.';
 			}
 			return;
@@ -324,9 +335,13 @@
 				</div>
 			{/if}
 
-			{#if !allowedToPublish}
+					{#if !allowedToPublish}
 				<div class="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4">
-					{#if reviewPendingBlocked}
+					{#if accountBlocked}
+						<p class="text-sm font-semibold text-amber-800">
+							{accountBlockedReason}
+						</p>
+					{:else if reviewPendingBlocked}
 						<p class="text-sm font-semibold text-amber-800 mb-2">
 							You have a pending review. Please rate your last trip before booking or posting a new ride.
 						</p>

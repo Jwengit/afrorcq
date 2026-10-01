@@ -139,7 +139,9 @@
 	let membershipExpiresAt: string | null = null;
 	let reviewPendingBlocked = false;
 	let reviewPendingRideId: string | null = null;
-	let loading = true;
+	let accountUserStatus: string = 'active';
+	let accountSuspendedUntil: string | null = null;
+	let accountStatusReason: string | null = null;	let loading = true;
 	let myRides: Ride[] = [];
 	let ridesLoading = false;
 	let myBookings: Booking[] = [];
@@ -665,8 +667,7 @@
 		if (error) {
 			const fallback = await supabase
 				.from('profiles')
-				.select('gender, status, is_verified, membership_paid, membership_expires_at')
-				.eq('id', userId)
+				.select('gender, status, is_verified, membership_paid, membership_expires_at, user_status, suspended_until, status_reason')				.eq('id', userId)
 				.maybeSingle();
 
 			if (fallback.error) {
@@ -713,6 +714,9 @@
 		membershipExpiresAt = profile?.membership_expires_at ?? null;
 		reviewPendingBlocked = Boolean(profile?.review_pending) && canUseVerifiedFeatures(memberStatus);
 		reviewPendingRideId = profile?.review_pending_ride_id ?? null;
+		accountUserStatus = profile?.user_status ?? 'active';
+		accountSuspendedUntil = profile?.suspended_until ?? null;
+		accountStatusReason = profile?.status_reason ?? null;
 	}
 
 	async function goToPendingReview() {
@@ -1380,7 +1384,19 @@
 	<div class="min-h-screen dashboard-bg py-10 px-4 sm:px-6 lg:px-8 relative">
 		<div class="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.2),transparent_58%)]"></div>
 		<div class="max-w-6xl mx-auto space-y-6 relative z-10">
-			{#if reviewPendingBlocked}
+				{#if accountUserStatus === 'suspended' || accountUserStatus === 'banned'}
+				<section class="rounded-lg border {accountUserStatus === 'banned' ? 'border-red-300 bg-red-50' : 'border-amber-300 bg-amber-50'} px-4 py-3">
+					<p class="text-sm font-semibold {accountUserStatus === 'banned' ? 'text-red-900' : 'text-amber-900'}">
+						{accountUserStatus === 'banned'
+							? 'Your account has been banned.'
+							: `Your account is suspended${accountSuspendedUntil ? ` until ${new Date(accountSuspendedUntil).toLocaleDateString()}` : ''}.`}
+					</p>
+					{#if accountStatusReason}
+						<p class="text-sm mt-1 {accountUserStatus === 'banned' ? 'text-red-800' : 'text-amber-800'}">Reason: {accountStatusReason}</p>
+					{/if}
+					<p class="text-sm mt-1 {accountUserStatus === 'banned' ? 'text-red-800' : 'text-amber-800'}">You cannot publish or book rides while this status is active. Contact support if you believe this is a mistake.</p>
+				</section>
+			{/if}
 				<section class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
 					<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 						<p class="text-sm text-amber-900">You have a pending review. Please rate your last trip before booking or posting a new ride.</p>

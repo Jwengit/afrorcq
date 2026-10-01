@@ -56,6 +56,8 @@ let driverIsVerifiedMember = false;
 let currentMemberStatus: MemberStatus = 'free';
 let currentUserGender = '';
 let existingBooking: { id: string; status: string; seats_booked: number } | null = null;
+let accountBlocked = false;
+let accountBlockedReason = '';
 
 $: bookingTotalAmount = ride ? ride.price * bookingSeats : 0;
 
@@ -88,7 +90,7 @@ onMount(async () => {
 	if (user) {
 		const { data: profile } = await supabase
 			.from('profiles')
-			.select('gender, status, is_verified, membership_paid, membership_expires_at')
+			.select('gender, status, is_verified, membership_paid, membership_expires_at, user_status, suspended_until')
 			.eq('id', user.id)
 			.maybeSingle();
 
@@ -99,6 +101,13 @@ onMount(async () => {
 			membershipPaid: profile?.membership_paid,
 			membershipExpiresAt: profile?.membership_expires_at
 		});
+		accountBlocked = profile?.user_status === 'suspended' || profile?.user_status === 'banned';
+		accountBlockedReason =
+			profile?.user_status === 'banned'
+				? 'Your account has been banned. You cannot book rides.'
+				: profile?.user_status === 'suspended'
+					? `Your account is suspended${profile?.suspended_until ? ` until ${new Date(profile.suspended_until).toLocaleDateString()}` : ''}. You cannot book rides during this period.`
+					: '';
 	}
 
 	if (!user && browser) {
@@ -160,7 +169,12 @@ onMount(async () => {
 
 	loading = false;
 });
-	async function createBooking() {
+		async function createBooking() {
+		if (accountBlocked) {
+			errorMessage = accountBlockedReason;
+			return;
+		}
+
 		if (!ride) {
 			errorMessage = 'Ride information unavailable.';
 			return;
@@ -348,6 +362,10 @@ onMount(async () => {
 					<div class="mt-8 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
 						<p>{VERIFIED_ONLY_MESSAGE}</p>
 						<a href="/pricing" class="mt-2 inline-flex items-center rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700">Upgrade now</a>
+					</div>
+								{:else if currentUser && currentUser.id !== ride.driver_id && accountBlocked}
+					<div class="mt-8 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+						{accountBlockedReason}
 					</div>
 				{:else if currentUser && currentUser.id !== ride.driver_id && ride.seats > 0}
 					<div class="mt-8 space-y-4 border-t border-gray-200 pt-6">

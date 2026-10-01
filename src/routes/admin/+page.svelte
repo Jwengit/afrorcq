@@ -124,6 +124,11 @@
 	let ridesLoading = false;
 	let statusActionInProgress = false;
 	let statusActionMessage = '';
+	let showStatusModal = false;
+	let statusModalAction: 'suspended' | 'banned' | null = null;
+	let statusModalDate = '';
+	let statusModalReason = '';
+	let statusModalSaving = false;
 
 	// Rides management
 	type AdminRide = {
@@ -1775,7 +1780,10 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 		statusActionMessage = '';
 	}
 
-	async function changeUserStatus(status: 'active' | 'suspended' | 'banned') {
+	async function changeUserStatus(
+		status: 'active' | 'suspended' | 'banned',
+		extra: { suspendedUntil?: string | null; reason?: string } = {}
+	) {
 		if (!selectedProfile) return;
 
 		statusActionInProgress = true;
@@ -1799,7 +1807,9 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 			},
 			body: JSON.stringify({
 				userId: selectedProfile.id,
-				status
+				status,
+				suspendedUntil: extra.suspendedUntil ?? null,
+				reason: extra.reason ?? ''
 			})
 		});
 
@@ -1823,6 +1833,46 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 
 		statusActionMessage = statusLabels[status] || 'Status updated';
 		statusActionInProgress = false;
+	}
+
+	function openStatusModal(action: 'suspended' | 'banned') {
+		statusModalAction = action;
+		statusModalReason = '';
+		if (action === 'suspended') {
+			const d = new Date();
+			d.setDate(d.getDate() + 15);
+			statusModalDate = d.toISOString().slice(0, 10);
+		}
+		showStatusModal = true;
+	}
+
+	function closeStatusModal() {
+		showStatusModal = false;
+		statusModalAction = null;
+		statusModalDate = '';
+		statusModalReason = '';
+		statusModalSaving = false;
+	}
+
+	async function confirmStatusModal() {
+		if (!statusModalAction) return;
+
+		if (statusModalAction === 'suspended' && !statusModalDate) {
+			statusActionMessage = 'Please choose a suspension end date.';
+			return;
+		}
+
+		statusModalSaving = true;
+		const suspendedUntilIso =
+			statusModalAction === 'suspended' ? new Date(statusModalDate + 'T23:59:59').toISOString() : null;
+
+		await changeUserStatus(statusModalAction, {
+			suspendedUntil: suspendedUntilIso,
+			reason: statusModalReason.trim()
+		});
+
+		statusModalSaving = false;
+		closeStatusModal();
 	}
 
 	async function resetUserPassword() {
@@ -5710,7 +5760,10 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 									<button
 										type="button"
 										disabled={statusActionInProgress}
-										on:click={() => changeUserStatus('suspended')}
+									<button
+										type="button"
+										disabled={statusActionInProgress}
+										on:click={() => openStatusModal('suspended')}
 										class="w-full px-3 py-2 rounded-lg border text-sm font-medium {selectedProfile.user_status === 'suspended' ? 'border-yellow-300 bg-yellow-50 text-yellow-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'} disabled:opacity-50"
 									>
 										{selectedProfile.user_status === 'suspended' ? '[Current] ' : ''}Suspended
@@ -5718,7 +5771,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 									<button
 										type="button"
 										disabled={statusActionInProgress}
-										on:click={() => changeUserStatus('banned')}
+										on:click={() => openStatusModal('banned')}
 										class="w-full px-3 py-2 rounded-lg border text-sm font-medium {selectedProfile.user_status === 'banned' ? 'border-red-300 bg-red-50 text-red-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'} disabled:opacity-50"
 									>
 										{selectedProfile.user_status === 'banned' ? '[Current] ' : ''}Banned
@@ -5879,6 +5932,60 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 						class="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-100"
 					>
 						Close
+					</button>
+				</div>
+			</div>
+		</div>
+	{/if}
+
+	{#if showStatusModal && statusModalAction}
+		<div class="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+			<div class="bg-white rounded-2xl max-w-md w-full p-6">
+				<h3 class="text-lg font-semibold text-gray-900 mb-1">
+					{statusModalAction === 'suspended' ? 'Suspend account' : 'Ban account'}
+				</h3>
+				<p class="text-sm text-gray-500 mb-4">
+					{statusModalAction === 'suspended'
+						? 'Choose the date the suspension ends. The user will be able to log in but not publish or book rides.'
+						: 'This will permanently block the account from logging in.'}
+				</p>
+
+				{#if statusModalAction === 'suspended'}
+					<label for="suspend-until-date" class="text-xs font-medium text-gray-700 block mb-1">Suspended until</label>
+					<input
+						id="suspend-until-date"
+						type="date"
+						bind:value={statusModalDate}
+						min={new Date().toISOString().slice(0, 10)}
+						class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-amber-500"
+					/>
+				{/if}
+
+				<label for="status-reason" class="text-xs font-medium text-gray-700 block mb-1">Reason (optional, included in the email)</label>
+				<textarea
+					id="status-reason"
+					bind:value={statusModalReason}
+					rows="3"
+					placeholder="e.g. Repeated no-shows, inappropriate behavior..."
+					class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-amber-500 resize-y"
+				></textarea>
+
+				<div class="flex gap-2">
+					<button
+						type="button"
+						disabled={statusModalSaving}
+						on:click={confirmStatusModal}
+						class={`px-4 py-2 text-white text-sm rounded-lg font-medium disabled:opacity-50 ${statusModalAction === 'banned' ? 'bg-red-600 hover:bg-red-700' : 'bg-amber-500 hover:bg-amber-600'}`}
+					>
+						{statusModalSaving ? 'Saving...' : 'Confirm'}
+					</button>
+					<button
+						type="button"
+						disabled={statusModalSaving}
+						on:click={closeStatusModal}
+						class="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50"
+					>
+						Cancel
 					</button>
 				</div>
 			</div>

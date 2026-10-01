@@ -70,6 +70,23 @@ export const POST: RequestHandler = async ({ request }) => {
 			return json({ error: 'You cannot book your own ride.' }, { status: 400 });
 		}
 
+		const { data: passengerAccount } = await adminClient
+			.from('profiles')
+			.select('user_status, suspended_until')
+			.eq('id', user.id)
+			.maybeSingle();
+
+		if (passengerAccount?.user_status === 'banned') {
+			return json({ error: 'Your account has been banned. You cannot book rides.' }, { status: 403 });
+		}
+
+		if (passengerAccount?.user_status === 'suspended') {
+			const until = passengerAccount?.suspended_until
+				? ` until ${new Date(passengerAccount.suspended_until).toLocaleDateString()}`
+				: '';
+			return json({ error: `Your account is suspended${until}. You cannot book rides during this period.` }, { status: 403 });
+		}
+
 		if (seats > ride.seats) {
 			return json({ error: 'Not enough seats available.' }, { status: 400 });
 		}

@@ -1,6 +1,7 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
+import { sendAccountSuspendedEmail, sendAccountBannedEmail } from '$lib/email';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -62,10 +63,14 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		}
 
 		const body = await request.json();
-		const { userId, status } = body;
+		const { userId, status, suspendedUntil, reason } = body;
 
 		if (!userId || !['active', 'suspended', 'banned'].includes(status)) {
 			return json({ error: 'Invalid userId or status' }, { status: 400 });
+		}
+
+		if (status === 'suspended' && !suspendedUntil) {
+			return json({ error: 'suspendedUntil is required when suspending an account' }, { status: 400 });
 		}
 
 		const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
@@ -81,14 +86,45 @@ export const PATCH: RequestHandler = async ({ request }) => {
 
 		const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-		// Update profile status
+		const updatePayload: Record<string, unknown> = {
+			user_status: status,
+			suspended_until: status === 'suspended' ? suspendedUntil : null,
+			status_reason: status === 'active' ? null : reason || null
+		};
+
 		const { error: updateError } = await adminClient
 			.from('profiles')
-			.update({ user_status: status })
+			.update(updatePayload)
 			.eq('id', userId);
 
 		if (updateError) {
 			return json({ error: updateError.message }, { status: 500 });
+		}
+
+		// Send notification email for suspend/ban (not for reactivation)
+		if (status === 'suspended' || status === 'banned') {
+			const { data: targetProfile } = await adminClient
+				.from('profiles')
+				.select('email, first_name')
+				.eq('id', userId)
+				.maybeSingle();
+
+			if (targetProfile?.email) {
+				if (status === 'suspended') {
+					await sendAccountSuspendedEmail({
+						to: targetProfile.email,
+						firstName: targetProfile.first_name,
+						suspendedUntil,
+						reason: reason || null
+					});
+				} else {
+					await sendAccountBannedEmail({
+						to: targetProfile.email,
+						firstName: targetProfile.first_name,
+						reason: reason || null
+					});
+				}
+			}
 		}
 
 		return json({
