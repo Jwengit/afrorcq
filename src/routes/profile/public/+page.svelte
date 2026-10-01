@@ -564,9 +564,11 @@
 			</div>
 
 			{#if canUseVerifiedFeatures(viewerMemberStatus)}
-				<ReviewsSection userId={viewedProfileId} userName={`${profile.first_name} ${profile.last_name}`.trim()} />
+				<div class="profile-card p-7 mt-6">
+					<ReviewsSection userId={viewedProfileId} userName={`${profile.first_name} ${profile.last_name}`.trim()} />
+				</div>
 			{:else}
-				<div class="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
+				<div class="profile-card p-7 mt-6">
 					<p class="text-sm font-semibold text-amber-800">{VERIFIED_ONLY_MESSAGE}</p>
 					<a
 						href="/pricing"

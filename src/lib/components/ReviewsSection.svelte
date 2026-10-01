@@ -72,17 +72,18 @@ return Boolean(review.profiles?.is_verified) && hasPhoto;
 </div>
 
 {#if loading}
-<p>Loading reviews...</p>
+<p class="muted">Loading reviews...</p>
 {:else if error}
 <p class="error">{error}</p>
 {:else if reviews.length === 0}
-<p>No review yet.</p>
+<p class="muted">No review yet.</p>
 {:else}
 <div class="summary-card">
 <div class="summary-score">
 <strong>{averageRating.toFixed(1)}</strong>
 <span>/5</span>
 </div>
+<span class="summary-count">{reviews.length} review{reviews.length > 1 ? 's' : ''}</span>
 </div>
 
 <div class="list">
@@ -132,39 +133,52 @@ Verified
 
 <style>
 .reviews-section {
-margin-top: 1.25rem;
-padding: 1.15rem;
-border: 1px solid #e2e8f0;
-border-radius: 0.9rem;
-background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+margin-top: 0;
 }
 .header-row {
 display: flex;
 align-items: center;
 justify-content: space-between;
+margin-bottom: 0.75rem;
+}
+.header-row h3 {
+margin: 0;
+font-size: 1.125rem;
+font-weight: 600;
+color: #0f172a;
+}
+.muted {
+color: #64748b;
+font-size: 0.9rem;
 }
 .summary-card {
-margin-top: 0.8rem;
+margin-top: 0;
 display: flex;
 align-items: center;
 justify-content: space-between;
 gap: 0.9rem;
 padding: 0.75rem 0.9rem;
-border: 1px solid #dbeafe;
-background: #eff6ff;
-border-radius: 0.7rem;
+border: 1px solid #a7f3d0;
+background: #ecfdf5;
+border-radius: 0.75rem;
 }
 .summary-score {
 display: flex;
 align-items: center;
+color: #065f46;
 }
 .summary-score strong {
 font-size: 1.15rem;
 line-height: 1;
 }
 .summary-score span {
-color: #475569;
+color: #047857;
 font-weight: 600;
+}
+.summary-count {
+font-size: 0.82rem;
+font-weight: 600;
+color: #047857;
 }
 .list {
 display: grid;

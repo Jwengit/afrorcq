@@ -1199,6 +1199,9 @@
 		return searchable.includes(normalizedSearch);
 	});
 
+	$: adminUsersList = filteredUsers.filter((u) => Boolean(u.is_admin));
+	$: regularUsersList = filteredUsers.filter((u) => !u.is_admin);
+
 	function setTab(tab: string) {
 		activeTab = tab;
 		if (tab === 'reviews') {
@@ -3713,23 +3716,52 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 								<p class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{usersError}</p>
 							{:else if usersLoading}
 								<p class="text-sm text-gray-500">Loading users...</p>
-							{:else if filteredUsers.length === 0}
-								<p class="text-sm text-gray-500">No users match your search.</p>
 							{:else}
-								<div class="overflow-x-auto border border-gray-100 rounded-xl">
-									<table class="w-full text-sm">
-										<thead class="bg-gray-50 text-left text-gray-600">
-											<tr>
-												<th class="px-4 py-3 font-medium">User</th>
-													<th class="px-4 py-3 font-medium">Verification</th>
-												<th class="px-4 py-3 font-medium">Status</th>
-												<th class="px-4 py-3 font-medium">Rating</th>
-												<th class="px-4 py-3 font-medium">Created</th>
-												<th class="px-4 py-3 font-medium">Actions</th>
-											</tr>
-										</thead>
-										<tbody class="divide-y divide-gray-100">
-											{#each filteredUsers as adminUser}
+								{#if adminUsersList.length > 0}
+									<div class="rounded-xl border border-purple-200 bg-purple-50/60 p-4">
+										<h3 class="text-sm font-semibold uppercase tracking-wide text-purple-700 mb-3">Admins ({adminUsersList.length})</h3>
+										<div class="flex flex-wrap gap-3">
+											{#each adminUsersList as adminUser}
+												<button
+													type="button"
+													on:click={() => openProfileModal(adminUser)}
+													class="flex items-center gap-3 rounded-lg border border-purple-200 bg-white px-3 py-2 shadow-sm hover:bg-purple-50 transition-colors text-left"
+												>
+													{#if adminUser.profile_photo_url}
+														<img src={adminUser.profile_photo_url} alt="" class="w-9 h-9 object-cover rounded-full border border-purple-200" />
+													{:else}
+														<div class="w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center text-sm">👤</div>
+													{/if}
+													<div>
+														<p class="text-sm font-medium text-gray-900">
+															{`${adminUser.first_name ?? ''} ${adminUser.last_name ?? ''}`.trim() || 'No name'}
+															<span class="ml-1 inline-flex items-center rounded-full bg-purple-600 px-2 py-0.5 text-[10px] font-semibold text-white align-middle">Admin</span>
+														</p>
+														<p class="text-xs text-gray-500">{adminUser.email ?? 'Email not provided'}</p>
+													</div>
+												</button>
+											{/each}
+										</div>
+									</div>
+								{/if}
+
+								{#if regularUsersList.length === 0}
+									<p class="text-sm text-gray-500">No other users match your search.</p>
+								{:else}
+									<div class="overflow-x-auto border border-gray-100 rounded-xl">
+										<table class="w-full text-sm">
+											<thead class="bg-gray-50 text-left text-gray-600">
+												<tr>
+													<th class="px-4 py-3 font-medium">User</th>
+														<th class="px-4 py-3 font-medium">Verification</th>
+													<th class="px-4 py-3 font-medium">Status</th>
+													<th class="px-4 py-3 font-medium">Rating</th>
+													<th class="px-4 py-3 font-medium">Created</th>
+													<th class="px-4 py-3 font-medium">Actions</th>
+												</tr>
+											</thead>
+											<tbody class="divide-y divide-gray-100">
+												{#each regularUsersList as adminUser}
 												<tr class="hover:bg-gray-50">
 													<td class="px-4 py-3 align-top">
 														<div class="flex items-start gap-3">
@@ -3818,6 +3850,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 										</tbody>
 									</table>
 								</div>
+							{/if}
 							{/if}
 						</div>
 					{:else if activeTab === 'rides'}

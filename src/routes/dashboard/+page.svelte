@@ -1395,11 +1395,6 @@
 				</section>
 			{/if}
 
-			{#if memberStatus === 'verified' && currentUser}
-				<section class="rounded-lg border border-slate-200 bg-white px-4 py-4">
-					<ReviewsSection userId={currentUser.id} />
-				</section>
-			{/if}
 
 			{#if memberStatus === 'free'}
 				<section class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
@@ -2022,8 +2017,14 @@
 						</article>
 					{/each}
 				</div>
-				{/if}
+					{/if}
 			</section>
+
+			{#if memberStatus === 'verified' && currentUser}
+				<section class="rounded-lg border border-slate-200 bg-white px-4 py-4">
+					<ReviewsSection userId={currentUser.id} />
+				</section>
+			{/if}
 			{/if}
 
 		{#if showArchive}
