@@ -166,7 +166,7 @@
 	$: docStatusByType = new Map(
 		(['identity_card_front', 'identity_card_back', 'student_id', 'proof_of_address', 'driver_license_front', 'driver_license_back', 'insurance', 'vehicle_registration'] as const).map(
 			(type) => {
-				const latest = latestDocumentForType(type);
+				const latest = latestDocumentForType(type, verificationDocuments);
 				if (!latest) return [type, 'missing'] as const;
 				if (latest.status === 'approved') return [type, 'approved'] as const;
 				if (latest.status === 'rejected') return [type, 'rejected'] as const;
@@ -175,15 +175,18 @@
 		)
 	);
 
-	function latestDocumentForType(documentType: string): VerificationDocument | null {
-		return verificationDocuments
+	function latestDocumentForType(
+		documentType: string,
+		documents: VerificationDocument[] = verificationDocuments
+	): VerificationDocument | null {
+		return documents
 			.filter((document) => normalizeVerificationDocumentType(document.document_type) === documentType)
 			.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] ?? null;
 	}
 
-	$: profileUploadedCount = profileDocumentTypes.filter((type) => latestDocumentForType(type)).length;
+	$: profileUploadedCount = profileDocumentTypes.filter((type) => latestDocumentForType(type, verificationDocuments)).length;
 	$: profileApprovedCount = profileDocumentTypes.filter((type) => docStatusByType.get(type) === 'approved').length;
-	$: driverUploadedCount = driverOnlyDocumentTypes.filter((type) => latestDocumentForType(type)).length;
+	$: driverUploadedCount = driverOnlyDocumentTypes.filter((type) => latestDocumentForType(type, verificationDocuments)).length;
 	$: driverApprovedCount = driverOnlyDocumentTypes.filter((type) => docStatusByType.get(type) === 'approved').length;
 	$: hasDriverDocuments = driverUploadedCount > 0;
 	$: showDriverDocuments = driverDocumentsVisible || hasDriverDocuments;
