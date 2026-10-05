@@ -21,7 +21,6 @@
 		color: string;
 		insurance_company: string;
 		plate_number: string;
-		proof_of_resident_type: string;
 		gender: string;
 		bio: string;
 		languages: string[];
@@ -67,7 +66,7 @@
 		color: '',
 		insurance_company: '',
 		plate_number: '',
-		proof_of_resident_type: '',
+	
 		gender: '',
 		bio: '',
 		languages: [] as string[],
@@ -465,7 +464,7 @@
 			color: (data?.color as string) ?? '',
 			insurance_company: (data?.insurance_company as string) ?? '',
 			plate_number: (data?.plate_number as string) ?? '',
-			proof_of_resident_type: (data?.proof_of_resident_type as string) ?? '',
+		
 			bio: (data?.bio as string) ?? '',
 			gender: data?.gender ?? '',
 			languages: normalizeOptionSelections(data?.languages, languageOptions),
@@ -997,7 +996,6 @@
 			const trimmedZipCode = formData.zip_code.trim();
 			const trimmedCarMake = formData.car_make.trim();
 			const trimmedColor = formData.color.trim();
-			const trimmedProofOfResidentType = formData.proof_of_resident_type.trim();
 			const parsedCarYear = Number.parseInt(formData.car_year, 10);
 			const carYear = Number.isNaN(parsedCarYear) ? null : parsedCarYear;
 if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
@@ -1042,7 +1040,6 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 					car_make: trimmedCarMake || null,
 					car_year: carYear,
 					color: trimmedColor || null,
-					proof_of_resident_type: trimmedProofOfResidentType || null,
 					gender: formData.gender,
 					bio: formData.bio.trim() || null,
 					languages: sanitizedLanguages,
@@ -1072,7 +1069,6 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 					car_make: trimmedCarMake,
 					car_year: carYear ? String(carYear) : '',
 					color: trimmedColor,
-					proof_of_resident_type: trimmedProofOfResidentType,
 					gender: formData.gender,
 					bio: formData.bio.trim(),
 					languages: sanitizedLanguages,
