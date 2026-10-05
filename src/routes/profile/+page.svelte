@@ -953,9 +953,11 @@
 		}
 	}
 
-	async function uploadPhoto(file: File): Promise<string | null> {
+	async function uploadPhoto(file: File): Promise<string> {
 		const token = await getSessionAccessToken();
-		if (!token) return null;
+		if (!token) {
+			throw new Error('Your session has expired. Please sign in again before uploading a profile photo.');
+		}
 
 		const formData = new FormData();
 		formData.append('file', file);
@@ -969,16 +971,21 @@
 		const payload = await response.json();
 		if (!response.ok) {
 			console.error('Error uploading photo:', payload?.error);
-			return null;
+			throw new Error(payload?.error || 'Unable to upload profile photo.');
 		}
 
-		return payload.publicUrl ?? null;
+		if (typeof payload.publicUrl !== 'string' || !payload.publicUrl.trim()) {
+			throw new Error('The photo was uploaded, but the server did not return its URL.');
+		}
+
+		return payload.publicUrl;
 	}
 
 	async function saveProfile() {
 		if (!currentUser) return;
 
 		saving = true;
+		profileError = '';
 
 		try {
 			const trimmedFirstName = formData.first_name.trim();
@@ -1018,17 +1025,10 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 					return;
 				}
 
-				const uploadedUrl = await uploadPhoto(selectedFile);
-				if (!uploadedUrl) {
-					profileError = 'Error uploading profile photo. Please check the file and try again.';
-					saving = false;
-					return;
-				}
-
-				photoUrl = uploadedUrl;
+				photoUrl = await uploadPhoto(selectedFile);
 			}
 
-			const { error } = await supabase
+			const { data: savedProfile, error } = await supabase
 				.from('profiles')
 				.upsert({
 					id: currentUser.id,
@@ -1049,11 +1049,17 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 					ride_preferences: sanitizedRidePreferences,
 					profile_photo_url: photoUrl || null,
 					updated_at: new Date().toISOString()
-				}, { onConflict: 'id' });
+				}, { onConflict: 'id' })
+				.select('profile_photo_url')
+				.single();
 
 			if (error) {
 				console.error('Erreur detaillee de sauvegarde:', error);
+				profileError = error.message || 'Error saving profile. Please try again.';
 				alert(error.message || 'Error saving profile. Please try again.');
+			} else if (photoUrl && savedProfile.profile_photo_url !== photoUrl) {
+				profileError = 'The profile was saved, but the photo URL was not stored. Please try saving again.';
+				alert(profileError);
 			} else {
 				profile = normalizeProfile({
 					first_name: trimmedFirstName,
@@ -1071,7 +1077,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 					bio: formData.bio.trim(),
 					languages: sanitizedLanguages,
 					ride_preferences: sanitizedRidePreferences,
-					profile_photo_url: photoUrl,
+					profile_photo_url: savedProfile.profile_photo_url || '',
 					status: profile.status
 				});
 				formData = { ...profile };
@@ -1082,7 +1088,8 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 			}
 		} catch (error) {
 			console.error('Error:', error);
-			alert('An error occurred. Please try again.');
+			profileError = error instanceof Error ? error.message : 'An error occurred. Please try again.';
+			alert(profileError);
 		} finally {
 			saving = false;
 		}
@@ -1701,7 +1708,12 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 					{#if !profile.profile_photo_url}
 						<div class="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
 							<span class="mt-0.5">⚠️</span>
-							<span><strong>Profile photo required.</strong> Add a profile photo before submitting for review — it's mandatory for verification.</span>
+							<span>
+								<strong>Profile photo required.</strong>
+								{selectedFile
+									? 'Save your profile changes to apply the selected photo before submitting for review.'
+									: "Add a profile photo before submitting for review — it's mandatory for verification."}
+							</span>
 						</div>
 					{/if}
 				</div>

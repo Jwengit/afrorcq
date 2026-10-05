@@ -1,6 +1,8 @@
-ALTER TABLE profiles
+ALTER TABLE public.profiles
 ADD COLUMN IF NOT EXISTS car_make TEXT,
 ADD COLUMN IF NOT EXISTS car_year INTEGER,
 ADD COLUMN IF NOT EXISTS insurance_company TEXT,
 ADD COLUMN IF NOT EXISTS plate_number TEXT,
 ADD COLUMN IF NOT EXISTS proof_of_resident_type TEXT;
+
+NOTIFY pgrst, 'reload schema';

@@ -22,12 +22,14 @@ async function getAuthenticatedUser(token: string) {
   return { user };
 }
 
-function createApiClient() {
+function createApiClient(token: string) {
   const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
   if (serviceRoleKey) {
     return createClient(supabaseUrl, serviceRoleKey);
   }
-  return createClient(supabaseUrl, supabaseAnonKey);
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    accessToken: async () => token
+  });
 }
 
 export const POST: RequestHandler = async ({ request }) => {
@@ -60,7 +62,7 @@ export const POST: RequestHandler = async ({ request }) => {
     const safeName = fileValue.name.replace(/[^a-zA-Z0-9._-]/g, '_');
     const storagePath = `${user.id}/${Date.now()}_${safeName}`;
 
-    const adminClient = createApiClient();
+    const adminClient = createApiClient(token);
 
     const { error: uploadError } = await adminClient.storage
       .from(BUCKET)
