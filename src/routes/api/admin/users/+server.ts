@@ -494,8 +494,9 @@ export const DELETE: RequestHandler = async ({ request }) => {
 		// First, manually cascade delete related data to avoid foreign key constraint violations
 		// This handles cases where ON DELETE CASCADE may not be properly configured
 		try {
-			// Delete reviews where this user is the reviewer or reviewee
-			await adminClient.from('reviews').delete().or(`reviewer_id.eq.${userId},reviewee_id.eq.${userId}`);
+					// Delete only the reviews this user RECEIVED. Reviews they wrote about other
+			// members are kept (reviewer_id becomes NULL), so recipients are not penalized.
+			await adminClient.from('reviews').delete().eq('reviewee_id', userId);
 
 			// Delete bookings where this user is the passenger
 			await adminClient.from('bookings').delete().eq('passenger_id', userId);

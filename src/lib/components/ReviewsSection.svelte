@@ -47,6 +47,7 @@ loading = false;
 }
 
 function fullName(review: Review): string {
+if (!review.profiles) return 'Former member';
 const first = review.profiles?.first_name?.trim() ?? '';
 const last = review.profiles?.last_name?.trim() ?? '';
 const name = `${first} ${last}`.trim();

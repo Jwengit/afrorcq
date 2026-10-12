@@ -4468,7 +4468,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 													<td class="px-4 py-3 align-top">
 														<p class="text-sm font-semibold text-gray-900">{review.rating}/5</p>
 														<p class="text-xs text-gray-500 mt-1">
-															Reviewer: {review.reviewer_profile?.first_name} {review.reviewer_profile?.last_name}
+															Reviewer: {review.reviewer_profile ? `${review.reviewer_profile.first_name ?? ''} ${review.reviewer_profile.last_name ?? ''}` : 'Deleted account'}
 														</p>
 														<p class="text-xs text-gray-500">
 															Reviewee: {review.reviewee_profile?.first_name} {review.reviewee_profile?.last_name}

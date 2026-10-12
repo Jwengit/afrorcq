@@ -365,6 +365,24 @@ export async function sendDocumentRejectedEmail(input: DocumentRejectedEmailInpu
 	return sendEmail({ ...input, template: buildDocumentRejectedEmail(input) });
 }
 
+export function buildDocumentApprovedEmail(firstName?: string | null): EmailTemplate {
+	return buildEmailTemplate({
+		firstName,
+		subject: 'One of your documents has been approved',
+		lines: [
+			'One of your submitted documents has been reviewed and approved.',
+			'If any other documents are still required or under review, you can check their status in your profile.',
+			'The Hizli Team'
+		],
+		buttonLabel: 'View my documents',
+		buttonUrl: HIZLI_PROFILE_URL
+	});
+}
+
+export async function sendDocumentApprovedEmail(input: BaseEmailInput): Promise<string | null> {
+	return sendEmail({ ...input, template: buildDocumentApprovedEmail(input.firstName) });
+}
+
 // ─── EMAIL 9 — Documents vérifiés → Complete membership ───
 
 export function buildDocumentsVerifiedEmail(firstName?: string | null): EmailTemplate {

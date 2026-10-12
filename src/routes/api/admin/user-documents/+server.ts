@@ -2,6 +2,7 @@ import { json, type RequestHandler } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
 import {
+  sendDocumentApprovedEmail,
   sendDocumentRejectedEmail,
   sendDocumentsVerifiedEmail,
   sendDriverDocumentsApprovedEmail
@@ -97,6 +98,21 @@ async function notifyApprovedMember(adminClient: any, userId: string, siteUrl: s
   const memberEmail = (profile?.email ?? '').trim();
   if (memberEmail) {
     await sendDocumentsVerifiedEmail({
+      to: memberEmail,
+      firstName: profile?.first_name
+    });
+  }
+}
+
+async function notifyApprovedDocument(adminClient: ReturnType<typeof createClient>, userId: string) {
+  const { data: profile } = await adminClient
+    .from('profiles')
+    .select('first_name, email')
+    .eq('id', userId)
+    .maybeSingle();
+  const memberEmail = (profile?.email ?? '').trim();
+  if (memberEmail) {
+    await sendDocumentApprovedEmail({
       to: memberEmail,
       firstName: profile?.first_name
     });
@@ -441,8 +457,12 @@ export const PATCH: RequestHandler = async ({ request }) => {
     const wasAlreadyApproved = isApprovedStatus(existingDoc.status);
 
     if (status === 'approved' && driverDocument) {
-      if (!wasAlreadyApproved && await allDriverDocumentsApproved(adminClient, existingDoc.user_id)) {
-        await notifyDriverDocumentsApproved(adminClient, existingDoc.user_id);
+      if (!wasAlreadyApproved) {
+        if (await allDriverDocumentsApproved(adminClient, existingDoc.user_id)) {
+          await notifyDriverDocumentsApproved(adminClient, existingDoc.user_id);
+        } else {
+          await notifyApprovedDocument(adminClient, existingDoc.user_id);
+        }
       }
     } else if (status === 'approved') {
       const allApproved = await shouldMarkProfileVerified(adminClient, existingDoc.user_id);
@@ -459,7 +479,11 @@ export const PATCH: RequestHandler = async ({ request }) => {
 
         const siteUrl = (String(env.PUBLIC_SITE_URL ?? '').trim() || 'https://afrorcqvercelapp.vercel.app').replace(/\/$/, '');
 
-        await notifyApprovedMember(adminClient, existingDoc.user_id, siteUrl);
+        if (!wasAlreadyApproved) {
+          await notifyApprovedMember(adminClient, existingDoc.user_id, siteUrl);
+        }
+      } else if (!wasAlreadyApproved) {
+        await notifyApprovedDocument(adminClient, existingDoc.user_id);
       }
     } else {
       // Doc rejected: keep profile in 'pending' so the member can re-upload without re-choosing a plan
