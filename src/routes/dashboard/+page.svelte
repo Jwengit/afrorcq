@@ -1008,14 +1008,26 @@
 		requestActionBookingId = bookingId;
 		requestActionMessage = '';
 
-		const { error } = await supabase
-			.from('bookings')
-			.update({ status })
-			.eq('id', bookingId);
+		const token = await getSessionAccessToken();
+		if (!token) {
+			requestActionMessage = 'Session expired. Please sign in again.';
+			requestActionBookingId = null;
+			return;
+		}
 
-		if (error) {
-			console.error('Incoming request update error:', error);
-			requestActionMessage = 'Could not update this booking request. Please try again.';
+		const response = await fetch('/api/bookings', {
+			method: 'PATCH',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${token}`
+			},
+			body: JSON.stringify({ bookingId, status })
+		});
+		const payload = await response.json().catch(() => null);
+
+		if (!response.ok) {
+			console.error('Incoming request update error:', payload?.error);
+			requestActionMessage = payload?.error || 'Could not update this booking request. Please try again.';
 			requestActionBookingId = null;
 			return;
 		}

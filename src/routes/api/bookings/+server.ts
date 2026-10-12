@@ -1,7 +1,11 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
-import { sendBookingRequestReceivedEmail } from '$lib/email';
+import {
+	sendBookingAcceptedEmail,
+	sendBookingRejectedEmail,
+	sendBookingRequestReceivedEmail
+} from '$lib/email';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -133,6 +137,119 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 
 		return json({ success: true, booking });
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Internal server error';
+		return json({ error: message }, { status: 500 });
+	}
+};
+
+export const PATCH: RequestHandler = async ({ request }) => {
+	try {
+		const token = getBearerToken(request);
+		if (!token) return json({ error: 'Unauthorized' }, { status: 401 });
+
+		const user = await getAuthenticatedUser(token);
+		if (!user) return json({ error: 'Unauthorized' }, { status: 401 });
+
+		const body = await request.json().catch(() => ({}));
+		const bookingId = typeof body?.bookingId === 'string' ? body.bookingId : '';
+		const status = body?.status === 'Confirmed' || body?.status === 'Rejected' ? body.status : null;
+		if (!bookingId || !status) {
+			return json({ error: 'Invalid booking update.' }, { status: 400 });
+		}
+
+		const adminClient = getAdminClient();
+		if (!adminClient) return json({ error: 'Server configuration error' }, { status: 500 });
+
+		const { data: booking, error: bookingError } = await adminClient
+			.from('bookings')
+			.select('id, ride_id, passenger_id, status')
+			.eq('id', bookingId)
+			.maybeSingle();
+
+		if (bookingError) {
+			return json({ error: bookingError.message }, { status: 500 });
+		}
+		if (!booking) {
+			return json({ error: 'Booking not found.' }, { status: 404 });
+		}
+		if (booking.status !== 'Pending') {
+			return json({ error: 'This booking request has already been processed.' }, { status: 409 });
+		}
+
+		const { data: ride, error: rideError } = await adminClient
+			.from('rides')
+			.select('id, driver_id, departure, arrival, ride_date')
+			.eq('id', booking.ride_id)
+			.maybeSingle();
+
+		if (rideError) {
+			return json({ error: rideError.message }, { status: 500 });
+		}
+		if (!ride) {
+			return json({ error: 'Ride not found.' }, { status: 404 });
+		}
+		if (ride.driver_id !== user.id) {
+			return json({ error: 'Only the driver can update this booking.' }, { status: 403 });
+		}
+
+		const { data: updatedBooking, error: updateError } = await adminClient
+			.from('bookings')
+			.update({ status })
+			.eq('id', bookingId)
+			.eq('status', 'Pending')
+			.select('id, status')
+			.maybeSingle();
+
+		if (updateError) {
+			return json({ error: updateError.message }, { status: 500 });
+		}
+		if (!updatedBooking) {
+			return json({ error: 'This booking request has already been processed.' }, { status: 409 });
+		}
+
+		try {
+			const [{ data: passengerProfile }, { data: driverProfile }] = await Promise.all([
+				adminClient
+					.from('profiles')
+					.select('email, first_name')
+					.eq('id', booking.passenger_id)
+					.maybeSingle(),
+				adminClient
+					.from('profiles')
+					.select('first_name, last_name')
+					.eq('id', ride.driver_id)
+					.maybeSingle()
+			]);
+			const passengerEmail = (passengerProfile?.email ?? '').trim();
+			const rideRoute = `${ride.departure} to ${ride.arrival}`;
+			const rideDate = new Date(ride.ride_date).toLocaleString('en-US');
+
+			if (passengerEmail && status === 'Confirmed') {
+				const driverName =
+					`${driverProfile?.first_name ?? ''} ${driverProfile?.last_name ?? ''}`.trim() || 'Your driver';
+				await sendBookingAcceptedEmail({
+					to: passengerEmail,
+					firstName: passengerProfile?.first_name,
+					rideRoute,
+					rideDate,
+					driverName,
+					myBookingsUrl: `${getOrigin()}/dashboard`
+				});
+			} else if (passengerEmail && status === 'Rejected') {
+				await sendBookingRejectedEmail({
+					to: passengerEmail,
+					firstName: passengerProfile?.first_name,
+					rideRoute,
+					rideDate,
+					searchRidesUrl: `${getOrigin()}/search`
+				});
+			}
+		} catch (notifyError) {
+			console.error('Booking status email notification failed:', notifyError);
+		}
+
+		return json({ success: true, booking: updatedBooking });
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Internal server error';
 		return json({ error: message }, { status: 500 });

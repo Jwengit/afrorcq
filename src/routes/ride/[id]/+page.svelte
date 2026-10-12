@@ -202,7 +202,7 @@ onMount(async () => {
 			return;
 		}
 
-		const response = await fetch('/api/bookings/create', {
+		const response = await fetch('/api/bookings', {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
