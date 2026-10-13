@@ -31,6 +31,10 @@ type DocumentRejectedEmailInput = BaseEmailInput & {
 	reason: string;
 };
 
+type ReviewRejectedEmailInput = BaseEmailInput & {
+	reason: string;
+};
+
 type SendEmailPayload = BaseEmailInput & {
 	template: EmailTemplate;
 };
@@ -363,6 +367,25 @@ export function buildDocumentRejectedEmail(input: { firstName?: string | null; r
 
 export async function sendDocumentRejectedEmail(input: DocumentRejectedEmailInput): Promise<string | null> {
 	return sendEmail({ ...input, template: buildDocumentRejectedEmail(input) });
+}
+
+export function buildReviewRejectedEmail(input: ReviewRejectedEmailInput): EmailTemplate {
+	return buildEmailTemplate({
+		firstName: input.firstName,
+		subject: 'Action required: please update your review',
+		lines: [
+			'Your review was not approved by our moderation team.',
+			`Admin note: ${input.reason}`,
+			'Please update your review from the dashboard and submit it again.',
+			'The Hizli Team'
+		],
+		buttonLabel: 'Update my review',
+		buttonUrl: `${HIZLI_DASHBOARD_URL}#archive`
+	});
+}
+
+export async function sendReviewRejectedEmail(input: ReviewRejectedEmailInput): Promise<string | null> {
+	return sendEmail({ ...input, template: buildReviewRejectedEmail(input) });
 }
 
 export function buildDocumentApprovedEmail(firstName?: string | null): EmailTemplate {

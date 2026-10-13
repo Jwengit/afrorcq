@@ -80,7 +80,7 @@ return json(
 
 const body = await request.json();
 const { reviewee_id, ride_id, rating, comment } = body;
-const normalizedComment = (comment || '').trim();
+const normalizedComment = typeof comment === 'string' ? comment.trim() : '';
 
 if (!reviewee_id || !ride_id || !rating) {
 return json({ error: 'Missing required fields' }, { status: 400 });
@@ -143,13 +143,50 @@ return json({ error: 'Invalid review target for this ride' }, { status: 403 });
 
 const { data: existingReview, error: existingError } = await supabase
 .from('reviews')
-.select('id')
+.select('id,reviewee_id,status')
 .eq('ride_id', ride_id)
 .eq('reviewer_id', user.id)
 .maybeSingle();
 
 if (existingError && existingError.code !== 'PGRST116') {
 return json({ error: existingError.message }, { status: 400 });
+}
+if (existingReview?.status === 'rejected') {
+if (existingReview.reviewee_id !== reviewee_id) {
+return json({ error: 'The rejected review target does not match this ride participant' }, { status: 403 });
+}
+
+const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
+if (!serviceRoleKey) {
+return json({ error: 'Server configuration error' }, { status: 500 });
+}
+
+const adminClient = createClient(supabaseUrl, serviceRoleKey);
+const { data: updated, error: updateError } = await adminClient
+.from('reviews')
+.update({
+rating,
+comment: normalizedComment,
+status: 'pending',
+admin_note: null,
+reviewed_by: null,
+reviewed_at: null,
+updated_at: new Date().toISOString()
+})
+.eq('id', existingReview.id)
+.eq('reviewer_id', user.id)
+.eq('status', 'rejected')
+.select('id,rating,comment,status,created_at,reviewer_id,reviewee_id,ride_id')
+.maybeSingle();
+
+if (updateError) {
+return json({ error: updateError.message }, { status: 400 });
+}
+if (!updated) {
+return json({ error: 'This review is no longer available to resubmit' }, { status: 409 });
+}
+
+return json(updated);
 }
 if (existingReview) {
 return json({ error: 'You already reviewed this ride' }, { status: 409 });
@@ -178,6 +215,34 @@ return json(inserted);
 export const GET: RequestHandler = async ({ request, url }) => {
 if (!supabaseUrl || !supabaseKey) {
 return json({ error: 'Server configuration error' }, { status: 500 });
+}
+
+const rideId = url.searchParams.get('ride_id');
+if (rideId) {
+const token = getTokenFromRequest(request);
+if (!token) {
+return json({ error: 'Unauthorized' }, { status: 401 });
+}
+
+const authClient = createClient(supabaseUrl, supabaseKey);
+const {
+data: { user },
+error: userError
+} = await authClient.auth.getUser(token);
+if (userError || !user) {
+return json({ error: 'Unauthorized' }, { status: 401 });
+}
+
+const { data: ownReviews, error: ownReviewsError } = await getAuthedClient(token)
+.from('reviews')
+.select('id,rating,comment,status,admin_note,reviewer_id,ride_id')
+.eq('reviewer_id', user.id)
+.eq('ride_id', rideId);
+
+if (ownReviewsError) {
+return json({ error: ownReviewsError.message }, { status: 400 });
+}
+return json(ownReviews ?? []);
 }
 
 const userId = url.searchParams.get('user_id');

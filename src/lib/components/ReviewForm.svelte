@@ -13,8 +13,9 @@ let rating = 5;
 let comment = '';
 let loading = false;
 let error: string | null = null;
-let success = false;
-let hasExistingReview = false;
+let existingReviewStatus: 'pending' | 'approved' | 'rejected' | null = null;
+let rejectionNote = '';
+let wasResubmitted = false;
 
 $: if (user && rideId && revieweeId) {
 void checkExistingReview();
@@ -25,18 +26,30 @@ const {
 data: { session }
 } = await supabase.auth.getSession();
 
-const response = await fetch(`/api/reviews?user_id=${revieweeId}`, {
+const response = await fetch(`/api/reviews?ride_id=${encodeURIComponent(rideId)}`, {
 headers: session?.access_token
 ? {
 Authorization: `Bearer ${session.access_token}`
 }
 : undefined
 });
-if (!response.ok) return;
-const reviews = await response.json();
-hasExistingReview = (reviews || []).some(
-(r: { reviewer_id: string; ride_id: string }) => r.reviewer_id === user?.id && r.ride_id === rideId
-);
+if (!response.ok) {
+error = 'Unable to check the status of your review. Please refresh the page.';
+return;
+}
+const reviews = (await response.json()) as Array<{
+rating: number;
+comment: string | null;
+status: 'pending' | 'approved' | 'rejected';
+admin_note: string | null;
+}>;
+const existingReview = reviews[0];
+existingReviewStatus = existingReview?.status ?? null;
+rejectionNote = existingReview?.admin_note ?? '';
+if (existingReview?.status === 'rejected') {
+rating = existingReview.rating;
+comment = existingReview.comment ?? '';
+}
 }
 
 async function submitReview() {
@@ -58,7 +71,7 @@ return;
 
 loading = true;
 error = null;
-success = false;
+wasResubmitted = false;
 
 try {
 const response = await fetch('/api/reviews', {
@@ -80,8 +93,8 @@ if (!response.ok) {
 throw new Error(payload.error || 'Failed to submit review');
 }
 
-success = true;
-hasExistingReview = true;
+existingReviewStatus = 'pending';
+wasResubmitted = true;
 if (onSuccess) onSuccess();
 } catch (err) {
 error = err instanceof Error ? err.message : 'Unexpected error';
@@ -94,9 +107,20 @@ loading = false;
 <div class="review-form">
 <h4>Review {revieweeName}</h4>
 
-{#if hasExistingReview}
+{#if existingReviewStatus === 'pending'}
+<p class="notice">
+{wasResubmitted ? 'Your updated review has been submitted and is awaiting admin approval.' : 'Your review is awaiting admin approval.'}
+</p>
+{:else if existingReviewStatus === 'approved'}
 <p class="notice">You already reviewed this ride.</p>
 {:else}
+{#if existingReviewStatus === 'rejected'}
+<p class="error">Your review was rejected. Update it and submit it again.</p>
+{#if rejectionNote}
+<p class="notice">Admin note: {rejectionNote}</p>
+{/if}
+{/if}
+
 <div class="rating-row" role="radiogroup" aria-label="Rating">
 {#each [1, 2, 3, 4, 5] as star (star)}
 <button
@@ -122,12 +146,8 @@ required
 {#if error}
 <p class="error">{error}</p>
 {/if}
-{#if success}
-<p class="success">Review submitted. It will be visible after admin approval.</p>
-{/if}
-
 <button type="button" disabled={loading || !user} on:click={submitReview}>
-{loading ? 'Submitting...' : 'Submit review'}
+{loading ? 'Submitting...' : existingReviewStatus === 'rejected' ? 'Resubmit review' : 'Submit review'}
 </button>
 {/if}
 </div>
@@ -180,8 +200,5 @@ color: #334155;
 }
 .error {
 color: #b91c1c;
-}
-.success {
-color: #166534;
 }
 </style>

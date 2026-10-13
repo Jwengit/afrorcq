@@ -113,10 +113,12 @@
 		senderRole: 'user' | 'admin';
 		message: string;
 		createdAt: string;
+		notificationType?: string;
 	};
 
 	type MemberNotification = {
 		id: string;
+		type: string;
 		title: string;
 		message: string;
 		created_at: string;
@@ -128,7 +130,7 @@
 		details: string;
 		createdAtIso: string;
 		sectionHref: string;
-		type: 'booking' | 'request' | 'admin';
+		type: 'booking' | 'request' | 'admin' | 'review';
 	};
 
 	let currentUser: User | null = null;
@@ -276,11 +278,14 @@
 			.filter((msg) => msg.senderRole === 'admin')
 			.map((msg) => ({
 				id: `admin:${msg.id}`,
-				title: 'New admin message',
-				details: msg.subject,
+				title: msg.notificationType === 'review_rejected' ? 'Review needs an update' : 'New admin message',
+				details:
+					msg.notificationType === 'review_rejected'
+						? 'Your review was rejected. Update it and submit it again.'
+						: msg.subject,
 				createdAtIso: msg.createdAt,
-				sectionHref: '#admin-messages',
-				type: 'admin' as const
+				sectionHref: msg.notificationType === 'review_rejected' ? '#archive' : '#admin-messages',
+				type: msg.notificationType === 'review_rejected' ? ('review' as const) : ('admin' as const)
 			}))
 	]
 		.sort((a, b) => new Date(b.createdAtIso).getTime() - new Date(a.createdAtIso).getTime())
@@ -331,7 +336,15 @@
 	function activityTypeLabel(type: ActivityItem['type']) {
 		if (type === 'booking') return 'Booking';
 		if (type === 'request') return 'Request';
+		if (type === 'review') return 'Review';
 		return 'Admin';
+	}
+
+	function handleActivityClick(item: ActivityItem, event: MouseEvent) {
+		if (item.type === 'review') {
+			event.preventDefault();
+			void goToPendingReview();
+		}
 	}
 
 	async function loadAdminInboxMessages() {
@@ -442,7 +455,8 @@
 				status: 'notification',
 				senderRole: 'admin' as const,
 				message: notification.message,
-				createdAt: notification.created_at
+				createdAt: notification.created_at,
+				notificationType: notification.type
 			}));
 			adminInboxMessages = [...adminInboxMessages.filter((message) => message.ticketId), ...memberNotifications]
 				.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -628,7 +642,7 @@
 
 		const { data, error } = await supabase
 			.from('reviews')
-			.select('ride_id,reviewee_id')
+			.select('ride_id,reviewee_id,status')
 			.eq('reviewer_id', currentUser.id);
 
 		if (error) {
@@ -638,8 +652,10 @@
 		}
 
 		const reviewedTargets = new Set(
-			((data ?? []) as Array<{ ride_id: string; reviewee_id: string }>).map(
-				(item) => `${item.ride_id}:${item.reviewee_id}`
+			((data ?? []) as Array<{ ride_id: string; reviewee_id: string; status: string }>).filter(
+				(item) => item.status !== 'rejected'
+			).map((item) =>
+				`${item.ride_id}:${item.reviewee_id}`
 			)
 		);
 
@@ -720,14 +736,47 @@
 	}
 
 	async function goToPendingReview() {
-		showArchive = true;
-
 		if (!reviewPendingRideId) {
+			showArchive = true;
 			await tick();
 			document.getElementById('archive')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 			return;
 		}
 
+		const activeRequest = incomingRequests.find(
+			(request) =>
+				request.status === 'Confirmed' &&
+				request.ride.id === reviewPendingRideId &&
+				hasRideEnded(request.ride.ride_date)
+		);
+		if (activeRequest) {
+			showArchive = false;
+			openReviewFormId = `active-request:${activeRequest.id}`;
+			await tick();
+			document
+				.getElementById(`pending-review-active-request-${activeRequest.id}`)
+				?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+			return;
+		}
+
+		const activeBooking = myBookings.find(
+			(booking) =>
+				booking.status === 'Confirmed' &&
+				booking.ride_id === reviewPendingRideId &&
+				Boolean(booking.ride.driver_id) &&
+				hasRideEnded(booking.ride.ride_date)
+		);
+		if (activeBooking) {
+			showArchive = false;
+			openReviewFormId = `active-booking:${activeBooking.id}`;
+			await tick();
+			document
+				.getElementById(`pending-review-active-booking-${activeBooking.id}`)
+				?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+			return;
+		}
+
+		showArchive = true;
 		const archivedRequest = archivedRequests.find(
 			(request) => request.status === 'Confirmed' && request.ride.id === reviewPendingRideId
 		);
@@ -1563,7 +1612,7 @@
 				{:else}
 					<div class="space-y-2">
 						{#each activityFeed as item (item.id)}
-							<a href={item.sectionHref} class="surface-card flex items-start justify-between gap-3 p-3 hover:border-emerald-300 transition-colors">
+							<a href={item.sectionHref} on:click={(event) => handleActivityClick(item, event)} class="surface-card flex items-start justify-between gap-3 p-3 hover:border-emerald-300 transition-colors">
 								<div>
 									<div class="flex items-center gap-2">
 										<p class="text-sm font-semibold text-gray-900">{item.title}</p>
@@ -1839,7 +1888,7 @@
 				{:else}
 					<div class="space-y-3">
 						{#each incomingRequests as request (request.id)}
-							<article class="surface-card p-4 flex flex-wrap flex-col md:flex-row md:items-center md:justify-between gap-3">
+							<article id={`pending-review-active-request-${request.id}`} class="surface-card p-4 flex flex-wrap flex-col md:flex-row md:items-center md:justify-between gap-3">
 								<div>
 									<h3 class="text-base font-semibold text-gray-900">
 										{request.ride.arrival
@@ -1947,7 +1996,7 @@
 				{:else}
 					<div class="space-y-3">
 						{#each myBookings as booking (booking.id)}
-							<article class="surface-card p-4 flex flex-wrap flex-col md:flex-row md:items-center md:justify-between gap-3">
+							<article id={`pending-review-active-booking-${booking.id}`} class="surface-card p-4 flex flex-wrap flex-col md:flex-row md:items-center md:justify-between gap-3">
 								<div>
 									<h3 class="text-base font-semibold text-gray-900">
 										{booking.ride.arrival

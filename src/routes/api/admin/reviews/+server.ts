@@ -1,6 +1,7 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
+import { sendReviewRejectedEmail } from '$lib/email';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -202,6 +203,19 @@ export const PATCH: RequestHandler = async ({ request }) => {
 			}
 		});
 
+		const { data: reviewToModerate, error: reviewLookupError } = await adminClient
+			.from('reviews')
+			.select('id, reviewer_id, status')
+			.eq('id', reviewId)
+			.maybeSingle();
+
+		if (reviewLookupError) {
+			return json({ error: reviewLookupError.message }, { status: 500 });
+		}
+		if (!reviewToModerate) {
+			return json({ error: 'Review not found' }, { status: 404 });
+		}
+
 		const {
 			data: { user: requesterUser }
 		} = await requesterClient.auth.getUser(token);
@@ -219,6 +233,64 @@ export const PATCH: RequestHandler = async ({ request }) => {
 
 		if (updateError) {
 			return json({ error: updateError.message }, { status: 500 });
+		}
+
+		if (status === 'rejected' && reviewToModerate.status !== 'rejected') {
+			const { data: reviewerProfile, error: profileError } = await adminClient
+				.from('profiles')
+				.select('first_name, email')
+				.eq('id', reviewToModerate.reviewer_id)
+				.maybeSingle();
+
+			if (profileError) {
+				console.error('Rejected review notification profile lookup failed:', profileError.message);
+				return json({ error: 'Review rejected, but the reviewer could not be notified.' }, { status: 500 });
+			}
+
+			const safeNote = (note ?? 'Please update your review and submit it again.')
+				.replace(/&/g, '&amp;')
+				.replace(/</g, '&lt;')
+				.replace(/>/g, '&gt;')
+				.replace(/"/g, '&quot;')
+				.replace(/'/g, '&#39;');
+			const reviewMessage =
+				`<p>Your review was not approved. Please update it and submit it again.</p>` +
+				`<p><strong>Admin note:</strong> ${safeNote}</p>` +
+				`<p><a href="${(env.PUBLIC_SITE_URL ?? 'https://afrorcqvercelapp.vercel.app').replace(/\/$/, '')}/dashboard#archive">Update my review</a></p>`;
+
+			const { error: notificationError } = await adminClient.from('member_notifications').insert({
+				user_id: reviewToModerate.reviewer_id,
+				type: 'review_rejected',
+				title: 'Your review needs an update',
+				message: reviewMessage
+			});
+
+			if (notificationError) {
+				console.error('Rejected review member notification failed:', notificationError.message);
+				return json({ error: 'Review rejected, but the reviewer notification could not be saved.' }, { status: 500 });
+			}
+
+			let reviewerEmail = (reviewerProfile?.email ?? '').trim();
+			if (!reviewerEmail) {
+				const { data: authUser, error: authUserError } = await adminClient.auth.admin.getUserById(
+					reviewToModerate.reviewer_id
+				);
+				if (authUserError) {
+					console.error('Rejected review email lookup failed:', authUserError.message);
+				} else {
+					reviewerEmail = authUser.user.email?.trim() ?? '';
+				}
+			}
+
+			if (reviewerEmail) {
+				await sendReviewRejectedEmail({
+					to: reviewerEmail,
+					firstName: reviewerProfile?.first_name,
+					reason: note ?? 'Please update your review and submit it again.'
+				});
+			} else {
+				console.warn('Rejected review email skipped: reviewer email not found.');
+			}
 		}
 
 		return json({ success: true });

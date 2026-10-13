@@ -294,7 +294,17 @@ export const GET: RequestHandler = async ({ request, url }) => {
 			supportTicketsToHandle = supportTicketsCount ?? 0;
 		}
 
-		const alertsCount = reportsCount + accountsToVerify + supportTicketsToHandle + readyToVerify;
+		const { count: pendingReviewsCount, error: pendingReviewsError } = await adminClient
+			.from('reviews')
+			.select('id', { count: 'exact', head: true })
+			.eq('status', 'pending');
+
+		if (pendingReviewsError) {
+			return json({ error: pendingReviewsError.message }, { status: 500 });
+		}
+
+		const pendingReviews = pendingReviewsCount ?? 0;
+		const alertsCount = reportsCount + accountsToVerify + supportTicketsToHandle + readyToVerify + pendingReviews;
 
 		return json({
 			stats: {
@@ -313,7 +323,8 @@ export const GET: RequestHandler = async ({ request, url }) => {
 					reports: reportsCount,
 					accountsToVerify,
 					readyToVerify,
-					supportTickets: supportTicketsToHandle
+					supportTickets: supportTicketsToHandle,
+					pendingReviews
 				}
 			},
 			period,

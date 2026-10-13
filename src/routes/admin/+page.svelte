@@ -510,7 +510,8 @@
 			reports: 0,
 			accountsToVerify: 0,
 			readyToVerify: 0,
-			supportTickets: 0
+			supportTickets: 0,
+			pendingReviews: 0
 		}
 	};
 
@@ -1221,6 +1222,11 @@
 		if (tab === 'transactions') {
 			void loadTransactions();
 		}
+	}
+
+	function openPendingReviews() {
+		reviewFilterStatus = 'pending';
+		setTab('reviews');
 	}
 
 	async function openProfileModal(user: AdminUser) {
@@ -3714,6 +3720,20 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 											<p class="text-xs text-indigo-700 mb-2">New or active support requests need attention.</p>
 											<button type="button" on:click={() => setTab('support')} class="text-xs font-medium text-indigo-700 underline hover:text-indigo-900 cursor-pointer">
 												View support ->
+											</button>
+										{/if}
+									</div>
+									<div class="rounded-xl border p-5 h-full flex flex-col justify-between shadow-sm {stats.alerts.pendingReviews > 0 ? 'border-violet-200 bg-violet-50' : 'border-gray-200 bg-gray-50'}">
+										<div class="flex items-center justify-between mb-2">
+											<p class="text-sm font-semibold {stats.alerts.pendingReviews > 0 ? 'text-violet-800' : 'text-gray-600'}">Reviews to approve</p>
+											<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold {stats.alerts.pendingReviews > 0 ? 'bg-violet-100 text-violet-700' : 'bg-gray-200 text-gray-600'}">{stats.alerts.pendingReviews}</span>
+										</div>
+										{#if stats.alerts.pendingReviews === 0}
+											<p class="text-xs text-gray-500">No reviews await approval.</p>
+										{:else}
+											<p class="text-xs text-violet-700 mb-2">Submitted reviews need moderation.</p>
+											<button type="button" on:click={openPendingReviews} class="text-xs font-medium text-violet-700 underline hover:text-violet-900 cursor-pointer">
+												Review submissions -&gt;
 											</button>
 										{/if}
 									</div>

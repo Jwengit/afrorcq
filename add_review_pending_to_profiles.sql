@@ -6,7 +6,7 @@ ALTER TABLE public.profiles
 CREATE INDEX IF NOT EXISTS idx_profiles_review_pending ON public.profiles(review_pending);
 CREATE INDEX IF NOT EXISTS idx_profiles_review_pending_ride_id ON public.profiles(review_pending_ride_id);
 
--- Finds the latest completed ride for which the member has not submitted a review yet.
+-- Finds the latest completed ride without a pending or approved review.
 CREATE OR REPLACE FUNCTION public.find_latest_unreviewed_completed_ride(p_user_id UUID)
 RETURNS UUID
 LANGUAGE sql
@@ -39,6 +39,7 @@ AS $$
     FROM public.reviews rv
     WHERE rv.ride_id = lcr.ride_id
       AND rv.reviewer_id = p_user_id
+      AND rv.status IN ('pending', 'approved')
   )
   ORDER BY lcr.completed_at DESC NULLS LAST
   LIMIT 1;
@@ -132,7 +133,7 @@ AFTER INSERT OR UPDATE OF status ON public.bookings
 FOR EACH ROW
 EXECUTE FUNCTION public.handle_booking_completed_review_pending();
 
--- When a member submits a review, unblock them if no review is pending anymore.
+-- Recalculate review eligibility when a review is submitted or rejected.
 CREATE OR REPLACE FUNCTION public.handle_review_insert_review_pending()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -146,9 +147,10 @@ END;
 $$;
 
 DROP TRIGGER IF EXISTS reviews_refresh_review_pending_on_insert ON public.reviews;
+DROP TRIGGER IF EXISTS reviews_refresh_review_pending_on_change ON public.reviews;
 
-CREATE TRIGGER reviews_refresh_review_pending_on_insert
-AFTER INSERT ON public.reviews
+CREATE TRIGGER reviews_refresh_review_pending_on_change
+AFTER INSERT OR UPDATE OF status ON public.reviews
 FOR EACH ROW
 EXECUTE FUNCTION public.handle_review_insert_review_pending();
 
