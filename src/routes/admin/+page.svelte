@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { supabase } from '$lib/supabaseClient';
 	import { user } from '$lib/authStore';
@@ -158,6 +158,7 @@
 	let rideFilterStatus = '';
 	let rideFilterFromDate = '';
 	let rideFilterToDate = '';
+	let rideFilterId = '';
 	let selectedRideForBookings: AdminRide | null = null;
 	let showRideBookingsModal = false;
 	let rideBookings: any[] = [];
@@ -244,6 +245,7 @@
 	let reportFilterStatus = '';
 	let reportSearch = '';
 	let reportActionId: string | null = null;
+	let reportRideReturnId: string | null = null;
 	let showReportHistoryModal = false;
 	let selectedReportHistory: AdminReport | null = null;
 
@@ -1209,6 +1211,13 @@
 	$: regularUsersList = filteredUsers.filter((u) => !u.is_admin);
 
 	function setTab(tab: string) {
+		if (activeTab === 'rides' && tab !== 'rides') {
+			reportRideReturnId = null;
+			rideFilterId = '';
+		} else if (tab === 'rides' && !reportRideReturnId) {
+			rideFilterId = '';
+		}
+
 		activeTab = tab;
 		if (tab === 'reviews') {
 			void loadReviews();
@@ -1936,6 +1945,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 		}
 
 		const params = new URLSearchParams();
+		if (rideFilterId) params.append('rideId', rideFilterId);
 		if (rideFilterCityFrom) params.append('cityFrom', rideFilterCityFrom);
 		if (rideFilterCityTo) params.append('cityTo', rideFilterCityTo);
 		if (rideFilterStatus) params.append('status', rideFilterStatus);
@@ -2359,8 +2369,21 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 
 	async function openReportedRide(report: AdminReport) {
 		if (!report.ride_id) return;
-		setTab('rides');
+		rideFilterId = report.ride_id;
+		reportRideReturnId = report.id;
+		activeTab = 'rides';
 		await loadRides();
+	}
+
+	async function returnToReports() {
+		const reportId = reportRideReturnId;
+		reportRideReturnId = null;
+		rideFilterId = '';
+		activeTab = 'reports';
+		await tick();
+		if (reportId) {
+			document.getElementById(`admin-report-${reportId}`)?.scrollIntoView({ block: 'center' });
+		}
 	}
 
 	function openReportHistory(report: AdminReport) {
@@ -3925,6 +3948,18 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 						</div>
 					{:else if activeTab === 'rides'}
 						<div class="space-y-6">
+							{#if reportRideReturnId}
+								<button
+									type="button"
+									on:click={returnToReports}
+									class="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+								>
+									<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+										<path stroke-linecap="round" stroke-linejoin="round" d="m15 18-6-6 6-6M9 12h12" />
+									</svg>
+									Back to reports
+								</button>
+							{/if}
 							<!-- Filters Section -->
 							<div class="bg-white rounded-xl p-4 border border-gray-200">
 								<h3 class="text-sm font-semibold text-gray-900 mb-4">Filters</h3>
@@ -4317,7 +4352,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 										</thead>
 										<tbody class="divide-y divide-gray-100">
 											{#each filteredReports as report}
-												<tr class="hover:bg-gray-50">
+												<tr id={`admin-report-${report.id}`} class="hover:bg-gray-50">
 													<td class="px-4 py-3 align-top">
 														<span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
 																report.type === 'user' ? 'bg-red-100 text-red-700'

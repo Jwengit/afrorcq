@@ -80,12 +80,16 @@ export const GET: RequestHandler = async ({ request, url }) => {
 			.select('id, departure, arrival, ride_date, price, seats, driver_id, created_at');
 
 		// Apply filters
+		const rideId = url.searchParams.get('rideId');
 		const cityFrom = url.searchParams.get('cityFrom');
 		const cityTo = url.searchParams.get('cityTo');
 		const status = url.searchParams.get('status');
 		const fromDate = url.searchParams.get('fromDate');
 		const toDate = url.searchParams.get('toDate');
 
+		if (rideId) {
+			query = query.eq('id', rideId);
+		}
 		if (cityFrom) {
 			query = query.ilike('departure', `%${cityFrom}%`);
 		}

@@ -10,6 +10,13 @@ import {
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
 
+function getBookingRejectionReason(reason: unknown): string | null {
+	if (reason === 'trip_unavailable') return 'The trip or seats are no longer available';
+	if (reason === 'time_or_location') return 'The time or meeting point does not work for me';
+	if (reason === 'prefer_not_to_say') return "I'd rather not say";
+	return null;
+}
+
 function getBearerToken(request: Request): string | null {
 	const authHeader = request.headers.get('authorization');
 	if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
@@ -35,7 +42,7 @@ function getAdminClient() {
 
 function getOrigin(): string {
 	const publicSiteUrl = process.env.PUBLIC_SITE_URL?.trim();
-	return publicSiteUrl || 'https://hizli-carpooling.com';
+	return (publicSiteUrl || 'https://hizli-carpooling.com').replace(/\/+$/, '');
 }
 
 // Creates a booking on behalf of the signed-in passenger, then notifies the
@@ -157,6 +164,17 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		if (!bookingId || !status) {
 			return json({ error: 'Invalid booking update.' }, { status: 400 });
 		}
+		const rejectionReason =
+			status === 'Rejected' ? getBookingRejectionReason(body?.rejectionReason) : null;
+		const rejectionMessage =
+			typeof body?.rejectionMessage === 'string' ? body.rejectionMessage.trim() : '';
+
+		if (status === 'Rejected' && !rejectionReason) {
+			return json({ error: 'Choose a reason before declining the booking.' }, { status: 400 });
+		}
+		if (rejectionMessage.length > 500) {
+			return json({ error: 'The optional message must be 500 characters or fewer.' }, { status: 400 });
+		}
 
 		const adminClient = getAdminClient();
 		if (!adminClient) return json({ error: 'Server configuration error' }, { status: 500 });
@@ -236,13 +254,19 @@ export const PATCH: RequestHandler = async ({ request }) => {
 					driverName,
 					myBookingsUrl: `${getOrigin()}/dashboard`
 				});
-			} else if (passengerEmail && status === 'Rejected') {
+			} else if (passengerEmail && status === 'Rejected' && rejectionReason) {
+				const searchRidesUrl = new URL('/search', getOrigin());
+				searchRidesUrl.searchParams.set('departure', ride.departure);
+				searchRidesUrl.searchParams.set('arrival', ride.arrival);
+
 				await sendBookingRejectedEmail({
 					to: passengerEmail,
 					firstName: passengerProfile?.first_name,
 					rideRoute,
 					rideDate,
-					searchRidesUrl: `${getOrigin()}/search`
+					rejectionReason,
+					rejectionMessage,
+					searchRidesUrl: searchRidesUrl.toString()
 				});
 			}
 		} catch (notifyError) {

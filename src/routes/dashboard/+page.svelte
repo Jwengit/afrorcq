@@ -88,6 +88,17 @@
 		};
 	};
 
+	type BookingRejectionReason =
+		| 'trip_unavailable'
+		| 'time_or_location'
+		| 'prefer_not_to_say';
+
+	const bookingRejectionReasons: { value: BookingRejectionReason; label: string }[] = [
+		{ value: 'trip_unavailable', label: 'The trip or seats are no longer available' },
+		{ value: 'time_or_location', label: 'The time or meeting point does not work for me' },
+		{ value: 'prefer_not_to_say', label: "I'd rather not say" }
+	];
+
 	type SupportTicket = {
 		id: string;
 		subject: string;
@@ -160,6 +171,9 @@
 	let bookingActionMessage = '';
 	let requestActionMessage = '';
 	let requestActionBookingId: string | null = null;
+	let bookingToReject: DriverBookingRequest | null = null;
+	let rejectionReason: BookingRejectionReason = 'prefer_not_to_say';
+	let rejectionMessage = '';
 	let reportActionMessage = '';
 	let reportActionError = '';
 	let reportingTargetId: string | null = null;
@@ -1052,8 +1066,9 @@
 
 	async function updateIncomingRequestStatus(
 		bookingId: string,
-		status: 'Confirmed' | 'Rejected'
-	) {
+		status: 'Confirmed' | 'Rejected',
+		rejection?: { reason: BookingRejectionReason; message: string }
+	): Promise<boolean> {
 		requestActionBookingId = bookingId;
 		requestActionMessage = '';
 
@@ -1061,7 +1076,7 @@
 		if (!token) {
 			requestActionMessage = 'Session expired. Please sign in again.';
 			requestActionBookingId = null;
-			return;
+			return false;
 		}
 
 		const response = await fetch('/api/bookings', {
@@ -1070,7 +1085,12 @@
 				'Content-Type': 'application/json',
 				Authorization: `Bearer ${token}`
 			},
-			body: JSON.stringify({ bookingId, status })
+			body: JSON.stringify({
+				bookingId,
+				status,
+				rejectionReason: rejection?.reason,
+				rejectionMessage: rejection?.message
+			})
 		});
 		const payload = await response.json().catch(() => null);
 
@@ -1078,7 +1098,7 @@
 			console.error('Incoming request update error:', payload?.error);
 			requestActionMessage = payload?.error || 'Could not update this booking request. Please try again.';
 			requestActionBookingId = null;
-			return;
+			return false;
 		}
 
 		incomingRequests = incomingRequests.map((request) =>
@@ -1089,6 +1109,32 @@
 			status === 'Confirmed'
 				? 'Booking request confirmed.'
 				: 'Booking request rejected.';
+		return true;
+	}
+
+	function openBookingRejection(request: DriverBookingRequest) {
+		bookingToReject = request;
+		rejectionReason = 'prefer_not_to_say';
+		rejectionMessage = '';
+		requestActionMessage = '';
+	}
+
+	function closeBookingRejection() {
+		if (requestActionBookingId) return;
+		bookingToReject = null;
+		rejectionMessage = '';
+	}
+
+	async function submitBookingRejection() {
+		if (!bookingToReject) return;
+		const didReject = await updateIncomingRequestStatus(bookingToReject.id, 'Rejected', {
+			reason: rejectionReason,
+			message: rejectionMessage.trim()
+		});
+		if (didReject) {
+			bookingToReject = null;
+			rejectionMessage = '';
+		}
 	}
 
 	function isOlderThan3Days(dateStr: string): boolean {
@@ -1926,11 +1972,11 @@
 										</button>
 										<button
 											type="button"
-											on:click={() => updateIncomingRequestStatus(request.id, 'Rejected')}
+											on:click={() => openBookingRejection(request)}
 											disabled={requestActionBookingId === request.id}
 											class="px-3 py-2 rounded-md border border-red-300 text-red-700 text-sm font-medium hover:bg-red-50 disabled:opacity-60"
 										>
-											{requestActionBookingId === request.id ? 'Updating...' : 'Reject'}
+											Reject
 										</button>
 									{/if}
 									{#if request.status === 'Confirmed' && hasRideEnded(request.ride.ride_date) && canUseVerifiedFeatures(memberStatus)}
@@ -2281,6 +2327,77 @@
 		{/if}
 
 		</div>
+	</div>
+{/if}
+
+{#if bookingToReject}
+	<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+		on:click|self={closeBookingRejection}
+	>
+		<form
+			class="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl"
+			on:submit|preventDefault={submitBookingRejection}
+		>
+			<h2 class="text-lg font-semibold text-gray-900">Decline booking request</h2>
+			<p class="mt-1 text-sm text-gray-600">
+				Choose a reason to share with the passenger. You can also add an optional message.
+			</p>
+
+			<fieldset class="mt-5 space-y-3">
+				<legend class="mb-2 text-sm font-medium text-gray-800">Reason</legend>
+				{#each bookingRejectionReasons as reason}
+					<label class="flex cursor-pointer items-start gap-3 rounded-lg border border-gray-200 p-3 hover:bg-gray-50">
+						<input
+							type="radio"
+							name="booking-rejection-reason"
+							value={reason.value}
+							bind:group={rejectionReason}
+							disabled={requestActionBookingId === bookingToReject.id}
+							class="mt-0.5 text-green-600 focus:ring-green-500"
+						/>
+						<span class="text-sm text-gray-700">{reason.label}</span>
+					</label>
+				{/each}
+			</fieldset>
+
+			<label for="booking-rejection-message" class="mt-4 block text-sm font-medium text-gray-800">
+				Optional message
+			</label>
+			<textarea
+				id="booking-rejection-message"
+				bind:value={rejectionMessage}
+				maxlength="500"
+				rows="3"
+				placeholder="Add a brief, polite note for the passenger"
+				disabled={requestActionBookingId === bookingToReject.id}
+				class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:bg-gray-50"
+			></textarea>
+			<p class="mt-1 text-right text-xs text-gray-500">{rejectionMessage.length}/500</p>
+
+			{#if requestActionMessage}
+				<p class="mt-3 text-sm text-red-600">{requestActionMessage}</p>
+			{/if}
+
+			<div class="mt-5 flex justify-end gap-3">
+				<button
+					type="button"
+					on:click={closeBookingRejection}
+					disabled={requestActionBookingId === bookingToReject.id}
+					class="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+				>
+					Cancel
+				</button>
+				<button
+					type="submit"
+					disabled={requestActionBookingId === bookingToReject.id}
+					class="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+				>
+					{requestActionBookingId === bookingToReject.id ? 'Declining...' : 'Confirm decline'}
+				</button>
+			</div>
+		</form>
 	</div>
 {/if}
 

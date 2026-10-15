@@ -309,6 +309,8 @@ export function buildBookingRejectedEmail(input: {
 	firstName?: string | null;
 	rideRoute: string;
 	rideDate: string;
+	rejectionReason: string;
+	rejectionMessage?: string;
 	searchRidesUrl: string;
 }): EmailTemplate {
 	return buildEmailTemplate({
@@ -318,6 +320,8 @@ export function buildBookingRejectedEmail(input: {
 			"Unfortunately, the driver was unable to confirm your booking for this trip.",
 			`Route: ${input.rideRoute}`,
 			`Date: ${input.rideDate}`,
+			`Reason: ${input.rejectionReason}`,
+			...(input.rejectionMessage ? [`Message from the driver: ${input.rejectionMessage}`] : []),
 			"Don't worry — there are other rides available for your route. Search for another ride now.",
 			'The Hizli Team'
 		],
@@ -331,6 +335,8 @@ export async function sendBookingRejectedEmail(input: {
 	firstName?: string | null;
 	rideRoute: string;
 	rideDate: string;
+	rejectionReason: string;
+	rejectionMessage?: string;
 	searchRidesUrl: string;
 }): Promise<string | null> {
 	return sendEmail({
