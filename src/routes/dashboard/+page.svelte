@@ -9,18 +9,10 @@
 	import {
 		resolveMemberStatus,
 		canUseVerifiedFeatures,
-		type MemberStatus,
-		VERIFIED_ONLY_MESSAGE
+		hasPendingReviewBlock,
+		type MemberStatus
 	} from '$lib/membershipAccess';
 	import type { User } from '@supabase/supabase-js';
-
-	// Support form state
-	let showSupportModal = false;
-	let supportSubject = '';
-	let supportMessage = '';
-	let supportSending = false;
-	let supportSendError = '';
-	let supportSendSuccess = '';
 
 	type DriverProfile = {
 		gender?: string | null;
@@ -30,6 +22,9 @@
 		membership_expires_at?: string | null;
 		review_pending?: boolean | null;
 		review_pending_ride_id?: string | null;
+		user_status?: string | null;
+		suspended_until?: string | null;
+		status_reason?: string | null;
 	};
 
 	type Ride = {
@@ -88,17 +83,6 @@
 		};
 	};
 
-	type BookingRejectionReason =
-		| 'trip_unavailable'
-		| 'time_or_location'
-		| 'prefer_not_to_say';
-
-	const bookingRejectionReasons: { value: BookingRejectionReason; label: string }[] = [
-		{ value: 'trip_unavailable', label: 'The trip or seats are no longer available' },
-		{ value: 'time_or_location', label: 'The time or meeting point does not work for me' },
-		{ value: 'prefer_not_to_say', label: "I'd rather not say" }
-	];
-
 	type SupportTicket = {
 		id: string;
 		subject: string;
@@ -140,7 +124,11 @@
 		title: string;
 		details: string;
 		createdAtIso: string;
-		sectionHref: string;
+		sectionHref:
+			| '/dashboard#my-bookings'
+			| '/dashboard#ride-requests'
+			| '/dashboard#archive'
+			| '/dashboard#admin-messages';
 		type: 'booking' | 'request' | 'admin' | 'review';
 	};
 
@@ -172,8 +160,7 @@
 	let requestActionMessage = '';
 	let requestActionBookingId: string | null = null;
 	let bookingToReject: DriverBookingRequest | null = null;
-	let rejectionReason: BookingRejectionReason = 'prefer_not_to_say';
-	let rejectionMessage = '';
+	let rejectionReason = '';
 	let reportActionMessage = '';
 	let reportActionError = '';
 	let reportingTargetId: string | null = null;
@@ -270,7 +257,7 @@
 							: 'Booking status updated',
 				details: `${booking.ride.departure} -> ${booking.ride.arrival}`,
 				createdAtIso: booking.updated_at,
-				sectionHref: '#my-bookings',
+				sectionHref: '/dashboard#my-bookings' as const,
 				type: 'booking' as const
 			})),
 		...incomingRequests
@@ -285,7 +272,7 @@
 							: 'Request status updated',
 				details: `${request.ride.departure} -> ${request.ride.arrival}`,
 				createdAtIso: request.updated_at,
-				sectionHref: '#ride-requests',
+				sectionHref: '/dashboard#ride-requests' as const,
 				type: 'request' as const
 			})),
 		...adminInboxMessages
@@ -298,7 +285,10 @@
 						? 'Your review was rejected. Update it and submit it again.'
 						: msg.subject,
 				createdAtIso: msg.createdAt,
-				sectionHref: msg.notificationType === 'review_rejected' ? '#archive' : '#admin-messages',
+				sectionHref:
+					msg.notificationType === 'review_rejected'
+						? ('/dashboard#archive' as const)
+						: ('/dashboard#admin-messages' as const),
 				type: msg.notificationType === 'review_rejected' ? ('review' as const) : ('admin' as const)
 			}))
 	]
@@ -520,48 +510,6 @@
 		}
 	}
 
-	async function sendSupportTicket() {
-		supportSendError = '';
-		supportSendSuccess = '';
-		supportSending = true;
-
-		try {
-			const token = await getSessionAccessToken();
-			if (!token) {
-				supportSendError = 'Session expired. Please sign in again.';
-				return;
-			}
-
-			const res = await fetch('/api/support/tickets', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${token}`
-				},
-				body: JSON.stringify({ subject: supportSubject.trim(), message: supportMessage.trim() })
-			});
-
-			const data = await res.json();
-			if (!res.ok) {
-				supportSendError = data?.error || 'Unable to send support ticket.';
-				return;
-			}
-
-			supportSendSuccess = 'Your message has been sent to support.';
-			supportSubject = '';
-			supportMessage = '';
-			void loadAdminInboxMessages();
-			setTimeout(() => {
-				showSupportModal = false;
-				supportSendSuccess = '';
-			}, 1200);
-		} catch (error) {
-			supportSendError = error instanceof Error ? error.message : 'Network error.';
-		} finally {
-			supportSending = false;
-		}
-	}
-
 	function isReplyBlocked(status: string) {
 		return status === 'resolved' || status === 'closed';
 	}
@@ -633,11 +581,11 @@
 			targets.push({ rideId: booking.ride_id, revieweeId: booking.ride.driver_id });
 		}
 
-		const seen = new Set<string>();
+		const seen: string[] = [];
 		return targets.filter((target) => {
 			const key = `${target.rideId}:${target.revieweeId}`;
-			if (seen.has(key)) return false;
-			seen.add(key);
+			if (seen.includes(key)) return false;
+			seen.push(key);
 			return true;
 		});
 	}
@@ -697,7 +645,8 @@
 		if (error) {
 			const fallback = await supabase
 				.from('profiles')
-				.select('gender, status, is_verified, membership_paid, membership_expires_at, user_status, suspended_until, status_reason')				.eq('id', userId)
+				.select('gender, status, is_verified, membership_paid, membership_expires_at, review_pending, review_pending_ride_id, user_status, suspended_until, status_reason')
+				.eq('id', userId)
 				.maybeSingle();
 
 			if (fallback.error) {
@@ -722,7 +671,13 @@
 			isCurrentUserVerified = Boolean(fallbackProfile?.is_verified);
 			hasActiveMembership = false;
 			membershipExpiresAt = null;
-			reviewPendingBlocked = Boolean(fallbackProfile?.review_pending) && canUseVerifiedFeatures(memberStatus);
+			reviewPendingBlocked = hasPendingReviewBlock({
+				status: fallbackProfile?.status,
+				isVerified: fallbackProfile?.is_verified,
+				membershipPaid: fallbackProfile?.membership_paid,
+				membershipExpiresAt: fallbackProfile?.membership_expires_at,
+				reviewPending: fallbackProfile?.review_pending
+			});
 			reviewPendingRideId = fallbackProfile?.review_pending_ride_id ?? null;
 			return;
 		}
@@ -742,7 +697,13 @@
 		isCurrentUserVerified = Boolean(profile?.is_verified);
 		hasActiveMembership = isMembershipPaid && isMembershipNotExpired;
 		membershipExpiresAt = profile?.membership_expires_at ?? null;
-		reviewPendingBlocked = Boolean(profile?.review_pending) && canUseVerifiedFeatures(memberStatus);
+		reviewPendingBlocked = hasPendingReviewBlock({
+			status: profile?.status,
+			isVerified: profile?.is_verified,
+			membershipPaid: profile?.membership_paid,
+			membershipExpiresAt: profile?.membership_expires_at,
+			reviewPending: profile?.review_pending
+		});
 		reviewPendingRideId = profile?.review_pending_ride_id ?? null;
 		accountUserStatus = profile?.user_status ?? 'active';
 		accountSuspendedUntil = profile?.suspended_until ?? null;
@@ -817,7 +778,7 @@
 
 	function goToBecomeAMember() {
 		if (memberStatus === 'pending') {
-			goto(`${resolve('/profile')}#verification-documents`);
+			goto(resolve('/profile#verification-documents'));
 		} else {
 			goto(resolve('/pricing'));
 		}
@@ -1067,7 +1028,7 @@
 	async function updateIncomingRequestStatus(
 		bookingId: string,
 		status: 'Confirmed' | 'Rejected',
-		rejection?: { reason: BookingRejectionReason; message: string }
+		rejection?: { reason: string }
 	): Promise<boolean> {
 		requestActionBookingId = bookingId;
 		requestActionMessage = '';
@@ -1088,8 +1049,7 @@
 			body: JSON.stringify({
 				bookingId,
 				status,
-				rejectionReason: rejection?.reason,
-				rejectionMessage: rejection?.message
+				rejectionReason: rejection?.reason
 			})
 		});
 		const payload = await response.json().catch(() => null);
@@ -1114,26 +1074,29 @@
 
 	function openBookingRejection(request: DriverBookingRequest) {
 		bookingToReject = request;
-		rejectionReason = 'prefer_not_to_say';
-		rejectionMessage = '';
+		rejectionReason = '';
 		requestActionMessage = '';
 	}
 
 	function closeBookingRejection() {
 		if (requestActionBookingId) return;
 		bookingToReject = null;
-		rejectionMessage = '';
+		rejectionReason = '';
 	}
 
 	async function submitBookingRejection() {
 		if (!bookingToReject) return;
+		const reason = rejectionReason.trim();
+		if (!reason) {
+			requestActionMessage = 'Please explain why you are declining this booking.';
+			return;
+		}
 		const didReject = await updateIncomingRequestStatus(bookingToReject.id, 'Rejected', {
-			reason: rejectionReason,
-			message: rejectionMessage.trim()
+			reason
 		});
 		if (didReject) {
 			bookingToReject = null;
-			rejectionMessage = '';
+			rejectionReason = '';
 		}
 	}
 
@@ -1658,7 +1621,11 @@
 				{:else}
 					<div class="space-y-2">
 						{#each activityFeed as item (item.id)}
-							<a href={item.sectionHref} on:click={(event) => handleActivityClick(item, event)} class="surface-card flex items-start justify-between gap-3 p-3 hover:border-emerald-300 transition-colors">
+							<a
+								href={resolve(item.sectionHref)}
+								on:click={(event) => handleActivityClick(item, event)}
+								class="surface-card flex items-start justify-between gap-3 p-3 hover:border-emerald-300 transition-colors"
+							>
 								<div>
 									<div class="flex items-center gap-2">
 										<p class="text-sm font-semibold text-gray-900">{item.title}</p>
@@ -1733,7 +1700,7 @@
 													: 'bg-gray-100 text-gray-700'
 									}`}>{msg.status}</span>
 								</div>
-								<div class="text-sm text-gray-700 mt-2">{@html msg.message}</div>
+								<div class="text-sm text-gray-700 mt-2 whitespace-pre-wrap">{msg.message}</div>
 								<div class="mt-2 flex items-center justify-between gap-2">
 									<p class="text-xs text-gray-400">{new Date(msg.createdAt).toLocaleString()}</p>
 									<button
@@ -1945,12 +1912,16 @@
 									<p class="text-sm font-semibold text-red-700 mt-1">Ride ID: #{request.ride.public_id ?? '-'}</p>
 									<div class="mt-1 flex flex-wrap items-center gap-2 text-sm text-gray-600">
 										<span>Passenger:</span>
-										<a
-											href={request.passenger.public_id ? resolve(`/profile/public?pid=${request.passenger.public_id}`) : '#'}
-											class="inline-flex items-center font-medium text-green-700 hover:text-green-800"
-										>
-											View public profile
-										</a>
+										{#if request.passenger.public_id}
+											<a
+												href={resolve(`/profile/public?pid=${request.passenger.public_id}`)}
+												class="inline-flex items-center font-medium text-green-700 hover:text-green-800"
+											>
+												View public profile
+											</a>
+										{:else}
+											<span class="inline-flex items-center font-medium text-gray-500">Public profile unavailable</span>
+										{/if}
 									</div>
 									<p class="text-sm text-gray-600 mt-1">
 										{request.seats_booked} seat{request.seats_booked !== 1 ? 's' : ''}
@@ -2207,12 +2178,16 @@
 									</p>
 										<div class="mt-2 flex flex-wrap items-center gap-2">
 											<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-200 text-gray-600 text-xs">{request.status}</span>
-											<a
-												href={request.passenger.public_id ? resolve(`/profile/public?pid=${request.passenger.public_id}`) : '#'}
-												class="text-sm font-medium text-green-700 hover:text-green-800"
-											>
-												View passenger profile
-											</a>
+											{#if request.passenger.public_id}
+												<a
+													href={resolve(`/profile/public?pid=${request.passenger.public_id}`)}
+													class="text-sm font-medium text-green-700 hover:text-green-800"
+												>
+													View passenger profile
+												</a>
+											{:else}
+												<span class="text-sm font-medium text-gray-500">Passenger profile unavailable</span>
+											{/if}
 											{#if request.status === 'Confirmed' && canUseVerifiedFeatures(memberStatus)}
 												<button
 													type="button"
@@ -2271,12 +2246,16 @@
 										<div class="mt-2 flex flex-wrap items-center gap-2">
 											<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-200 text-gray-600 text-xs">{booking.status}</span>
 											{#if booking.ride.driver_id}
-												<a
-													href={booking.ride.driver_public_id ? resolve(`/profile/public?pid=${booking.ride.driver_public_id}`) : '#'}
-													class="text-sm font-medium text-green-700 hover:text-green-800"
-												>
-													View driver profile
-												</a>
+												{#if booking.ride.driver_public_id}
+													<a
+														href={resolve(`/profile/public?pid=${booking.ride.driver_public_id}`)}
+														class="text-sm font-medium text-green-700 hover:text-green-800"
+													>
+														View driver profile
+													</a>
+												{:else}
+													<span class="text-sm font-medium text-gray-500">Driver profile unavailable</span>
+												{/if}
 											{/if}
 											{#if booking.status === 'Confirmed' && booking.ride.driver_id && canUseVerifiedFeatures(memberStatus)}
 												<button
@@ -2342,39 +2321,23 @@
 		>
 			<h2 class="text-lg font-semibold text-gray-900">Decline booking request</h2>
 			<p class="mt-1 text-sm text-gray-600">
-				Choose a reason to share with the passenger. You can also add an optional message.
+				Please explain briefly why you are declining this booking. Your explanation will be shared with the passenger.
 			</p>
 
-			<fieldset class="mt-5 space-y-3">
-				<legend class="mb-2 text-sm font-medium text-gray-800">Reason</legend>
-				{#each bookingRejectionReasons as reason}
-					<label class="flex cursor-pointer items-start gap-3 rounded-lg border border-gray-200 p-3 hover:bg-gray-50">
-						<input
-							type="radio"
-							name="booking-rejection-reason"
-							value={reason.value}
-							bind:group={rejectionReason}
-							disabled={requestActionBookingId === bookingToReject.id}
-							class="mt-0.5 text-green-600 focus:ring-green-500"
-						/>
-						<span class="text-sm text-gray-700">{reason.label}</span>
-					</label>
-				{/each}
-			</fieldset>
-
-			<label for="booking-rejection-message" class="mt-4 block text-sm font-medium text-gray-800">
-				Optional message
+			<label for="booking-rejection-reason" class="mt-4 block text-sm font-medium text-gray-800">
+				Reason for declining <span class="text-red-600" aria-hidden="true">*</span>
 			</label>
 			<textarea
-				id="booking-rejection-message"
-				bind:value={rejectionMessage}
+				id="booking-rejection-reason"
+				bind:value={rejectionReason}
 				maxlength="500"
 				rows="3"
-				placeholder="Add a brief, polite note for the passenger"
+				required
+				placeholder="Write a brief explanation for the passenger"
 				disabled={requestActionBookingId === bookingToReject.id}
 				class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:bg-gray-50"
 			></textarea>
-			<p class="mt-1 text-right text-xs text-gray-500">{rejectionMessage.length}/500</p>
+			<p class="mt-1 text-right text-xs text-gray-500">{rejectionReason.length}/500</p>
 
 			{#if requestActionMessage}
 				<p class="mt-3 text-sm text-red-600">{requestActionMessage}</p>

@@ -60,7 +60,7 @@ export function canAccessGirlsOnlyRides(status: MemberStatus, gender: string | n
 }
 
 export function hasPendingReviewBlock(input: StatusInput): boolean {
-  return canUseVerifiedFeatures(resolveMemberStatus(input)) && Boolean(input.reviewPending);
+  return Boolean(input.reviewPending);
 }
 
 export const VERIFIED_ONLY_MESSAGE =

@@ -11,10 +11,9 @@ const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
 
 function getBookingRejectionReason(reason: unknown): string | null {
-	if (reason === 'trip_unavailable') return 'The trip or seats are no longer available';
-	if (reason === 'time_or_location') return 'The time or meeting point does not work for me';
-	if (reason === 'prefer_not_to_say') return "I'd rather not say";
-	return null;
+	if (typeof reason !== 'string') return null;
+	const normalizedReason = reason.trim();
+	return normalizedReason.length > 0 && normalizedReason.length <= 500 ? normalizedReason : null;
 }
 
 function getBearerToken(request: Request): string | null {
@@ -166,14 +165,9 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		}
 		const rejectionReason =
 			status === 'Rejected' ? getBookingRejectionReason(body?.rejectionReason) : null;
-		const rejectionMessage =
-			typeof body?.rejectionMessage === 'string' ? body.rejectionMessage.trim() : '';
 
 		if (status === 'Rejected' && !rejectionReason) {
-			return json({ error: 'Choose a reason before declining the booking.' }, { status: 400 });
-		}
-		if (rejectionMessage.length > 500) {
-			return json({ error: 'The optional message must be 500 characters or fewer.' }, { status: 400 });
+			return json({ error: 'Enter a reason before declining the booking (500 characters maximum).' }, { status: 400 });
 		}
 
 		const adminClient = getAdminClient();
@@ -265,7 +259,6 @@ export const PATCH: RequestHandler = async ({ request }) => {
 					rideRoute,
 					rideDate,
 					rejectionReason,
-					rejectionMessage,
 					searchRidesUrl: searchRidesUrl.toString()
 				});
 			}

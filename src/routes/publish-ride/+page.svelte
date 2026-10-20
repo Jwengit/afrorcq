@@ -136,7 +136,8 @@
 
 		const { data, error } = await supabase
 			.from('profiles')
-			.select('gender, car_make, car_year, color, status, is_verified, membership_paid, membership_expires_at, review_pending, review_pending_ride_id, user_status, suspended_until')			.eq('id', userId)
+			.select('gender, car_make, car_year, color, status, is_verified, membership_paid, membership_expires_at, review_pending, review_pending_ride_id, user_status, suspended_until')
+			.eq('id', userId)
 			.maybeSingle();
 
 		if (error) {
@@ -159,13 +160,14 @@
 			membershipExpiresAt: profile?.membership_expires_at,
 			reviewPending: profile?.review_pending
 		});
-			accountBlocked = profile?.user_status === 'suspended' || profile?.user_status === 'banned';
+		accountBlocked = profile?.user_status === 'suspended' || profile?.user_status === 'banned';
 		accountBlockedReason =
 			profile?.user_status === 'banned'
 				? 'Your account has been banned. You cannot publish rides.'
 				: profile?.user_status === 'suspended'
 					? `Your account is suspended${profile?.suspended_until ? ` until ${new Date(profile.suspended_until).toLocaleDateString()}` : ''}. You cannot publish rides during this period.`
-					: '';	isFemaleDriver = (profile?.gender ?? '').toLowerCase() === 'female';
+					: '';
+		isFemaleDriver = (profile?.gender ?? '').toLowerCase() === 'female';
 
 		// Check car information
 		const hasCarInfo =
@@ -212,7 +214,11 @@
 
 		needsDriverDocumentsOnly = !missingCarInfo && missingDriverDocs.length > 0;
 
-			allowedToPublish = !accountBlocked && !reviewPendingBlocked && !missingCarInfo && missingDriverDocs.length === 0;	allowedToPublish = !reviewPendingBlocked && !missingCarInfo && missingDriverDocs.length === 0;
+		allowedToPublish =
+			!accountBlocked &&
+			!reviewPendingBlocked &&
+			!missingCarInfo &&
+			missingDriverDocs.length === 0;
 
 		if (!isFemaleDriver) {
 			form.girlsOnly = false;
@@ -335,7 +341,7 @@
 				</div>
 			{/if}
 
-					{#if !allowedToPublish}
+			{#if !allowedToPublish}
 				<div class="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4">
 					{#if accountBlocked}
 						<p class="text-sm font-semibold text-amber-800">
