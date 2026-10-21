@@ -6,42 +6,45 @@ ALTER TABLE public.profiles
 CREATE INDEX IF NOT EXISTS idx_profiles_review_pending ON public.profiles(review_pending);
 CREATE INDEX IF NOT EXISTS idx_profiles_review_pending_ride_id ON public.profiles(review_pending_ride_id);
 
--- Finds the latest completed ride without a pending or approved review.
+-- Finds the latest ended ride with a confirmed booking and no pending or approved review.
 CREATE OR REPLACE FUNCTION public.find_latest_unreviewed_completed_ride(p_user_id UUID)
 RETURNS UUID
 LANGUAGE sql
 STABLE
 SET search_path = public
 AS $$
-  WITH completed_rides AS (
-    SELECT b.ride_id, b.updated_at
+  WITH ended_rides AS (
+    SELECT r.id AS ride_id, r.ride_date
     FROM public.bookings b
+    JOIN public.rides r ON r.id = b.ride_id
     WHERE b.passenger_id = p_user_id
-      AND LOWER(COALESCE(b.status, '')) = 'completed'
+      AND LOWER(BTRIM(COALESCE(b.status, ''))) = 'confirmed'
+      AND r.ride_date + INTERVAL '10 hours' <= NOW()
 
-    UNION ALL
+    UNION
 
-    SELECT b.ride_id, b.updated_at
+    SELECT r.id AS ride_id, r.ride_date
     FROM public.rides r
     JOIN public.bookings b ON b.ride_id = r.id
     WHERE r.driver_id = p_user_id
-      AND LOWER(COALESCE(b.status, '')) = 'completed'
+      AND LOWER(BTRIM(COALESCE(b.status, ''))) = 'confirmed'
+      AND r.ride_date + INTERVAL '10 hours' <= NOW()
   ),
-  latest_completed_rides AS (
-    SELECT ride_id, MAX(updated_at) AS completed_at
-    FROM completed_rides
+  latest_ended_rides AS (
+    SELECT ride_id, MAX(ride_date) AS ended_at
+    FROM ended_rides
     GROUP BY ride_id
   )
-  SELECT lcr.ride_id
-  FROM latest_completed_rides lcr
+  SELECT ler.ride_id
+  FROM latest_ended_rides ler
   WHERE NOT EXISTS (
     SELECT 1
     FROM public.reviews rv
-    WHERE rv.ride_id = lcr.ride_id
+    WHERE rv.ride_id = ler.ride_id
       AND rv.reviewer_id = p_user_id
-      AND rv.status IN ('pending', 'approved')
+      AND LOWER(BTRIM(COALESCE(rv.status, ''))) IN ('pending', 'approved')
   )
-  ORDER BY lcr.completed_at DESC NULLS LAST
+  ORDER BY ler.ended_at DESC NULLS LAST
   LIMIT 1;
 $$;
 
@@ -107,10 +110,6 @@ AS $$
 DECLARE
   v_driver_id UUID;
 BEGIN
-  IF LOWER(COALESCE(NEW.status, '')) <> 'completed' THEN
-    RETURN NEW;
-  END IF;
-
   PERFORM public.refresh_review_pending_for_member(NEW.passenger_id);
 
   SELECT r.driver_id
@@ -127,8 +126,9 @@ END;
 $$;
 
 DROP TRIGGER IF EXISTS bookings_review_pending_on_completed ON public.bookings;
+DROP TRIGGER IF EXISTS bookings_review_pending_on_change ON public.bookings;
 
-CREATE TRIGGER bookings_review_pending_on_completed
+CREATE TRIGGER bookings_review_pending_on_change
 AFTER INSERT OR UPDATE OF status ON public.bookings
 FOR EACH ROW
 EXECUTE FUNCTION public.handle_booking_completed_review_pending();

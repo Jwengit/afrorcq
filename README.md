@@ -58,6 +58,10 @@ Set it to `false` to keep users logged in only for the current browser session v
    - New users signing up with email are set to "Unverified" status
    - Users signing in with Google are considered verified
 
+### Review eligibility
+
+Bookings stay in the `Confirmed` status after a ride. To enable review reminders and the booking/search/publishing restriction for rides that ended at least 10 hours ago, run `fix_review_pending_for_confirmed_rides.sql` in the Supabase SQL Editor.
+
 ### Routes
 
 - `/auth/signup` - User registration

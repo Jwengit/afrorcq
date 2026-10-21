@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
+	import { onDestroy, onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { resolve } from '$app/paths';
 	import { supabase } from '$lib/supabaseClient';
@@ -101,6 +102,56 @@
 		departure = arrival;
 		arrival = oldDeparture;
 	}
+
+	async function refreshReviewEligibility(userId: string) {
+		const { error: refreshError } = await supabase.rpc('refresh_review_pending_for_member', {
+			p_user_id: userId
+		});
+		if (refreshError) {
+			console.error('Review eligibility refresh error:', refreshError);
+		}
+
+		const { data: profile, error: profileError } = await supabase
+			.from('profiles')
+			.select('gender, status, is_verified, membership_paid, membership_expires_at, review_pending, review_pending_ride_id')
+			.eq('id', userId)
+			.maybeSingle();
+		if (profileError) {
+			console.error('Review eligibility profile error:', profileError);
+			return;
+		}
+
+		isFemaleUser = (profile?.gender ?? '').toLowerCase() === 'female';
+		currentMemberStatus = resolveMemberStatus({
+			status: profile?.status,
+			isVerified: profile?.is_verified,
+			membershipPaid: profile?.membership_paid,
+			membershipExpiresAt: profile?.membership_expires_at
+		});
+		reviewPendingBlocked = hasPendingReviewBlock({
+			status: profile?.status,
+			isVerified: profile?.is_verified,
+			membershipPaid: profile?.membership_paid,
+			membershipExpiresAt: profile?.membership_expires_at,
+			reviewPending: profile?.review_pending
+		});
+		reviewPendingRideId = profile?.review_pending_ride_id ?? null;
+	}
+
+	async function refreshReviewEligibilityOnFocus() {
+		const {
+			data: { user }
+		} = await supabase.auth.getUser();
+		if (user) {
+			await refreshReviewEligibility(user.id);
+		}
+	}
+
+	onDestroy(() => {
+		if (browser) {
+			window.removeEventListener('focus', refreshReviewEligibilityOnFocus);
+		}
+	});
 
 	async function searchRides() {
 		if (reviewPendingBlocked) {
@@ -237,28 +288,8 @@
 	onMount(async () => {
 		const { data: { user } } = await supabase.auth.getUser();
 		if (user) {
-			await supabase.rpc('refresh_review_pending_for_member', { p_user_id: user.id });
-
-			const { data: profile } = await supabase
-				.from('profiles')
-				.select('gender, status, is_verified, membership_paid, membership_expires_at, review_pending, review_pending_ride_id')
-				.eq('id', user.id)
-				.maybeSingle();
-			isFemaleUser = (profile?.gender ?? '').toLowerCase() === 'female';
-			currentMemberStatus = resolveMemberStatus({
-				status: profile?.status,
-				isVerified: profile?.is_verified,
-				membershipPaid: profile?.membership_paid,
-				membershipExpiresAt: profile?.membership_expires_at
-			});
-			reviewPendingBlocked = hasPendingReviewBlock({
-				status: profile?.status,
-				isVerified: profile?.is_verified,
-				membershipPaid: profile?.membership_paid,
-				membershipExpiresAt: profile?.membership_expires_at,
-				reviewPending: profile?.review_pending
-			});
-			reviewPendingRideId = profile?.review_pending_ride_id ?? null;
+			window.addEventListener('focus', refreshReviewEligibilityOnFocus);
+			await refreshReviewEligibility(user.id);
 		}
 
 		const dep = $page.url.searchParams.get('departure') ?? '';

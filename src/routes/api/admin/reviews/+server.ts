@@ -235,6 +235,20 @@ export const PATCH: RequestHandler = async ({ request }) => {
 			return json({ error: updateError.message }, { status: 500 });
 		}
 
+		const { error: eligibilityRefreshError } = await adminClient.rpc(
+			'refresh_review_pending_for_member',
+			{ p_user_id: reviewToModerate.reviewer_id }
+		);
+		if (eligibilityRefreshError) {
+			console.error('Review eligibility refresh failed after moderation:', eligibilityRefreshError.message);
+			return json(
+				{
+					error: `Review ${status}, but the member's ride access could not be refreshed. Please retry the moderation action or contact support.`
+				},
+				{ status: 500 }
+			);
+		}
+
 		if (status === 'rejected' && reviewToModerate.status !== 'rejected') {
 			const { data: reviewerProfile, error: profileError } = await adminClient
 				.from('profiles')
@@ -247,16 +261,9 @@ export const PATCH: RequestHandler = async ({ request }) => {
 				return json({ error: 'Review rejected, but the reviewer could not be notified.' }, { status: 500 });
 			}
 
-			const safeNote = (note ?? 'Please update your review and submit it again.')
-				.replace(/&/g, '&amp;')
-				.replace(/</g, '&lt;')
-				.replace(/>/g, '&gt;')
-				.replace(/"/g, '&quot;')
-				.replace(/'/g, '&#39;');
 			const reviewMessage =
-				`<p>Your review was not approved. Please update it and submit it again.</p>` +
-				`<p><strong>Admin note:</strong> ${safeNote}</p>` +
-				`<p><a href="${(env.PUBLIC_SITE_URL ?? 'https://afrorcqvercelapp.vercel.app').replace(/\/$/, '')}/dashboard#archive">Update my review</a></p>`;
+				`Your review was not approved. Please update it and submit it again.\n\n` +
+				`Admin note: ${note ?? 'Please update your review and submit it again.'}`;
 
 			const { error: notificationError } = await adminClient.from('member_notifications').insert({
 				user_id: reviewToModerate.reviewer_id,

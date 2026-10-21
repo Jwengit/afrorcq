@@ -4,7 +4,7 @@
 	import { resolve } from '$app/paths';
 	import ReviewForm from '$lib/components/ReviewForm.svelte';
 	import ReviewsSection from '$lib/components/ReviewsSection.svelte';
-	import { onMount, tick } from 'svelte';
+	import { onDestroy, onMount, tick } from 'svelte';
 	import { supabase } from '$lib/supabaseClient';
 	import {
 		resolveMemberStatus,
@@ -204,12 +204,21 @@
 
 	let currentAccessToken: string | null = null;
 
+	function refreshEligibilityOnFocus() {
+		if (currentUser) {
+			void loadDriverEligibility(currentUser.id);
+		}
+	}
+
 	onMount(async () => {
 		const {
 			data: { user }
 		} = await supabase.auth.getUser();
 
 		currentUser = user;
+		if (browser) {
+			window.addEventListener('focus', refreshEligibilityOnFocus);
+		}
 		loadActivitySeenAt();
 
 		// Get and store access token for child components
@@ -242,6 +251,12 @@
 		}
 		await loadMemberNotifications();
 		loading = false;
+	});
+
+	onDestroy(() => {
+		if (browser) {
+			window.removeEventListener('focus', refreshEligibilityOnFocus);
+		}
 	});
 
 	$: activityFeed = [
@@ -468,6 +483,20 @@
 		} catch {
 			memberNotifications = [];
 		}
+	}
+
+	function getReviewRejectionNote(message: string): string {
+		const legacyHtmlNote = message.match(/<strong>Admin note:<\/strong>\s*([\s\S]*?)<\/p>/i)?.[1];
+		if (legacyHtmlNote !== undefined) {
+			return legacyHtmlNote
+				.replace(/&lt;/g, '<')
+				.replace(/&gt;/g, '>')
+				.replace(/&quot;/g, '"')
+				.replace(/&#39;/g, "'")
+				.replace(/&amp;/g, '&');
+		}
+
+		return message.match(/^Admin note:\s*(.+)$/m)?.[1]?.trim() ?? '';
 	}
 
 	async function deleteAdminInboxMessage(messageId: string) {
@@ -1700,7 +1729,19 @@
 													: 'bg-gray-100 text-gray-700'
 									}`}>{msg.status}</span>
 								</div>
-								<div class="text-sm text-gray-700 mt-2 whitespace-pre-wrap">{msg.message}</div>
+								{#if msg.notificationType === 'review_rejected'}
+									<div class="mt-2 space-y-2 text-sm text-gray-700">
+										<p>Your review was not approved. Please update it and submit it again.</p>
+										{#if getReviewRejectionNote(msg.message)}
+											<p><strong>Admin note:</strong> {getReviewRejectionNote(msg.message)}</p>
+										{/if}
+										<a href={resolve('/dashboard#archive')} class="inline-flex font-medium text-indigo-700 underline hover:text-indigo-900">
+											Update my review
+										</a>
+									</div>
+								{:else}
+									<div class="text-sm text-gray-700 mt-2 whitespace-pre-wrap">{msg.message}</div>
+								{/if}
 								<div class="mt-2 flex items-center justify-between gap-2">
 									<p class="text-xs text-gray-400">{new Date(msg.createdAt).toLocaleString()}</p>
 									<button

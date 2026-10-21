@@ -75,8 +75,17 @@
 		currentUser = u;
 	});
 
+	function refreshPublishingEligibilityOnFocus() {
+		if (currentUser) {
+			void loadPublishingEligibility(currentUser.id);
+		}
+	}
+
 	onDestroy(() => {
 		unsubscribe();
+		if (browser) {
+			window.removeEventListener('focus', refreshPublishingEligibilityOnFocus);
+		}
 	});
 
 	onMount(async () => {
@@ -92,6 +101,9 @@
 			return;
 		}
 
+		if (browser) {
+			window.addEventListener('focus', refreshPublishingEligibilityOnFocus);
+		}
 		await loadPublishingEligibility(currentUser.id);
 		loading = false;
 	});
