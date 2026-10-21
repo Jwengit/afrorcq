@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { user } from '$lib/authStore';
+	import { archiveResolvedMemberConversations } from '$lib/memberConversations';
 	import { supabase } from '$lib/supabaseClient';
 	import { goto } from '$app/navigation';
 	import { hasPendingReviewBlock } from '$lib/membershipAccess';
@@ -68,6 +69,11 @@
 	}
 
 	async function signOut() {
+		const archiveResult = await archiveResolvedMemberConversations();
+		if (!archiveResult.success) {
+			console.error('Unable to archive resolved conversations before sign-out:', archiveResult.error);
+			alert('We could not archive your resolved conversations, but you will still be signed out.');
+		}
 		await supabase.auth.signOut();
 		goto('/');
 	}

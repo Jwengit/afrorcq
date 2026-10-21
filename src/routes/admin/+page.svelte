@@ -878,9 +878,9 @@
 			return;
 		}
 
-		const response = await fetch('/api/admin/users', {
-			method: 'PATCH',
-			headers: {
+			const response = await fetch('/api/admin/users', {
+				method: 'PATCH',
+				headers: {
 				'Content-Type': 'application/json',
 				Authorization: `Bearer ${session.access_token}`
 			},
@@ -945,34 +945,58 @@
 	async function simulatePaymentReceived() {
 		const profile = selectedProfile;
 		if (!profile || currentUser?.email?.toLowerCase() !== 'hizli.carpooling@gmail.com') return;
-		if (!confirm(`Simulate payment received for ${profile.email ?? profile.id}?`)) return;
+		const enablePayment = profile.membership_paid !== true;
+		const confirmation = enablePayment
+			? `Simulate a test payment for ${profile.email ?? profile.id}? This will activate the membership for 30 days.`
+			: `Deactivate the test membership for ${profile.email ?? profile.id}?`;
+		if (!confirm(confirmation)) return;
 
-		const {
-			data: { session }
-		} = await supabase.auth.getSession();
-		if (!session?.access_token) {
-			usersActionMessage = 'Session expired. Please sign in again.';
-			return;
+		actionUserId = profile.id;
+		try {
+			usersActionMessage = '';
+			const {
+				data: { session }
+			} = await supabase.auth.getSession();
+			if (!session?.access_token) {
+				usersActionMessage = 'Session expired. Please sign in again.';
+				return;
+			}
+
+			const response = await fetch('/api/admin/users', {
+				method: 'PATCH',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${session.access_token}`
+				},
+				body: JSON.stringify({ userId: profile.id, field: 'membership_paid', value: enablePayment })
+			});
+			const payload = await response.json();
+			if (!response.ok) {
+				usersActionMessage = payload?.error || 'Unable to update test membership.';
+				return;
+			}
+
+			const expiresAt = enablePayment
+				? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+				: null;
+			users = users.map((user) =>
+				user.id === profile.id
+					? { ...user, membership_paid: enablePayment, membership_expires_at: expiresAt }
+					: user
+			);
+			selectedProfile = {
+				...profile,
+				membership_paid: enablePayment,
+				membership_expires_at: expiresAt
+			};
+			usersActionMessage = enablePayment
+				? 'Test payment received. Membership activated for 30 days.'
+				: 'Test membership deactivated.';
+		} catch (error) {
+			usersActionMessage = error instanceof Error ? error.message : 'Unable to update test membership.';
+		} finally {
+			actionUserId = null;
 		}
-
-		const response = await fetch('/api/admin/users', {
-			method: 'PATCH',
-			headers: {
-				'Content-Type': 'application/json',
-				Authorization: `Bearer ${session.access_token}`
-			},
-			body: JSON.stringify({ userId: profile.id, field: 'membership_paid', value: true })
-		});
-		const payload = await response.json();
-		if (!response.ok) {
-			usersActionMessage = payload?.error || 'Unable to simulate payment.';
-			return;
-		}
-
-		const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-		users = users.map((user) => user.id === profile.id ? { ...user, membership_paid: true, membership_expires_at: expiresAt } : user);
-		selectedProfile = { ...profile, membership_paid: true, membership_expires_at: expiresAt };
-		usersActionMessage = 'Test payment marked as received.';
 	}
 
 	async function updateProfilePhotoStatus(status: 'approved' | 'rejected') {
@@ -1693,7 +1717,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 			});
 
 			const responseText = await response.text();
-			let payload: { error?: string; emailSent?: boolean; warning?: string };
+			let payload: { error?: string; emailSent?: boolean; warning?: string; ticketId?: string };
 			try {
 				payload = JSON.parse(responseText) as typeof payload;
 			} catch {
@@ -1709,10 +1733,14 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 			}
 
 			memberMessageFeedback = payload?.emailSent
-				? 'Message sent by email and added to the member Activity Center.'
-				: payload?.warning || 'Message added to the member Activity Center, but the email was not sent.';
+				? 'Message emailed to the member and conversation started.'
+				: payload?.warning || 'Conversation started, but the email was not sent.';
+			memberMessageFeedbackIsError = !payload?.emailSent;
 			memberMessageSubject = '';
 			memberMessageBody = '';
+			await loadSupportTickets();
+			const createdTicket = supportTickets.find((ticket) => ticket.id === payload.ticketId);
+			if (createdTicket) await openSupportTicket(createdTicket);
 		} catch (error) {
 			memberMessageFeedback = error instanceof Error ? error.message : 'Unable to send this message.';
 			memberMessageFeedbackIsError = true;
@@ -2171,41 +2199,12 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 		selectedBookingRider = null;
 		riderDetailsLoading = true;
 
-		const {
-			data: { session }
-		} = await supabase.auth.getSession();
-
-		if (!session?.access_token) {
-			riderDetailsLoading = false;
-			return;
-		}
-
-		// Fetch rider profile details
-		let { data: riderProfile, error: riderProfileError } = await supabase
-			.from('profiles')
-			.select('id, first_name, last_name, email, phone_number, average_rating, created_at')
-			.eq('id', booking.user_id)
-			.maybeSingle();
-
-		if (riderProfileError?.message?.toLowerCase().includes('average_rating')) {
-			const { data: fallbackRiderProfile, error: fallbackRiderProfileError } = await supabase
-				.from('profiles')
-				.select('id, first_name, last_name, email, phone_number, created_at')
-				.eq('id', booking.user_id)
-				.maybeSingle();
-
-			if (!fallbackRiderProfileError && fallbackRiderProfile) {
-				riderProfile = {
-					...fallbackRiderProfile,
-					average_rating: null
-				};
-			}
-		}
+		const riderProfile = users.find((candidate) => candidate.id === booking.user_id);
 
 		if (riderProfile) {
 			selectedBookingRider = {
-				...(riderProfile as AdminUser),
-				user_status: (riderProfile as Partial<AdminUser>).user_status ?? 'active'
+				...riderProfile,
+				user_status: riderProfile.user_status ?? 'active'
 			};
 		}
 
@@ -3464,6 +3463,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 		settingsMessage = 'Settings saved.';
 		settingsSaving = false;
 	}
+
 </script>
 
 {#if loading}
@@ -5702,7 +5702,7 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 					<div class="rounded-xl border border-indigo-200 bg-indigo-50/50 p-4">
 						<h3 class="text-sm font-semibold text-gray-900">Contact member</h3>
 						<p class="mt-1 text-xs text-gray-600">
-							Send an email to {selectedProfile.email || 'the member'} and add the same message to their Activity Center.
+							Send an email to {selectedProfile.email || 'the member'} and open a conversation that remains available in the Support Center until it is resolved.
 						</p>
 						<div class="mt-3 space-y-3">
 							<label class="block">
@@ -5904,11 +5904,11 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 									<!-- TEST ONLY: simulates Stripe payment confirmation for testing before Stripe is live -->
 									<button
 										type="button"
-										disabled={actionUserId === selectedProfile.id || selectedProfile.membership_paid === true}
+										disabled={actionUserId === selectedProfile.id}
 										on:click={simulatePaymentReceived}
-										class="mt-2 w-full px-3 py-2 rounded-lg border border-amber-300 text-amber-700 bg-amber-50 text-sm font-medium hover:bg-amber-100 disabled:opacity-50"
+										class="mt-2 w-full px-3 py-2 rounded-lg border {selectedProfile.membership_paid ? 'border-red-300 text-red-700 bg-red-50 hover:bg-red-100' : 'border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100'} text-sm font-medium disabled:opacity-50"
 									>
-										Simulate payment received (test)
+										{selectedProfile.membership_paid ? 'Deactivate test membership' : 'Simulate payment / renew 30 days (test)'}
 									</button>
 								{/if}
 							</div>

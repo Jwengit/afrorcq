@@ -4,6 +4,7 @@
 	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { supabase } from '$lib/supabaseClient';
+	import { archiveResolvedMemberConversations } from '$lib/memberConversations';
 	import type { User } from '@supabase/supabase-js';
 
 	const allowedEmail = 'hizli-carpooling@gmail.com';
@@ -93,6 +94,11 @@
 	});
 
 	async function signOut() {
+		const archiveResult = await archiveResolvedMemberConversations();
+		if (!archiveResult.success) {
+			console.error('Unable to archive resolved conversations before sign-out:', archiveResult.error);
+			alert('We could not archive your resolved conversations, but you will still be signed out.');
+		}
 		await supabase.auth.signOut();
 		goto(resolve('/auth/login'));
 	}

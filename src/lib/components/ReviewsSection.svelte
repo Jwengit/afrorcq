@@ -29,9 +29,19 @@ async function fetchReviews() {
 loading = true;
 error = null;
 try {
-const response = await fetch(`/api/reviews?user_id=${userId}`);
-if (!response.ok) throw new Error('Failed to fetch reviews');
-const payload = (await response.json()) as Review[];
+const response = await fetch(`/api/reviews?user_id=${encodeURIComponent(userId)}`);
+const responsePayload: unknown = await response.json();
+if (!response.ok) {
+	const message =
+		responsePayload &&
+		typeof responsePayload === 'object' &&
+		'error' in responsePayload &&
+		typeof responsePayload.error === 'string'
+			? responsePayload.error
+			: `Failed to fetch reviews (HTTP ${response.status})`;
+	throw new Error(message);
+}
+const payload = responsePayload as Review[];
 reviews = payload.sort(
 	(a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
 );
@@ -116,7 +126,7 @@ Verified
 
 <div class="rating-box" aria-label={`Rating ${review.rating} out of 5`}>
 <div class="rating-dots">
-{#each [1, 2, 3, 4, 5] as dot}
+{#each [1, 2, 3, 4, 5] as dot (dot)}
 <span class="dot" class:filled={dot <= review.rating}></span>
 {/each}
 </div>

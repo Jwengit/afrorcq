@@ -88,6 +88,8 @@
 		subject: string;
 		status: 'open' | 'in_progress' | 'resolved' | 'closed';
 		priority: 'low' | 'normal' | 'high' | 'urgent';
+		initiated_by_admin?: boolean;
+		archived_at?: string | null;
 		created_at: string;
 		updated_at: string;
 	};
@@ -108,7 +110,19 @@
 		senderRole: 'user' | 'admin';
 		message: string;
 		createdAt: string;
+		archivedAt?: string | null;
 		notificationType?: string;
+	};
+
+	type InboxConversation = {
+		key: string;
+		ticketId: string;
+		subject: string;
+		status: string;
+		messages: AdminInboxMessage[];
+		latestAt: string;
+		notificationType?: string;
+		archivedAt: string | null;
 	};
 
 	type MemberNotification = {
@@ -188,6 +202,7 @@
 	let supportReplyError = '';
 	let supportReplySuccess = '';
 	let activityFeed: ActivityItem[] = [];
+	let visibleActivityFeed: ActivityItem[] = [];
 	let activitySeenAt = 0;
 	let newActivityCount = 0;
 
@@ -207,6 +222,8 @@
 	function refreshEligibilityOnFocus() {
 		if (currentUser) {
 			void loadDriverEligibility(currentUser.id);
+			void loadAdminInboxMessages();
+			void loadMemberNotifications();
 		}
 	}
 
@@ -242,13 +259,7 @@
 				await goToPendingReview();
 			}
 		}
-		if (canUseVerifiedFeatures(memberStatus)) {
-			await loadAdminInboxMessages();
-		} else {
-			adminInboxMessages = [];
-			memberNotifications = [];
-			adminInboxError = '';
-		}
+		await loadAdminInboxMessages();
 		await loadMemberNotifications();
 		loading = false;
 	});
@@ -290,31 +301,74 @@
 				sectionHref: '/dashboard#ride-requests' as const,
 				type: 'request' as const
 			})),
-		...adminInboxMessages
-			.filter((msg) => msg.senderRole === 'admin')
-			.map((msg) => ({
-				id: `admin:${msg.id}`,
-				title: msg.notificationType === 'review_rejected' ? 'Review needs an update' : 'New admin message',
-				details:
-					msg.notificationType === 'review_rejected'
+		...activeAdminInboxConversations
+			.filter((conversation) => conversation.messages.some((message) => message.senderRole === 'admin'))
+			.map((conversation) => ({
+				id: `admin:${conversation.key}`,
+				title: conversation.notificationType === 'review_rejected' ? 'Review needs an update' : 'New admin message',
+				details: conversation.notificationType === 'review_rejected'
 						? 'Your review was rejected. Update it and submit it again.'
-						: msg.subject,
-				createdAtIso: msg.createdAt,
+						: conversation.subject,
+				createdAtIso: conversation.latestAt,
 				sectionHref:
-					msg.notificationType === 'review_rejected'
+					conversation.notificationType === 'review_rejected'
 						? ('/dashboard#archive' as const)
 						: ('/dashboard#admin-messages' as const),
-				type: msg.notificationType === 'review_rejected' ? ('review' as const) : ('admin' as const)
+				type: conversation.notificationType === 'review_rejected' ? ('review' as const) : ('admin' as const)
 			}))
 	]
 		.sort((a, b) => new Date(b.createdAtIso).getTime() - new Date(a.createdAtIso).getTime())
 		.slice(0, 20);
 
-	$: newActivityCount = activityFeed.filter((item) => {
+	$: visibleActivityFeed = activityFeed.filter((item) => {
 		const timestamp = Date.parse(item.createdAtIso);
 		if (Number.isNaN(timestamp)) return false;
 		return timestamp > activitySeenAt;
-	}).length;
+	});
+	$: newActivityCount = visibleActivityFeed.length;
+
+	$: adminInboxConversations = (() => {
+		const conversations: Record<string, InboxConversation> = {};
+		for (const message of adminInboxMessages) {
+			const key = message.ticketId ? `ticket:${message.ticketId}` : `notification:${message.id}`;
+			const existing = conversations[key];
+			if (existing) {
+				existing.messages.push(message);
+				if (new Date(message.createdAt).getTime() > new Date(existing.latestAt).getTime()) {
+					existing.latestAt = message.createdAt;
+				}
+				continue;
+			}
+
+			conversations[key] = {
+				key,
+				ticketId: message.ticketId,
+				subject: message.subject,
+				status: message.status,
+				messages: [message],
+				latestAt: message.createdAt,
+				notificationType: message.notificationType,
+				archivedAt: message.archivedAt ?? null
+			};
+		}
+
+		const groupedConversations = Object.values(conversations);
+		for (const conversation of groupedConversations) {
+			conversation.messages.sort(
+				(a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+			);
+		}
+
+		return groupedConversations.sort(
+			(a, b) => new Date(b.latestAt).getTime() - new Date(a.latestAt).getTime()
+		);
+	})();
+	$: activeAdminInboxConversations = adminInboxConversations.filter(
+		(conversation) => !conversation.archivedAt
+	);
+	$: archivedAdminInboxConversations = adminInboxConversations.filter(
+		(conversation) => Boolean(conversation.archivedAt)
+	);
 
 	function activitySeenStorageKey() {
 		return currentUser ? `${ACTIVITY_SEEN_KEY_PREFIX}:${currentUser.id}` : ACTIVITY_SEEN_KEY_PREFIX;
@@ -367,12 +421,6 @@
 	}
 
 	async function loadAdminInboxMessages() {
-		if (!canUseVerifiedFeatures(memberStatus)) {
-			adminInboxMessages = [];
-			adminInboxError = '';
-			return;
-		}
-
 		if (!currentUser) {
 			adminInboxMessages = [];
 			return;
@@ -401,7 +449,7 @@
 				return;
 			}
 
-			const tickets = ((ticketsPayload?.tickets ?? []) as SupportTicket[]).slice(0, 10);
+			const tickets = (ticketsPayload?.tickets ?? []) as SupportTicket[];
 			if (tickets.length === 0) {
 				adminInboxMessages = [];
 				return;
@@ -438,12 +486,12 @@
 							status: ticket.status,
 							senderRole: msg.sender_role,
 							message: msg.message,
-							createdAt: msg.created_at
+							createdAt: msg.created_at,
+							archivedAt: ticket.archived_at ?? null
 						}))
 				) as AdminInboxMessage[])
 				.concat(memberNotifications)
-				.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-				.slice(0, 20);
+				.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 		} catch (error) {
 			adminInboxError = error instanceof Error ? error.message : 'Unable to load admin messages.';
 			adminInboxMessages = [];
@@ -478,8 +526,7 @@
 				notificationType: notification.type
 			}));
 			adminInboxMessages = [...adminInboxMessages.filter((message) => message.ticketId), ...memberNotifications]
-				.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-				.slice(0, 20);
+				.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 		} catch {
 			memberNotifications = [];
 		}
@@ -582,7 +629,11 @@
 			}
 
 			supportReplyDrafts = { ...supportReplyDrafts, [ticketId]: '' };
-			supportReplySuccess = 'Your reply has been sent.';
+			if (payload?.emailSent === false) {
+				supportReplyError = payload?.warning || 'Your reply was saved, but the administrator email notification failed.';
+			} else {
+				supportReplySuccess = 'Your reply has been sent.';
+			}
 			await loadAdminInboxMessages();
 		} catch (error) {
 			supportReplyError = error instanceof Error ? error.message : 'Network error.';
@@ -1572,7 +1623,7 @@
 						<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
 						{showArchive
 							? 'Back to dashboard'
-							: `View archive (${myArchivedRides.length + myArchivedBookings.length + archivedRequests.length})${pendingArchiveReviewsCount > 0 ? ` · ${pendingArchiveReviewsCount} review${pendingArchiveReviewsCount > 1 ? 's' : ''} left` : ''}`}
+							: `View archive (${myArchivedRides.length + myArchivedBookings.length + archivedRequests.length + archivedAdminInboxConversations.length})${pendingArchiveReviewsCount > 0 ? ` · ${pendingArchiveReviewsCount} review${pendingArchiveReviewsCount > 1 ? 's' : ''} left` : ''}`}
 					</button>
 				</nav>
 
@@ -1645,11 +1696,11 @@
 					</p>
 				{/if}
 
-				{#if activityFeed.length === 0}
-					<p class="text-sm text-gray-500">No activity yet.</p>
+				{#if visibleActivityFeed.length === 0}
+					<p class="text-sm text-gray-500">No new activity. Seen updates remain available in their sections.</p>
 				{:else}
 					<div class="space-y-2">
-						{#each activityFeed as item (item.id)}
+						{#each visibleActivityFeed as item (item.id)}
 							<a
 								href={resolve(item.sectionHref)}
 								on:click={(event) => handleActivityClick(item, event)}
@@ -1680,19 +1731,17 @@
 						<h2 class="text-xl font-semibold text-gray-900">Admin messages</h2>
 						<p class="text-sm text-gray-500">Private moderation and support messages visible only to your account.</p>
 					</div>
-					{#if canUseVerifiedFeatures(memberStatus)}
-						<button
-							type="button"
-							on:click={async () => {
-								await loadAdminInboxMessages();
-								await loadMemberNotifications();
-							}}
-							disabled={adminInboxLoading}
-							class="px-3 py-2 rounded-md border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
-						>
-							{adminInboxLoading ? 'Refreshing...' : 'Refresh'}
-						</button>
-					{/if}
+					<button
+						type="button"
+						on:click={async () => {
+							await loadAdminInboxMessages();
+							await loadMemberNotifications();
+						}}
+						disabled={adminInboxLoading}
+						class="px-3 py-2 rounded-md border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+					>
+						{adminInboxLoading ? 'Refreshing...' : 'Refresh'}
+					</button>
 				</div>
 
 				{#if adminInboxError}
@@ -1706,82 +1755,109 @@
 				{/if}
 				{#if adminInboxLoading}
 					<p class="text-sm text-gray-500">Loading messages...</p>
-				{:else if adminInboxMessages.length === 0}
-					<p class="text-sm text-gray-500">No admin messages for now.</p>
 				{:else}
-					<div class="space-y-3">
-						{#each adminInboxMessages as msg (msg.id)}
+					{#if activeAdminInboxConversations.length === 0}
+						<p class="text-sm text-gray-500">No active admin messages for now.</p>
+					{:else}
+						<div class="space-y-4">
+							{#each activeAdminInboxConversations as conversation (conversation.key)}
 							<article class="surface-card p-4">
 								<div class="flex flex-wrap items-center justify-between gap-2">
-									<div class="flex items-center gap-2">
-										<p class="text-sm font-semibold text-gray-900">{msg.subject}</p>
-										<span class={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${msg.senderRole === 'admin' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-700'}`}>
-											{msg.senderRole === 'admin' ? 'Admin' : 'You'}
-										</span>
-									</div>
-									<span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-										msg.status === 'open'
-											? 'bg-yellow-100 text-yellow-700'
-											: msg.status === 'in_progress'
-												? 'bg-blue-100 text-blue-700'
-												: msg.status === 'resolved'
-													? 'bg-green-100 text-green-700'
-													: 'bg-gray-100 text-gray-700'
-									}`}>{msg.status}</span>
+									<p class="text-sm font-semibold text-gray-900">{conversation.subject}</p>
+									{#if conversation.ticketId}
+										<span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+											conversation.status === 'open'
+												? 'bg-yellow-100 text-yellow-700'
+												: conversation.status === 'in_progress'
+													? 'bg-blue-100 text-blue-700'
+													: conversation.status === 'resolved'
+														? 'bg-green-100 text-green-700'
+														: 'bg-gray-100 text-gray-700'
+										}`}>{conversation.status.replace('_', ' ')}</span>
+									{/if}
 								</div>
-								{#if msg.notificationType === 'review_rejected'}
-									<div class="mt-2 space-y-2 text-sm text-gray-700">
-										<p>Your review was not approved. Please update it and submit it again.</p>
-										{#if getReviewRejectionNote(msg.message)}
-											<p><strong>Admin note:</strong> {getReviewRejectionNote(msg.message)}</p>
-										{/if}
-										<a href={resolve('/dashboard#archive')} class="inline-flex font-medium text-indigo-700 underline hover:text-indigo-900">
-											Update my review
-										</a>
+
+								{#if conversation.ticketId}
+									<div class="mt-4 max-h-96 space-y-3 overflow-y-auto rounded-xl bg-slate-50 p-3">
+										{#each conversation.messages as msg (msg.id)}
+											<div class={`flex ${msg.senderRole === 'user' ? 'justify-end' : 'justify-start'}`}>
+												<div class={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
+													msg.senderRole === 'user'
+														? 'rounded-br-sm bg-indigo-600 text-white'
+														: 'rounded-bl-sm border border-slate-200 bg-white text-gray-800'
+												}`}>
+													<p class="mb-1 text-[11px] font-semibold opacity-75">{msg.senderRole === 'admin' ? 'Hizli Support' : 'You'}</p>
+													<p class="whitespace-pre-wrap text-sm">{msg.message}</p>
+													<div class="mt-1 flex items-center justify-between gap-4">
+														<p class="text-[10px] opacity-70">{new Date(msg.createdAt).toLocaleString()}</p>
+														<button
+															type="button"
+															on:click={() => deleteAdminInboxMessage(msg.id)}
+															disabled={deletingAdminMessageId === msg.id}
+															class="text-[10px] underline opacity-70 hover:opacity-100 disabled:opacity-40"
+														>
+															{deletingAdminMessageId === msg.id ? 'Deleting...' : 'Delete'}
+														</button>
+													</div>
+												</div>
+											</div>
+										{/each}
 									</div>
-								{:else}
-									<div class="text-sm text-gray-700 mt-2 whitespace-pre-wrap">{msg.message}</div>
-								{/if}
-								<div class="mt-2 flex items-center justify-between gap-2">
-									<p class="text-xs text-gray-400">{new Date(msg.createdAt).toLocaleString()}</p>
-									<button
-										type="button"
-										on:click={() => deleteAdminInboxMessage(msg.id)}
-										disabled={deletingAdminMessageId === msg.id}
-										class="px-2 py-1 rounded-md border border-gray-300 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
-									>
-										{deletingAdminMessageId === msg.id ? 'Deleting...' : 'Delete'}
-									</button>
-								</div>
-								{#if msg.status === 'notification'}
-									<p class="mt-2 text-xs text-gray-500">This is an informational notification.</p>
-								{:else if isReplyBlocked(msg.status)}
-									<p class="mt-2 text-xs text-gray-500">Replies are disabled because this ticket is {msg.status}.</p>
-								{:else}
-									<div class="mt-3 space-y-2">
-										<label class="text-xs font-medium text-gray-600" for={`reply-${msg.id}`}>Reply</label>
-										<textarea
-											id={`reply-${msg.id}`}
-											rows="3"
-											class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-500"
-											placeholder="Write your reply"
-											bind:value={supportReplyDrafts[msg.ticketId]}
-										></textarea>
-										<div class="flex justify-end">
-											<button
-												type="button"
-												on:click={() => sendSupportReply(msg.ticketId, msg.status)}
-												disabled={supportReplySendingTicketId === msg.ticketId}
-												class="px-3 py-1.5 rounded-md bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 disabled:opacity-60"
-											>
-												{supportReplySendingTicketId === msg.ticketId ? 'Sending...' : 'Send reply'}
-											</button>
+
+									{#if isReplyBlocked(conversation.status)}
+										<p class="mt-3 text-xs text-gray-500">This conversation is {conversation.status}; replies are disabled.</p>
+									{:else}
+										<div class="mt-3 space-y-2">
+											<label class="text-xs font-medium text-gray-600" for={`reply-${conversation.ticketId}`}>Reply</label>
+											<textarea
+												id={`reply-${conversation.ticketId}`}
+												rows="3"
+												class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-500"
+												placeholder="Write your reply"
+												bind:value={supportReplyDrafts[conversation.ticketId]}
+											></textarea>
+											<div class="flex justify-end">
+												<button
+													type="button"
+													on:click={() => sendSupportReply(conversation.ticketId, conversation.status)}
+													disabled={supportReplySendingTicketId === conversation.ticketId}
+													class="px-3 py-1.5 rounded-md bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 disabled:opacity-60"
+												>
+													{supportReplySendingTicketId === conversation.ticketId ? 'Sending...' : 'Send reply'}
+												</button>
+											</div>
 										</div>
+									{/if}
+								{:else}
+									{#if conversation.notificationType === 'review_rejected'}
+										<div class="mt-2 space-y-2 text-sm text-gray-700">
+											<p>Your review was not approved. Please update it and submit it again.</p>
+											{#if getReviewRejectionNote(conversation.messages[0].message)}
+												<p><strong>Admin note:</strong> {getReviewRejectionNote(conversation.messages[0].message)}</p>
+											{/if}
+											<a href={resolve('/dashboard#archive')} class="inline-flex font-medium text-indigo-700 underline hover:text-indigo-900">Update my review</a>
+										</div>
+									{:else}
+										<p class="mt-2 whitespace-pre-wrap text-sm text-gray-700">{conversation.messages[0].message}</p>
+										<p class="mt-2 text-xs text-gray-500">This is an informational notification.</p>
+									{/if}
+									<div class="mt-2 flex items-center justify-between gap-2">
+										<p class="text-xs text-gray-400">{new Date(conversation.latestAt).toLocaleString()}</p>
+										<button
+											type="button"
+											on:click={() => deleteAdminInboxMessage(conversation.messages[0].id)}
+											disabled={deletingAdminMessageId === conversation.messages[0].id}
+											class="px-2 py-1 rounded-md border border-gray-300 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+										>
+											{deletingAdminMessageId === conversation.messages[0].id ? 'Deleting...' : 'Delete'}
+										</button>
 									</div>
 								{/if}
 							</article>
-						{/each}
-					</div>
+							{/each}
+						</div>
+					{/if}
+
 				{/if}
 			</section>
 
@@ -2169,7 +2245,7 @@
 				<h2 class="text-xl font-semibold text-gray-900 flex items-center gap-2">
 					<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
 					Archive
-					<span class="text-sm font-normal text-gray-400">({myArchivedRides.length + myArchivedBookings.length + archivedRequests.length})</span>
+					<span class="text-sm font-normal text-gray-400">({myArchivedRides.length + myArchivedBookings.length + archivedRequests.length + archivedAdminInboxConversations.length})</span>
 					{#if pendingArchiveReviewsCount > 0}
 						<span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
 							{pendingArchiveReviewsCount} review{pendingArchiveReviewsCount > 1 ? 's' : ''} left to post
@@ -2178,9 +2254,9 @@
 				</h2>
 			</div>
 
-			{#if myArchivedRides.length === 0 && myArchivedBookings.length === 0 && archivedRequests.length === 0}
+			{#if myArchivedRides.length === 0 && myArchivedBookings.length === 0 && archivedRequests.length === 0 && archivedAdminInboxConversations.length === 0}
 				<p class="mt-4 text-sm text-gray-500">
-					No archived items yet. Rides appear here 24 hours after they end.
+					No archived items yet. Rides appear here 24 hours after they end, and conversations after you sign out.
 				</p>
 			{/if}
 
@@ -2342,6 +2418,40 @@
 							{/each}
 						</div>
 					</div>
+			{/if}
+
+			{#if archivedAdminInboxConversations.length > 0}
+				<div class="mt-5">
+					<h3 class="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">Conversations</h3>
+					<p class="mb-3 text-xs text-gray-500">Conversations are retained for 30 days after sign-out.</p>
+					<div class="space-y-3">
+						{#each archivedAdminInboxConversations as conversation (conversation.key)}
+							<article class="subtle-card p-4 opacity-90">
+								<div class="flex flex-wrap items-center justify-between gap-2">
+									<h4 class="text-base font-semibold text-gray-700">{conversation.subject}</h4>
+									<p class="text-xs text-gray-500">
+										Archived {conversation.archivedAt ? new Date(conversation.archivedAt).toLocaleDateString() : ''}
+									</p>
+								</div>
+								<div class="mt-3 max-h-72 space-y-2 overflow-y-auto rounded-xl bg-slate-50 p-3">
+									{#each conversation.messages as msg (msg.id)}
+										<div class={`flex ${msg.senderRole === 'user' ? 'justify-end' : 'justify-start'}`}>
+											<div class={`max-w-[85%] rounded-2xl px-3 py-2 ${
+												msg.senderRole === 'user'
+													? 'rounded-br-sm bg-indigo-600 text-white'
+													: 'rounded-bl-sm border border-slate-200 bg-white text-gray-800'
+											}`}>
+												<p class="mb-1 text-[11px] font-semibold opacity-75">{msg.senderRole === 'admin' ? 'Hizli Support' : 'You'}</p>
+												<p class="whitespace-pre-wrap text-sm">{msg.message}</p>
+												<p class="mt-1 text-[10px] opacity-70">{new Date(msg.createdAt).toLocaleString()}</p>
+											</div>
+										</div>
+									{/each}
+								</div>
+							</article>
+						{/each}
+					</div>
+				</div>
 			{/if}
 		</section>
 		{/if}

@@ -250,9 +250,11 @@ if (!userId) {
 return json({ error: 'Missing user_id parameter' }, { status: 400 });
 }
 
-const authHeader = request.headers.get('authorization');
-const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-const client = token ? getAuthedClient(token) : createClient(supabaseUrl, supabaseKey);
+const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
+if (!serviceRoleKey) {
+return json({ error: 'Review service is not configured.' }, { status: 500 });
+}
+const client = createClient(supabaseUrl, serviceRoleKey);
 
 const { data: reviews, error } = await client
 .from('reviews')
@@ -291,12 +293,14 @@ const reviewerIds = Array.from(
 
 const profileMap: Record<string, ReviewerProfile> = {};
 if (reviewerIds.length > 0) {
-	const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
-	const profileClient = serviceRoleKey ? createClient(supabaseUrl, serviceRoleKey) : client;
-	const { data: profileRows } = await profileClient
+	const { data: profileRows, error: profileError } = await client
 		.from('profiles')
 		.select('id,first_name,last_name,profile_photo_url,is_verified')
 		.in('id', reviewerIds);
+
+	if (profileError) {
+		return json({ error: profileError.message }, { status: 500 });
+	}
 
 	for (const profile of (profileRows || []) as ReviewerProfile[]) {
 		profileMap[profile.id] = profile;

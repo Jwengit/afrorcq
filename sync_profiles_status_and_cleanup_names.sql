@@ -4,9 +4,9 @@
 -- 1) Keep legacy text status consistent with boolean verification flag.
 UPDATE public.profiles
 SET
-  status = CASE WHEN COALESCE(is_verified, false) THEN 'Verified' ELSE 'Unverified' END,
+  status = CASE WHEN COALESCE(is_verified, false) THEN 'verified' ELSE 'free' END,
   updated_at = NOW()
-WHERE status IS DISTINCT FROM CASE WHEN COALESCE(is_verified, false) THEN 'Verified' ELSE 'Unverified' END;
+WHERE status IS DISTINCT FROM CASE WHEN COALESCE(is_verified, false) THEN 'verified' ELSE 'free' END;
 
 -- 2) Cleanup invalid last_name values accidentally saved as gender labels.
 UPDATE public.profiles

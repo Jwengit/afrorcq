@@ -23,7 +23,7 @@ STRIPE_WEBHOOK_SECRET=whsec_xxx
 STRIPE_ANNUAL_MEMBERSHIP_PRICE_ID=price_xxx
 ```
 
-Note: `SUPABASE_SERVICE_ROLE_KEY` is required for admin APIs (`/api/admin/users` and `/api/admin/overview`).
+Note: `SUPABASE_SERVICE_ROLE_KEY` is required for admin APIs (`/api/admin/users` and `/api/admin/overview`) and the private profile contact API.
 Do not expose this key in client code.
 `RESEND_API_KEY` is required for sending welcome emails.
 `PUBLIC_SITE_URL` is used for building links included in emails.
@@ -61,6 +61,14 @@ Set it to `false` to keep users logged in only for the current browser session v
 ### Review eligibility
 
 Bookings stay in the `Confirmed` status after a ride. To enable review reminders and the booking/search/publishing restriction for rides that ended at least 10 hours ago, run `fix_review_pending_for_confirmed_rides.sql` in the Supabase SQL Editor.
+
+### Driver contact sharing
+
+Run `add_driver_contact_method_to_profiles.sql` in the Supabase SQL Editor before deploying the driver contact-sharing flow. Drivers choose whether to share their phone number or account email; the selected detail is included only in the confirmed-booking email sent to the passenger and is excluded from public profile queries. The migration also removes direct client `SELECT` access to profile email, phone number, and contact preference; the signed-in member's profile page loads and saves these fields through the authenticated server API. Existing drivers can save their choice from the driver documents section of their profile.
+
+### Admin member conversations
+
+Run `create_support_tickets_and_messages.sql` if support conversations have not been set up, then run `add_admin_member_conversations.sql` and `archive_resolved_member_conversations.sql`. Admin messages start a replyable conversation, send an email notification, and appear in the member dashboard and Admin Support Center. Members can reply from their dashboard; replies notify the admin by email. When a member explicitly signs out, resolved conversations move to the dashboard's archived conversations section and are retained for 30 days from sign-out.
 
 ### Routes
 

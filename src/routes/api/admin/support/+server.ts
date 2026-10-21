@@ -71,7 +71,23 @@ function adminClientOrError() {
 async function purgeExpiredSupportConversations(adminClient: any) {
 	const cutoffIso = new Date(Date.now() - SUPPORT_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-	await adminClient.from('support_tickets').delete().eq('status', 'resolved').lt('updated_at', cutoffIso);
+	const { error: resolvedTicketError } = await adminClient
+		.from('support_tickets')
+		.delete()
+		.eq('initiated_by_admin', false)
+		.eq('status', 'resolved')
+		.lt('updated_at', cutoffIso);
+	if (resolvedTicketError) console.error('Resolved support ticket cleanup failed:', resolvedTicketError);
+
+	const { error: archivedConversationError } = await adminClient
+		.from('support_tickets')
+		.delete()
+		.eq('initiated_by_admin', true)
+		.not('archived_at', 'is', null)
+		.lt('archived_at', cutoffIso);
+	if (archivedConversationError) {
+		console.error('Archived member conversation cleanup failed:', archivedConversationError);
+	}
 }
 
 export const GET: RequestHandler = async ({ request, url }) => {
@@ -179,7 +195,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		const { error: updateError } = await adminClient
 			.from('support_tickets')
-			.update({ status: 'in_progress', updated_at: new Date().toISOString() })
+			.update({ status: 'in_progress', archived_at: null, updated_at: new Date().toISOString() })
 			.eq('id', ticketId);
 		if (updateError) return json({ error: updateError.message }, { status: 500 });
 
@@ -241,9 +257,14 @@ export const PATCH: RequestHandler = async ({ request }) => {
 			return json({ error: 'status or action is required' }, { status: 400 });
 		}
 
+		const ticketUpdate = {
+			status,
+			updated_at: new Date().toISOString(),
+			...(status === 'open' || status === 'in_progress' ? { archived_at: null } : {})
+		};
 		const { error } = await adminClient
 			.from('support_tickets')
-			.update({ status, updated_at: new Date().toISOString() })
+			.update(ticketUpdate)
 			.eq('id', ticketId);
 		if (error) return json({ error: error.message }, { status: 500 });
 

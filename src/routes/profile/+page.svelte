@@ -19,14 +19,13 @@
 		car_make: string;
 		car_year: string;
 		color: string;
-		insurance_company: string;
-		plate_number: string;
 		gender: string;
 		bio: string;
 		languages: string[];
 		ride_preferences: string[];
 		profile_photo_url: string;
 		status: string;
+		driver_contact_method: 'phone' | 'email' | null;
 		membership_plan?: string | null;
 	};
 
@@ -51,6 +50,7 @@
 	let profileError = '';
 	let profileLoaded = false;
 	let authChecked = false;
+	let savingDriverContactPreference = false;
 
 	const emptyProfile: Profile = {
 		first_name: '',
@@ -64,8 +64,6 @@
 		car_make: '',
 		car_year: '',
 		color: '',
-		insurance_company: '',
-		plate_number: '',
 	
 		gender: '',
 		bio: '',
@@ -73,6 +71,7 @@
 		ride_preferences: [] as string[],
 		profile_photo_url: '',
 		status: 'Unverified',
+		driver_contact_method: null,
 		membership_plan: null
 	};
 
@@ -80,6 +79,17 @@
 	let formData: Profile = { ...emptyProfile };
 
 	const MAX_PROFILE_PHOTO_SIZE_BYTES = 2 * 1024 * 1024;
+	const profileColumns =
+		'id, first_name, last_name, is_verified, date_of_birth, city_of_birth, address, zip_code, car_make, car_year, color, gender, bio, languages, ride_preferences, profile_photo_url, status, membership_plan';
+
+	function getErrorMessage(error: unknown, fallback: string): string {
+		if (error instanceof Error) return error.message;
+		if (error && typeof error === 'object' && 'message' in error) {
+			const message = error.message;
+			if (typeof message === 'string' && message.trim()) return message;
+		}
+		return fallback;
+	}
 
 	let selectedFile: File | null = null;
 	let previewUrl = '';
@@ -472,14 +482,16 @@
 			car_make: (data?.car_make as string) ?? '',
 			car_year: data?.car_year ? String(data.car_year) : '',
 			color: (data?.color as string) ?? '',
-			insurance_company: (data?.insurance_company as string) ?? '',
-			plate_number: (data?.plate_number as string) ?? '',
 		
 			bio: (data?.bio as string) ?? '',
 			gender: data?.gender ?? '',
 			languages: normalizeOptionSelections(data?.languages, languageOptions),
 			ride_preferences: normalizeOptionSelections(data?.ride_preferences, ridePreferenceOptions),
 			profile_photo_url: (data?.profile_photo_url as string) ?? '',
+			driver_contact_method:
+				data?.driver_contact_method === 'phone' || data?.driver_contact_method === 'email'
+					? data.driver_contact_method
+					: null,
 			status: isVerified ? 'Verified' : data?.status ?? 'Unverified'
 		};
 	}
@@ -501,7 +513,7 @@
 
 			let { data, error } = await supabase
 				.from('profiles')
-				.select('*')
+				.select(profileColumns)
 				.eq('id', currentUserId)
 				.maybeSingle();
 
@@ -531,7 +543,7 @@
 
 				const retry = await supabase
 					.from('profiles')
-					.select('*')
+					.select(profileColumns)
 					.eq('id', currentUserId)
 					.maybeSingle();
 
@@ -554,7 +566,7 @@
 				// Refresh the profile data
 				const retry = await supabase
 					.from('profiles')
-					.select('*')
+					.select(profileColumns)
 					.eq('id', currentUserId)
 					.maybeSingle();
 
@@ -567,13 +579,29 @@
 
 			if (data) {
 				profile = normalizeProfile(data);
+				const token = await getSessionAccessToken();
+				if (!token) throw new Error('Session expired. Please sign in again.');
+
+				const privateContactResponse = await fetch('/api/profile', {
+					headers: { Authorization: `Bearer ${token}` }
+				});
+				const privateContactPayload = await privateContactResponse.json();
+				if (!privateContactResponse.ok) {
+					throw new Error(privateContactPayload?.error || 'Unable to load private contact details.');
+				}
+
+				profile = normalizeProfile({
+					...profile,
+					phone_number: privateContactPayload?.contact?.phone_number ?? '',
+					driver_contact_method: privateContactPayload?.contact?.driver_contact_method ?? null
+				});
 				formData = { ...profile };
 				previewUrl = profile.profile_photo_url || '';
 				profilePhotoFileName = getProfilePhotoLabel(profile.profile_photo_url);
 			}
 		} catch (error) {
 			console.error('Error loading profile:', error);
-			profileError = error instanceof Error ? error.message : 'Unable to load profile.';
+			profileError = getErrorMessage(error, 'Unable to load profile.');
 		} finally {
 			await loadVerificationDocuments();
 			await loadReceivedReviews();
@@ -587,6 +615,31 @@
 		} = await supabase.auth.getSession();
 
 		return session?.access_token ?? null;
+	}
+
+	async function updatePrivateContact(payload: {
+		phone_number?: string | null;
+		driver_contact_method?: 'phone' | 'email' | null;
+	}) {
+		const token = await getSessionAccessToken();
+		if (!token) throw new Error('Session expired. Please sign in again.');
+
+		const response = await fetch('/api/profile', {
+			method: 'PATCH',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${token}`
+			},
+			body: JSON.stringify(payload)
+		});
+		const result = await response.json();
+		if (!response.ok) {
+			throw new Error(result?.error || 'Unable to save private contact details.');
+		}
+		return result.contact as {
+			phone_number: string | null;
+			driver_contact_method: 'phone' | 'email' | null;
+		};
 	}
 
 	function formatFileSize(fileSize: number | null): string {
@@ -841,11 +894,55 @@
 		}
 	}
 
+	async function saveDriverContactPreference() {
+		if (!currentUser || !formData.driver_contact_method) {
+			documentsError = 'Choose whether passengers may contact you by phone or by your account email.';
+			return;
+		}
+		if (formData.driver_contact_method === 'phone' && !profile.phone_number.trim()) {
+			documentsError = 'Add and save your phone number in your profile before choosing phone as your contact method.';
+			return;
+		}
+
+		savingDriverContactPreference = true;
+		documentsError = '';
+		documentsMessage = '';
+		try {
+			await updatePrivateContact({ driver_contact_method: formData.driver_contact_method });
+
+			profile = { ...profile, driver_contact_method: formData.driver_contact_method };
+			documentsMessage = 'Your contact preference has been saved. It will be shared only with passengers whose booking is confirmed.';
+		} catch (error) {
+			documentsError =
+				error instanceof Error ? error.message : 'Unable to save your contact preference.';
+		} finally {
+			savingDriverContactPreference = false;
+		}
+	}
+
 	async function submitForReview() {
 		submittingForReview = true;
 		documentsError = '';
 		documentsMessage = '';
 		try {
+			if (canSubmitDriverDocumentsForReview) {
+				if (!formData.driver_contact_method) {
+					documentsError = 'Choose whether passengers may contact you by phone or by your account email.';
+					return;
+				}
+
+				if (formData.driver_contact_method === 'phone' && !profile.phone_number.trim()) {
+					documentsError = 'Add and save your phone number in your profile before choosing phone as your contact method.';
+					return;
+				}
+
+				await updatePrivateContact({
+					driver_contact_method: formData.driver_contact_method
+				});
+
+				profile = { ...profile, driver_contact_method: formData.driver_contact_method };
+			}
+
 			const submittedScopes: string[] = [];
 
 			if (canSubmitProfileForReview) {
@@ -1043,7 +1140,6 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 					id: currentUser.id,
 					first_name: trimmedFirstName,
 					last_name: trimmedLastName || null,
-					phone_number: trimmedPhoneNumber || null,
 					date_of_birth: formData.date_of_birth || null,
 					city_of_birth: trimmedCityOfBirth || null,
 					address: trimmedAddress || null,
@@ -1069,6 +1165,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 				profileError = 'The profile was saved, but the photo URL was not stored. Please try saving again.';
 				alert(profileError);
 			} else {
+				await updatePrivateContact({ phone_number: trimmedPhoneNumber || null });
 				profile = normalizeProfile({
 					first_name: trimmedFirstName,
 					last_name: trimmedLastName,
@@ -1085,6 +1182,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 					languages: sanitizedLanguages,
 					ride_preferences: sanitizedRidePreferences,
 					profile_photo_url: savedProfile.profile_photo_url || '',
+					driver_contact_method: profile.driver_contact_method,
 					status: profile.status
 				});
 				formData = { ...profile };
@@ -1095,7 +1193,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 			}
 		} catch (error) {
 			console.error('Error:', error);
-			profileError = error instanceof Error ? error.message : 'An error occurred. Please try again.';
+			profileError = getErrorMessage(error, 'An error occurred. Please try again.');
 			alert(profileError);
 		} finally {
 			saving = false;
@@ -1760,6 +1858,35 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 								</div>
 							{/each}
 						</div>
+
+						{#if showDriverDocuments}
+							<fieldset class="mt-5 rounded-lg border border-emerald-200 bg-white p-4">
+								<legend class="px-1 text-sm font-semibold text-slate-900">How may passengers contact you?</legend>
+								<p class="mb-3 text-xs text-slate-600">
+									If a passenger's booking is confirmed, your selected contact will be shared with that passenger by email only. It will not appear on your public profile.
+								</p>
+								<div class="space-y-2">
+									<label class="flex items-start gap-2 text-sm text-slate-700">
+										<input type="radio" name="driver-contact-method" value="phone" bind:group={formData.driver_contact_method} />
+										<span>Phone{profile.phone_number ? ` (${profile.phone_number})` : ' (add and save a phone number in your profile first)'}</span>
+									</label>
+									<label class="flex items-start gap-2 text-sm text-slate-700">
+										<input type="radio" name="driver-contact-method" value="email" bind:group={formData.driver_contact_method} />
+										<span>Email address used for my account ({currentUser?.email || 'unavailable'})</span>
+									</label>
+								</div>
+								{#if !canSubmitDriverDocumentsForReview}
+									<button
+										type="button"
+										on:click={saveDriverContactPreference}
+										disabled={savingDriverContactPreference || submittingForReview}
+										class="mt-4 rounded-md border border-emerald-300 px-3 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-50 disabled:opacity-50"
+									>
+										{savingDriverContactPreference ? 'Saving...' : 'Save contact preference'}
+									</button>
+								{/if}
+							</fieldset>
+						{/if}
 
 						{#if driverDocumentsSubmitted && driverApprovedCount < 4 && allDriverDocsUploaded}
 							<div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">

@@ -20,11 +20,6 @@
 		car_year: string;
 		car_model: string;
 		color: string;
-		phone_number: string;
-		date_of_birth: string;
-		city_of_birth: string;
-		address: string;
-		zip_code: string;
 		gender: string;
 		bio: string;
 		languages: string[];
@@ -49,11 +44,6 @@
 		car_year: '',
 		car_model: '',
 		color: '',
-		phone_number: '',
-		date_of_birth: '',
-		city_of_birth: '',
-		address: '',
-		zip_code: '',
 		gender: '',
 		bio: '',
 		languages: [],
@@ -73,6 +63,8 @@
 	const languageOptions = [
 		'English', 'French', 'Spanish', 'German', 'Italian', 'Portuguese', 'Arabic', 'Chinese', 'Japanese', 'Korean'
 	];
+	const publicProfileColumns =
+		'id, public_id, first_name, last_name, is_verified, status, car_make, car_year, color, gender, bio, languages, ride_preferences, profile_photo_url';
 
 	function mapPublicProfileFromRow(data: Record<string, unknown>): PublicProfile {
 		const legacyStatus = String(data.status ?? '').toLowerCase();
@@ -87,11 +79,6 @@
 			car_year: data.car_year ? String(data.car_year) : '',
 			car_model: String(data.car_model ?? ''),
 			color: String(data.color ?? ''),
-			phone_number: String(data.phone_number ?? ''),
-			date_of_birth: String(data.date_of_birth ?? ''),
-			city_of_birth: String(data.city_of_birth ?? ''),
-			address: String(data.address ?? ''),
-			zip_code: String(data.zip_code ?? ''),
 			gender: String(data.gender ?? ''),
 			bio: String(data.bio ?? ''),
 			languages: normalizeOptionSelections(data.languages as string[] | string | null | undefined, languageOptions),
@@ -329,7 +316,7 @@
 
 			const { data: profileByPublicId, error: profileByPublicIdError } = await supabase
 				.from('profiles')
-				.select('*')
+				.select(publicProfileColumns)
 				.eq('public_id', requestedPublicProfileId)
 				.maybeSingle();
 
@@ -358,7 +345,7 @@
 
 		let { data, error } = await supabase
 			.from('profiles')
-			.select('*')
+			.select(publicProfileColumns)
 			.eq('id', profileId)
 			.maybeSingle();
 
@@ -374,7 +361,11 @@
 				first_name: fallbackFirstName
 			});
 
-			const retry = await supabase.from('profiles').select('*').eq('id', profileId).maybeSingle();
+			const retry = await supabase
+				.from('profiles')
+				.select(publicProfileColumns)
+				.eq('id', profileId)
+				.maybeSingle();
 			data = retry.data;
 			error = retry.error;
 		}

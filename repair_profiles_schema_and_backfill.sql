@@ -77,15 +77,23 @@ WHERE p.id = u.id
 UPDATE public.profiles
 SET
   is_verified = TRUE,
-  status = 'Verified',
+  status = 'verified',
   updated_at = NOW()
 WHERE LOWER(COALESCE(status, '')) = 'verified';
 
 UPDATE public.profiles
 SET
-  status = CASE WHEN is_verified THEN 'Verified' ELSE 'Unverified' END,
+  status = CASE
+    WHEN COALESCE(is_verified, FALSE) THEN 'verified'
+    WHEN LOWER(COALESCE(status, '')) IN ('pending', 'approved', 'under_review') THEN 'pending'
+    ELSE 'free'
+  END,
   updated_at = NOW()
-WHERE status IS NULL OR btrim(status) = '';
+WHERE status IS DISTINCT FROM CASE
+  WHEN COALESCE(is_verified, FALSE) THEN 'verified'
+  WHEN LOWER(COALESCE(status, '')) IN ('pending', 'approved', 'under_review') THEN 'pending'
+  ELSE 'free'
+END;
 
 -- Enforce valid user_status values
 UPDATE public.profiles

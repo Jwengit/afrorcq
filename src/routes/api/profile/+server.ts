@@ -5,6 +5,117 @@ import { env } from '$env/dynamic/private';
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
 
+async function getAuthenticatedUser(request: Request) {
+	const authorization = request.headers.get('authorization');
+	if (!authorization?.startsWith('Bearer ')) return null;
+	if (!supabaseUrl || !supabaseKey) return null;
+
+	const authClient = createClient(supabaseUrl, supabaseKey);
+	const {
+		data: { user },
+		error
+	} = await authClient.auth.getUser(authorization.slice(7).trim());
+
+	return error || !user ? null : user;
+}
+
+function getServiceRoleClient() {
+	const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
+	return supabaseUrl && serviceRoleKey ? createClient(supabaseUrl, serviceRoleKey) : null;
+}
+
+export const GET: RequestHandler = async ({ request }) => {
+	if (!supabaseUrl || !supabaseKey) {
+		return json({ error: 'Server configuration error' }, { status: 500 });
+	}
+	const user = await getAuthenticatedUser(request);
+	if (!user) return json({ error: 'Unauthorized' }, { status: 401 });
+
+	const adminClient = getServiceRoleClient();
+	if (!adminClient) return json({ error: 'Server configuration error' }, { status: 500 });
+
+	const { data, error } = await adminClient
+		.from('profiles')
+		.select('phone_number, driver_contact_method')
+		.eq('id', user.id)
+		.maybeSingle();
+
+	if (error) {
+		console.error('Private profile contact load error:', error);
+		return json({ error: 'Unable to load private contact details.' }, { status: 500 });
+	}
+
+	return json(
+		{
+			contact: {
+				phone_number: data?.phone_number ?? null,
+				driver_contact_method: data?.driver_contact_method ?? null
+			}
+		},
+		{ headers: { 'Cache-Control': 'private, no-store' } }
+	);
+};
+
+export const PATCH: RequestHandler = async ({ request }) => {
+	if (!supabaseUrl || !supabaseKey) {
+		return json({ error: 'Server configuration error' }, { status: 500 });
+	}
+	const user = await getAuthenticatedUser(request);
+	if (!user) return json({ error: 'Unauthorized' }, { status: 401 });
+
+	const adminClient = getServiceRoleClient();
+	if (!adminClient) return json({ error: 'Server configuration error' }, { status: 500 });
+
+	let body: Record<string, unknown>;
+	try {
+		const parsedBody: unknown = await request.json();
+		if (!parsedBody || typeof parsedBody !== 'object' || Array.isArray(parsedBody)) {
+			return json({ error: 'Invalid request body.' }, { status: 400 });
+		}
+		body = parsedBody as Record<string, unknown>;
+	} catch {
+		return json({ error: 'Invalid request body.' }, { status: 400 });
+	}
+
+	const update: Record<string, string | null> = {};
+	if (Object.prototype.hasOwnProperty.call(body, 'phone_number')) {
+		if (body.phone_number !== null && typeof body.phone_number !== 'string') {
+			return json({ error: 'Phone number must be a string or null.' }, { status: 400 });
+		}
+		const phoneNumber = typeof body.phone_number === 'string' ? body.phone_number.trim() : '';
+		if (phoneNumber.length > 50) {
+			return json({ error: 'Phone number must be 50 characters or fewer.' }, { status: 400 });
+		}
+		update.phone_number = phoneNumber || null;
+	}
+
+	if (Object.prototype.hasOwnProperty.call(body, 'driver_contact_method')) {
+		const method = body.driver_contact_method;
+		if (method !== null && method !== 'phone' && method !== 'email') {
+			return json({ error: 'Contact method must be phone, email, or null.' }, { status: 400 });
+		}
+		update.driver_contact_method = method;
+	}
+
+	if (Object.keys(update).length === 0) {
+		return json({ error: 'No private contact fields provided.' }, { status: 400 });
+	}
+
+	const { data, error } = await adminClient
+		.from('profiles')
+		.update(update)
+		.eq('id', user.id)
+		.select('phone_number, driver_contact_method')
+		.single();
+
+	if (error) {
+		console.error('Private profile contact save error:', error);
+		return json({ error: 'Unable to save private contact details.' }, { status: 500 });
+	}
+
+	return json({ contact: data });
+};
+
 export const POST: RequestHandler = async ({ request }) => {
 	try {
 		if (!supabaseUrl || !supabaseKey) {
@@ -203,4 +314,3 @@ export const DELETE: RequestHandler = async ({ request }) => {
 		return json({ error: `Internal error: ${message}` }, { status: 500 });
 	}
 };
-

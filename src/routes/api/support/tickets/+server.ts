@@ -2,6 +2,7 @@ import { json, type RequestHandler } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
 import { resolveMemberStatus, canUseVerifiedFeatures } from '$lib/membershipAccess';
+import { sendMemberSupportReplyEmail } from '$lib/email';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -69,7 +70,23 @@ async function assertVerifiedMember(adminClient: any, userId: string) {
 async function purgeExpiredSupportConversations(adminClient: any) {
 	const cutoffIso = new Date(Date.now() - SUPPORT_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-	await adminClient.from('support_tickets').delete().eq('status', 'resolved').lt('updated_at', cutoffIso);
+	const { error: resolvedTicketError } = await adminClient
+		.from('support_tickets')
+		.delete()
+		.eq('initiated_by_admin', false)
+		.eq('status', 'resolved')
+		.lt('updated_at', cutoffIso);
+	if (resolvedTicketError) console.error('Resolved support ticket cleanup failed:', resolvedTicketError);
+
+	const { error: archivedConversationError } = await adminClient
+		.from('support_tickets')
+		.delete()
+		.eq('initiated_by_admin', true)
+		.not('archived_at', 'is', null)
+		.lt('archived_at', cutoffIso);
+	if (archivedConversationError) {
+		console.error('Archived member conversation cleanup failed:', archivedConversationError);
+	}
 }
 
 export const GET: RequestHandler = async ({ request, url }) => {
@@ -85,49 +102,50 @@ export const GET: RequestHandler = async ({ request, url }) => {
 			return json({ error: 'Server configuration error' }, { status: 500 });
 		}
 
-		const blocked = await assertVerifiedMember(adminClient, userId);
-		if (blocked) return blocked;
-
 		await purgeExpiredSupportConversations(adminClient);
 
 		const ticketId = url.searchParams.get('ticketId');
 		if (ticketId) {
-			const [{ data: ticket, error: ticketError }, { data: messages, error: messagesError }] =
-				await Promise.all([
-					adminClient
-						.from('support_tickets')
-						.select('id, user_id, subject, status, priority, created_at, updated_at')
-						.eq('id', ticketId)
-						.eq('user_id', userId)
-						.maybeSingle(),
-					adminClient
-						.from('support_messages')
-						.select('id, ticket_id, sender_id, sender_role, message, created_at')
-						.eq('ticket_id', ticketId)
-						.order('created_at', { ascending: true })
-				]);
+			const { data: ticket, error: ticketError } = await adminClient
+				.from('support_tickets')
+				.select('id, user_id, subject, status, priority, initiated_by_admin, archived_at, created_at, updated_at')
+				.eq('id', ticketId)
+				.eq('user_id', userId)
+				.maybeSingle();
 
 			if (ticketError) return json({ error: ticketError.message }, { status: 500 });
-			if (messagesError) return json({ error: messagesError.message }, { status: 500 });
 			if (!ticket) return json({ error: 'Ticket not found' }, { status: 404 });
+
+			if (!ticket.initiated_by_admin) {
+				const blocked = await assertVerifiedMember(adminClient, userId);
+				if (blocked) return blocked;
+			}
+
+			const { data: messages, error: messagesError } = await adminClient
+				.from('support_messages')
+				.select('id, ticket_id, sender_id, sender_role, message, created_at')
+				.eq('ticket_id', ticketId)
+				.order('created_at', { ascending: true });
+
+			if (messagesError) return json({ error: messagesError.message }, { status: 500 });
 
 			return json({ ticket, messages: messages ?? [] });
 		}
 
 		const { data: tickets, error } = await adminClient
 			.from('support_tickets')
-			.select('id, user_id, subject, status, priority, created_at, updated_at')
+			.select('id, user_id, subject, status, priority, initiated_by_admin, archived_at, created_at, updated_at')
 			.eq('user_id', userId)
 			.order('updated_at', { ascending: false });
 
-		if (error) {
-			if (error.message.toLowerCase().includes('relation') && error.message.toLowerCase().includes('support_tickets')) {
-				return json({ tickets: [] });
-			}
-			return json({ error: error.message }, { status: 500 });
-		}
+		if (error) return json({ error: error.message }, { status: 500 });
 
-		return json({ tickets: tickets ?? [] });
+		const blocked = await assertVerifiedMember(adminClient, userId);
+		const visibleTickets = blocked
+			? (tickets ?? []).filter((ticket) => ticket.initiated_by_admin)
+			: tickets ?? [];
+
+		return json({ tickets: visibleTickets });
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Internal server error';
 		return json({ error: message }, { status: 500 });
@@ -147,9 +165,6 @@ export const POST: RequestHandler = async ({ request }) => {
 			return json({ error: 'Server configuration error' }, { status: 500 });
 		}
 
-		const blocked = await assertVerifiedMember(adminClient, userId);
-		if (blocked) return blocked;
-
 		await purgeExpiredSupportConversations(adminClient);
 
 		const body = await request.json();
@@ -158,19 +173,41 @@ export const POST: RequestHandler = async ({ request }) => {
 		const message = (body?.message as string | undefined)?.trim();
 		const priority = (body?.priority as 'low' | 'normal' | 'high' | 'urgent' | undefined) ?? 'normal';
 
-		if (!message) {
-			return json({ error: 'message is required' }, { status: 400 });
+		if (!message || message.length > 5000) {
+			return json({ error: 'A message of 1 to 5,000 characters is required.' }, { status: 400 });
 		}
 
 		if (ticketId) {
 			const { data: existing, error: existingError } = await adminClient
 				.from('support_tickets')
-				.select('id')
+				.select('id, subject, initiated_by_admin, status')
 				.eq('id', ticketId)
 				.eq('user_id', userId)
 				.maybeSingle();
 			if (existingError) return json({ error: existingError.message }, { status: 500 });
 			if (!existing) return json({ error: 'Ticket not found' }, { status: 404 });
+
+			if (!existing.initiated_by_admin) {
+				const blocked = await assertVerifiedMember(adminClient, userId);
+				if (blocked) return blocked;
+			} else if (existing.status === 'resolved' || existing.status === 'closed') {
+				return json({ error: 'This conversation has been resolved and can no longer receive replies.' }, { status: 409 });
+			}
+
+			if (existing.initiated_by_admin) {
+				const { data: updatedTicket, error: updateError } = await adminClient
+					.from('support_tickets')
+					.update({ status: 'open', updated_at: new Date().toISOString() })
+					.eq('id', ticketId)
+					.eq('user_id', userId)
+					.in('status', ['open', 'in_progress'])
+					.select('id')
+					.maybeSingle();
+				if (updateError) return json({ error: updateError.message }, { status: 500 });
+				if (!updatedTicket) {
+					return json({ error: 'This conversation has been resolved and can no longer receive replies.' }, { status: 409 });
+				}
+			}
 
 			const { error: insertMsgError } = await adminClient.from('support_messages').insert({
 				ticket_id: ticketId,
@@ -179,6 +216,33 @@ export const POST: RequestHandler = async ({ request }) => {
 				message
 			});
 			if (insertMsgError) return json({ error: insertMsgError.message }, { status: 500 });
+
+			if (existing.initiated_by_admin) {
+				const { data: memberProfile, error: memberProfileError } = await adminClient
+					.from('profiles')
+					.select('first_name')
+					.eq('id', userId)
+					.maybeSingle();
+				if (memberProfileError) {
+					console.error('Member reply email profile lookup failed:', memberProfileError);
+				}
+
+				const emailId = await sendMemberSupportReplyEmail({
+					to: 'hizli.carpooling@gmail.com',
+					firstName: memberProfile?.first_name,
+					subject: existing.subject,
+					message
+				});
+				if (!emailId) {
+					return json({
+						success: true,
+						ticketId,
+						emailSent: false,
+						warning: 'Your reply was saved, but the administrator could not be notified by email.'
+					});
+				}
+				return json({ success: true, ticketId, emailSent: true });
+			}
 
 			await adminClient
 				.from('support_tickets')
@@ -189,8 +253,14 @@ export const POST: RequestHandler = async ({ request }) => {
 			return json({ success: true, ticketId });
 		}
 
+		const blocked = await assertVerifiedMember(adminClient, userId);
+		if (blocked) return blocked;
+
 		if (!subject) {
 			return json({ error: 'subject is required when creating a new ticket' }, { status: 400 });
+		}
+		if (subject.length > 150) {
+			return json({ error: 'Subject must be 150 characters or fewer.' }, { status: 400 });
 		}
 
 		const { data: createdTicket, error: createTicketError } = await adminClient

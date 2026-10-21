@@ -198,6 +198,33 @@ export async function sendSupportReplyEmail(input: BaseEmailInput): Promise<stri
 	return sendEmail({ ...input, template: buildSupportReplyEmail(input.firstName) });
 }
 
+export function buildMemberSupportReplyEmail(input: {
+	firstName?: string | null;
+	subject: string;
+	message: string;
+}): EmailTemplate {
+	return buildEmailTemplate({
+		firstName: input.firstName,
+		subject: `Member replied: ${input.subject}`,
+		lines: [
+			'A member replied to an administrator-started conversation.',
+			...input.message.split(/\r?\n/).map((line) => line || '\u00a0'),
+			'Open the Admin Support Center to continue the conversation.'
+		],
+		buttonLabel: 'Open Admin Support',
+		buttonUrl: `${HIZLI_BASE_URL}/admin`
+	});
+}
+
+export async function sendMemberSupportReplyEmail(input: {
+	to: string;
+	firstName?: string | null;
+	subject: string;
+	message: string;
+}): Promise<string | null> {
+	return sendEmail({ to: input.to, template: buildMemberSupportReplyEmail(input) });
+}
+
 export function buildAdminMemberMessageEmail(input: {
 	firstName?: string | null;
 	subject: string;
@@ -210,9 +237,9 @@ export function buildAdminMemberMessageEmail(input: {
 		lines: [
 			'An administrator sent you a message.',
 			...messageLines,
-			'You can also find this message in your Activity Center.'
+			'Log in to your dashboard to reply and continue the conversation.'
 		],
-		buttonLabel: 'Open Activity Center',
+		buttonLabel: 'Open conversation',
 		buttonUrl: `${HIZLI_DASHBOARD_URL}#admin-messages`
 	});
 }
@@ -297,6 +324,8 @@ export function buildBookingAcceptedEmail(input: {
 	rideRoute: string;
 	rideDate: string;
 	driverName: string;
+	driverContactMethod: 'phone' | 'email' | null;
+	driverContact: string | null;
 	myBookingsUrl: string;
 }): EmailTemplate {
 	return buildEmailTemplate({
@@ -307,6 +336,14 @@ export function buildBookingAcceptedEmail(input: {
 			`Route: ${input.rideRoute}`,
 			`Date: ${input.rideDate}`,
 			`Driver: ${input.driverName}`,
+			...(input.driverContactMethod && input.driverContact
+				? [
+						`Contact your driver by ${input.driverContactMethod === 'phone' ? 'phone' : 'email'}: ${input.driverContact}`,
+						'Please contact your driver to coordinate your trip.'
+					]
+				: [
+						'Your driver has not shared a contact detail yet. Please use the Help & Support section in your dashboard if you need assistance coordinating your trip.'
+					]),
 			'Remember: payment is handled directly between you and your driver at the time of the trip.',
 			'See you on the road!',
 			'The Hizli Team'
@@ -322,6 +359,8 @@ export async function sendBookingAcceptedEmail(input: {
 	rideRoute: string;
 	rideDate: string;
 	driverName: string;
+	driverContactMethod: 'phone' | 'email' | null;
+	driverContact: string | null;
 	myBookingsUrl: string;
 }): Promise<string | null> {
 	return sendEmail({

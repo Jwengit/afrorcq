@@ -79,23 +79,47 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		const email = (targetProfile?.email ?? authResult.user.email ?? '').trim();
 		const firstName = targetProfile?.first_name ?? null;
-		const { error: notificationError } = await adminClient.from('member_notifications').insert({
-			user_id: userId,
-			type: 'admin_message',
-			title: subject,
+		const { data: ticket, error: ticketError } = await adminClient
+			.from('support_tickets')
+			.insert({
+				user_id: userId,
+				subject,
+				status: 'open',
+				priority: 'normal',
+				initiated_by_admin: true
+			})
+			.select('id')
+			.single();
+
+		if (ticketError) {
+			console.error('Admin conversation creation failed:', ticketError);
+			return json({ error: 'Unable to start the member conversation.' }, { status: 500 });
+		}
+
+		const { error: messageError } = await adminClient.from('support_messages').insert({
+			ticket_id: ticket.id,
+			sender_id: adminUserId,
+			sender_role: 'admin',
 			message
 		});
 
-		if (notificationError) {
-			return json({ error: notificationError.message }, { status: 500 });
+		if (messageError) {
+			const { error: cleanupError } = await adminClient
+				.from('support_tickets')
+				.delete()
+				.eq('id', ticket.id);
+			if (cleanupError) console.error('Admin conversation cleanup failed:', cleanupError);
+			console.error('Admin conversation opening message failed:', messageError);
+			return json({ error: 'Unable to save the opening message.' }, { status: 500 });
 		}
 
 		if (!email) {
 			console.error('Admin member message saved without email: member has no email address.', userId);
 			return json({
 				success: true,
+				ticketId: ticket.id,
 				emailSent: false,
-				warning: 'The message was added to the member Activity Center, but the member has no email address.'
+				warning: 'The conversation was started, but the member has no email address.'
 			});
 		}
 
@@ -103,12 +127,13 @@ export const POST: RequestHandler = async ({ request }) => {
 		if (!emailId) {
 			return json({
 				success: true,
+				ticketId: ticket.id,
 				emailSent: false,
-				warning: 'The message was added to the member Activity Center, but the email could not be sent. Check the server and Resend logs.'
+				warning: 'The conversation was started, but the email could not be sent. Check the server and Resend logs.'
 			});
 		}
 
-		return json({ success: true, emailSent: true });
+		return json({ success: true, ticketId: ticket.id, emailSent: true });
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Internal server error';
 		console.error('Admin member message failed:', message);

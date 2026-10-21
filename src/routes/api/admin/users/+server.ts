@@ -31,8 +31,8 @@ const PROFILE_SELECT_WITHOUT_RATING =
 const PROFILE_SELECT_BASE =
 	'id, first_name, last_name, email, phone_number, gender, profile_photo_url, profile_photo_status, is_admin, is_verified, membership_paid, membership_expires_at, user_status, created_at';
 
-function resolveVerificationLabel(isVerified: boolean): 'Verified' | 'Unverified' {
-	return isVerified ? 'Verified' : 'Unverified';
+function resolveVerificationStatus(isVerified: boolean): 'verified' | 'free' {
+	return isVerified ? 'verified' : 'free';
 }
 
 function normalizeNameValue(value: string | null): string | null {
@@ -357,8 +357,8 @@ export const PATCH: RequestHandler = async ({ request }) => {
 			if (adminCheck.email?.toLowerCase() !== 'hizli.carpooling@gmail.com') {
 				return json({ error: 'Only the master admin can simulate payment.' }, { status: 403 });
 			}
-			if (value !== true) {
-				return json({ error: 'Test payment can only be enabled.' }, { status: 400 });
+			if (typeof value !== 'boolean') {
+				return json({ error: 'Test payment must be enabled or disabled.' }, { status: 400 });
 			}
 		}
 
@@ -398,7 +398,8 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		}
 
 		if (field === 'membership_paid') {
-			payload.membership_expires_at = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+			payload.membership_expires_at =
+				value === true ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() : null;
 		}
 
 		if (field === 'is_verified' && typeof value === 'boolean') {
@@ -430,7 +431,7 @@ export const PATCH: RequestHandler = async ({ request }) => {
 				payload.gender = profileForVerification?.gender ?? null;
 			}
 
-			payload.status = resolveVerificationLabel(value);
+			payload.status = resolveVerificationStatus(value);
 		}
 
 		payload[field] = value;

@@ -4,7 +4,7 @@
 UPDATE profiles
 SET
   is_verified = false,
-  status = CASE WHEN status = 'Verified' THEN 'Unverified' ELSE status END,
+  status = CASE WHEN LOWER(status) = 'verified' THEN 'free' ELSE status END,
   updated_at = NOW()
 WHERE
   is_verified = true

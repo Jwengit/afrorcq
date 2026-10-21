@@ -229,7 +229,7 @@ export const PATCH: RequestHandler = async ({ request }) => {
 					.maybeSingle(),
 				adminClient
 					.from('profiles')
-					.select('first_name, last_name')
+					.select('first_name, last_name, phone_number, driver_contact_method')
 					.eq('id', ride.driver_id)
 					.maybeSingle()
 			]);
@@ -240,12 +240,33 @@ export const PATCH: RequestHandler = async ({ request }) => {
 			if (passengerEmail && status === 'Confirmed') {
 				const driverName =
 					`${driverProfile?.first_name ?? ''} ${driverProfile?.last_name ?? ''}`.trim() || 'Your driver';
+				const driverContactMethod =
+					driverProfile?.driver_contact_method === 'phone' ||
+					driverProfile?.driver_contact_method === 'email'
+						? driverProfile.driver_contact_method
+						: null;
+				let driverContact: string | null = null;
+
+				if (driverContactMethod === 'phone') {
+					driverContact = (driverProfile?.phone_number ?? '').trim() || null;
+				} else if (driverContactMethod === 'email') {
+					const { data: driverAuthResult, error: driverAuthError } =
+						await adminClient.auth.admin.getUserById(ride.driver_id);
+					if (driverAuthError) {
+						console.error('Unable to load driver account email for booking confirmation:', driverAuthError);
+					} else {
+						driverContact = driverAuthResult.user?.email?.trim() || null;
+					}
+				}
+
 				await sendBookingAcceptedEmail({
 					to: passengerEmail,
 					firstName: passengerProfile?.first_name,
 					rideRoute,
 					rideDate,
 					driverName,
+					driverContactMethod,
+					driverContact,
 					myBookingsUrl: `${getOrigin()}/dashboard`
 				});
 			} else if (passengerEmail && status === 'Rejected' && rejectionReason) {
