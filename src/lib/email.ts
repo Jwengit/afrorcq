@@ -198,6 +198,34 @@ export async function sendSupportReplyEmail(input: BaseEmailInput): Promise<stri
 	return sendEmail({ ...input, template: buildSupportReplyEmail(input.firstName) });
 }
 
+export function buildAdminMemberMessageEmail(input: {
+	firstName?: string | null;
+	subject: string;
+	message: string;
+}): EmailTemplate {
+	const messageLines = input.message.split(/\r?\n/).map((line) => line || '\u00a0');
+	return buildEmailTemplate({
+		firstName: input.firstName,
+		subject: input.subject,
+		lines: [
+			'An administrator sent you a message.',
+			...messageLines,
+			'You can also find this message in your Activity Center.'
+		],
+		buttonLabel: 'Open Activity Center',
+		buttonUrl: `${HIZLI_DASHBOARD_URL}#admin-messages`
+	});
+}
+
+export async function sendAdminMemberMessageEmail(input: {
+	to: string;
+	firstName?: string | null;
+	subject: string;
+	message: string;
+}): Promise<string | null> {
+	return sendEmail({ to: input.to, firstName: input.firstName, template: buildAdminMemberMessageEmail(input) });
+}
+
 // ─── EMAIL 3 — Reset password ───
 
 export function buildPasswordResetEmail(input: { firstName?: string | null; resetUrl: string }): EmailTemplate {

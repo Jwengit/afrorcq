@@ -49,6 +49,11 @@
 	let users: AdminUser[] = [];
 	let actionUserId: string | null = null;
 	let statsError = '';
+	let memberMessageSubject = '';
+	let memberMessageBody = '';
+	let memberMessageSending = false;
+	let memberMessageFeedback = '';
+	let memberMessageFeedbackIsError = false;
 
 	// Modal states
 	let showProfileModal = false;
@@ -1242,6 +1247,10 @@
 		selectedProfile = user;
 		// Reset any previous user action messages when opening a profile
 		usersActionMessage = '';
+		memberMessageSubject = '';
+		memberMessageBody = '';
+		memberMessageFeedback = '';
+		memberMessageFeedbackIsError = false;
 		showProfileModal = true;
 		profileRides = [];
 		profileBookings = [];
@@ -1649,6 +1658,66 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 			}
 		} finally {
 			privateProfileOpenInProgress = false;
+		}
+	}
+
+	async function sendDirectMemberMessage() {
+		if (!selectedProfile || !memberMessageSubject.trim() || !memberMessageBody.trim()) return;
+
+		memberMessageSending = true;
+		memberMessageFeedback = '';
+		memberMessageFeedbackIsError = false;
+
+		try {
+			const {
+				data: { session }
+			} = await supabase.auth.getSession();
+
+			if (!session?.access_token) {
+				memberMessageFeedback = 'Session expired. Please sign in again.';
+				memberMessageFeedbackIsError = true;
+				return;
+			}
+
+			const response = await fetch('/api/admin/member-message', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: 'Bearer ' + session.access_token
+				},
+				body: JSON.stringify({
+					userId: selectedProfile.id,
+					subject: memberMessageSubject.trim(),
+					message: memberMessageBody.trim()
+				})
+			});
+
+			const responseText = await response.text();
+			let payload: { error?: string; emailSent?: boolean; warning?: string };
+			try {
+				payload = JSON.parse(responseText) as typeof payload;
+			} catch {
+				memberMessageFeedback = `The server returned an invalid response (HTTP ${response.status}). The admin messaging endpoint may not be deployed yet.`;
+				memberMessageFeedbackIsError = true;
+				return;
+			}
+
+			if (!response.ok) {
+				memberMessageFeedback = payload?.error || 'Unable to send this message.';
+				memberMessageFeedbackIsError = true;
+				return;
+			}
+
+			memberMessageFeedback = payload?.emailSent
+				? 'Message sent by email and added to the member Activity Center.'
+				: payload?.warning || 'Message added to the member Activity Center, but the email was not sent.';
+			memberMessageSubject = '';
+			memberMessageBody = '';
+		} catch (error) {
+			memberMessageFeedback = error instanceof Error ? error.message : 'Unable to send this message.';
+			memberMessageFeedbackIsError = true;
+		} finally {
+			memberMessageSending = false;
 		}
 	}
 
@@ -5626,6 +5695,49 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 							<div>
 								<p class="text-gray-500">Role</p>
 								<p class="font-medium text-gray-900">{selectedProfile.is_admin ? 'Admin' : 'User'}</p>
+							</div>
+						</div>
+					</div>
+
+					<div class="rounded-xl border border-indigo-200 bg-indigo-50/50 p-4">
+						<h3 class="text-sm font-semibold text-gray-900">Contact member</h3>
+						<p class="mt-1 text-xs text-gray-600">
+							Send an email to {selectedProfile.email || 'the member'} and add the same message to their Activity Center.
+						</p>
+						<div class="mt-3 space-y-3">
+							<label class="block">
+								<span class="mb-1 block text-xs font-medium text-gray-700">Subject</span>
+								<input
+									bind:value={memberMessageSubject}
+									maxlength="150"
+									class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+									placeholder="Message subject"
+								/>
+							</label>
+							<label class="block">
+								<span class="mb-1 block text-xs font-medium text-gray-700">Message</span>
+								<textarea
+									bind:value={memberMessageBody}
+									maxlength="5000"
+									rows="4"
+									class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+									placeholder="Write a message to this member"
+								></textarea>
+							</label>
+							{#if memberMessageFeedback}
+								<p class="rounded-lg border px-3 py-2 text-sm {memberMessageFeedbackIsError ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}">
+									{memberMessageFeedback}
+								</p>
+							{/if}
+							<div class="flex justify-end">
+								<button
+									type="button"
+									on:click={sendDirectMemberMessage}
+									disabled={memberMessageSending || !memberMessageSubject.trim() || !memberMessageBody.trim()}
+									class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+								>
+									{memberMessageSending ? 'Sending...' : 'Send message'}
+								</button>
 							</div>
 						</div>
 					</div>

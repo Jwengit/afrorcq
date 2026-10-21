@@ -201,6 +201,16 @@
 		const status = docStatusByType.get(type);
 		return status === 'pending' || status === 'approved';
 	});
+	$: canSubmitProfileForReview =
+		!profile.is_verified &&
+		!isProfileStatusPending &&
+		allRequiredDocsUploaded &&
+		Boolean(profile.profile_photo_url);
+	$: canSubmitDriverDocumentsForReview =
+		showDriverDocuments &&
+		driverApprovedCount < 4 &&
+		!driverDocumentsSubmitted &&
+		allDriverDocsUploaded;
 
 	const baseRequiredDocumentTypes = ['identity_card_front', 'identity_card_back', 'student_id', 'proof_of_address'] as const;
 	const driverOnlyDocumentTypes = ['driver_license_front', 'driver_license_back', 'insurance', 'vehicle_registration'] as const;
@@ -836,38 +846,39 @@
 		documentsError = '';
 		documentsMessage = '';
 		try {
-			const { error } = await supabase
-				.from('profiles')
-				.update({ status: 'pending' })
-				.eq('id', currentUser!.id);
-			if (error) throw error;
-			profile = { ...profile, status: 'pending' };
-			documentsMessage = 'Your documents have been submitted for review. We\'ll notify you once verified.';
-			await notifySelfSubmission('profile_documents_submitted');
+			const submittedScopes: string[] = [];
+
+			if (canSubmitProfileForReview) {
+				const { error } = await supabase
+					.from('profiles')
+					.update({ status: 'pending' })
+					.eq('id', currentUser!.id);
+				if (error) throw error;
+				profile = { ...profile, status: 'pending' };
+				submittedScopes.push('profile');
+				await notifySelfSubmission('profile_documents_submitted');
+			}
+
+			if (canSubmitDriverDocumentsForReview) {
+				driverDocumentsSubmitted = true;
+				submittedScopes.push('driver');
+				await notifySelfSubmission('car_documents_submitted');
+			}
+
+			documentsMessage =
+				submittedScopes.length === 2
+					? 'Your profile and car documents have been submitted for review.'
+					: submittedScopes[0] === 'driver'
+						? 'Your car documents have been submitted for review. We\'ll notify you once validated.'
+						: 'Your profile documents have been submitted for review. We\'ll notify you once verified.';
 		} catch (err) {
-			documentsError = err instanceof Error ? err.message : 'Unable to submit for review. Please try again.';
+			documentsError = err instanceof Error ? err.message : 'Unable to submit documents for review. Please try again.';
 		} finally {
 			submittingForReview = false;
 		}
 	}
 
-	let submittingDriverForReview = false;
 	let driverDocumentsSubmitted = false;
-
-	async function submitDriverDocumentsForReview() {
-		submittingDriverForReview = true;
-		documentsError = '';
-		documentsMessage = '';
-		try {
-			documentsMessage = 'Your car documents have been submitted for review. We\'ll notify you once validated.';
-			driverDocumentsSubmitted = true;
-			await notifySelfSubmission('car_documents_submitted');
-		} catch (err) {
-			documentsError = err instanceof Error ? err.message : 'Unable to submit car documents for review. Please try again.';
-		} finally {
-			submittingDriverForReview = false;
-		}
-	}
 
 	async function deleteVerificationDocument(document: VerificationDocument) {
 		if (document.status !== 'pending') {
@@ -1750,24 +1761,10 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 							{/each}
 						</div>
 
-						{#if driverApprovedCount < 4}
-							{#if driverDocumentsSubmitted && allDriverDocsUploaded}
-								<div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-									Your car documents are being reviewed by admin. We'll notify you once validated.
-								</div>
-							{:else}
-								<div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-									<p class="text-sm text-slate-600">Submit your car documents once all 4 are uploaded above.</p>
-									<button
-										type="button"
-										on:click={submitDriverDocumentsForReview}
-										disabled={!allDriverDocsUploaded || uploadingDocument || submittingDriverForReview}
-										class="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50 {allDriverDocsUploaded ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-gray-400'}"
-									>
-										{submittingDriverForReview ? 'Submitting...' : 'Submit for review'}
-									</button>
-								</div>
-							{/if}
+						{#if driverDocumentsSubmitted && driverApprovedCount < 4 && allDriverDocsUploaded}
+							<div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+								Your car documents are being reviewed by admin. We'll notify you once validated.
+							</div>
 						{/if}
 					</div>
 				{/if}
@@ -1778,34 +1775,31 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 					</div>
 				{/if}
 
-				<!-- Submit for review -->
 				<div class="mt-5 rounded-xl border border-slate-200 bg-white p-5">
-					{#if !profile.is_verified}
-						{#if isProfileStatusPending && allRequiredDocsUploaded}
-							<div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-								Your documents are being reviewed by admin. We'll notify you once verified.
-							</div>
-						{:else}
-							<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-								<div>
-									<h3 class="text-base font-semibold text-slate-900">Ready to submit?</h3>
-									<p class="text-sm text-slate-600 mt-1">Submit your profile for admin review once all required documents are uploaded.</p>
-								</div>
-								<button
-									type="button"
-									on:click={submitForReview}
-									disabled={!allRequiredDocsUploaded || uploadingDocument || !profile.profile_photo_url || submittingForReview}
-									class="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50 {allRequiredDocsUploaded && profile.profile_photo_url ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-gray-400'}"
-								>
-									{submittingForReview ? 'Submitting...' : 'Submit for review'}
-								</button>
-							</div>
-							{#if !profile.profile_photo_url}
-								<p class="mt-3 text-xs text-slate-500">Add a profile photo to enable submission.</p>
-							{:else if !allRequiredDocsUploaded}
-								<p class="mt-3 text-xs text-slate-500">Upload all required profile documents above to enable submission.</p>
-							{/if}
-						{/if}
+					{#if !profile.is_verified && isProfileStatusPending && allRequiredDocsUploaded}
+						<div class="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+							Your profile documents are being reviewed by admin. We'll notify you once verified.
+						</div>
+					{/if}
+					{#if !canSubmitProfileForReview && !profile.is_verified && !isProfileStatusPending}
+						<p class="mb-3 text-sm text-slate-600">
+							{!profile.profile_photo_url
+								? 'Add a profile photo and upload all required profile documents to enable submission.'
+								: 'Upload all required profile documents above to enable submission.'}
+						</p>
+					{/if}
+					{#if showDriverDocuments && !canSubmitDriverDocumentsForReview && !driverDocumentsSubmitted && driverApprovedCount < 4}
+						<p class="mb-3 text-sm text-slate-600">Upload all four driver documents above to include them in your review submission.</p>
+					{/if}
+					{#if (!profile.is_verified && !isProfileStatusPending) || (showDriverDocuments && driverApprovedCount < 4)}
+						<button
+							type="button"
+							on:click={submitForReview}
+							disabled={(!canSubmitProfileForReview && !canSubmitDriverDocumentsForReview) || uploadingDocument || submittingForReview}
+							class="inline-flex w-full items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto {canSubmitProfileForReview || canSubmitDriverDocumentsForReview ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-gray-400'}"
+						>
+							{submittingForReview ? 'Submitting...' : 'Submit for review'}
+						</button>
 					{/if}
 				</div>
 
