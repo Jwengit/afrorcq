@@ -304,6 +304,10 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		if (event.type === 'checkout.session.completed') {
 			const session = event.data.object as Stripe.Checkout.Session;
+			if (session.mode !== 'subscription' || session.payment_status !== 'paid') {
+				return json({ received: true, ignored: 'checkout-not-paid-subscription' });
+			}
+
 			const userId = await resolveUserId(stripe, session);
 			if (!userId) {
 				return json({ received: true, ignored: 'no-user-id' });
@@ -312,7 +316,12 @@ export const POST: RequestHandler = async ({ request }) => {
 			let expiresAtIso: string | null = null;
 			if (typeof session.subscription === 'string') {
 				const subscription = await stripe.subscriptions.retrieve(session.subscription);
+				if (subscription.status !== 'active' && subscription.status !== 'trialing') {
+					return json({ received: true, ignored: 'subscription-not-active' });
+				}
 				expiresAtIso = timestampToIso(extractSubscriptionPeriodEnd(subscription));
+			} else {
+				return json({ received: true, ignored: 'missing-subscription' });
 			}
 
 			await updateMembership(userId, true, expiresAtIso);

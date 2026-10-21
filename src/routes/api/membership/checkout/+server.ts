@@ -41,6 +41,29 @@ export const POST: RequestHandler = async ({ request, url }) => {
 			return json({ error: 'Invalid plan selection. Use "student" or "standard".' }, { status: 400 });
 		}
 
+		const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
+		if (!serviceRoleKey) {
+			return json({ error: 'Server configuration error: membership verification is unavailable.' }, { status: 500 });
+		}
+
+		const adminClient = createClient(supabaseUrl, serviceRoleKey);
+		const { data: profile, error: profileError } = await adminClient
+			.from('profiles')
+			.select('status, membership_plan')
+			.eq('id', user.id)
+			.maybeSingle();
+
+		if (profileError) {
+			console.error('Unable to verify membership eligibility for Stripe checkout:', profileError);
+			return json({ error: 'Unable to verify membership eligibility.' }, { status: 500 });
+		}
+		if (!profile || (profile.status ?? '').toLowerCase() !== 'approved') {
+			return json({ error: 'Your documents must be approved before paying for membership.' }, { status: 403 });
+		}
+		if (profile.membership_plan !== selectedPlan) {
+			return json({ error: 'The selected plan does not match your saved membership plan.' }, { status: 400 });
+		}
+
 		const stripe = getStripeClient();
 		const priceId = selectedPlan === 'student' ? getStudentPriceId() : getStandardPriceId();
 		const appBaseUrl = (env.PUBLIC_SITE_URL || url.origin).replace(/\/$/, '');

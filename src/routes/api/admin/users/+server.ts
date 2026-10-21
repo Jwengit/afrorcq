@@ -312,7 +312,6 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		const field =
 			body.field === 'is_admin' ||
 			body.field === 'is_verified' ||
-			body.field === 'membership_paid' ||
 			body.field === 'email_confirmed' ||
 			body.field === 'gender'
 				? body.field
@@ -353,15 +352,6 @@ export const PATCH: RequestHandler = async ({ request }) => {
 			}
 		}
 
-		if (field === 'membership_paid') {
-			if (adminCheck.email?.toLowerCase() !== 'hizli.carpooling@gmail.com') {
-				return json({ error: 'Only the master admin can simulate payment.' }, { status: 403 });
-			}
-			if (typeof value !== 'boolean') {
-				return json({ error: 'Test payment must be enabled or disabled.' }, { status: 400 });
-			}
-		}
-
 		const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
 		if (field === 'email_confirmed') {
@@ -395,11 +385,6 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		if (field === 'is_admin' || field === 'is_verified') {
 			payload.first_name = firstName;
 			payload.last_name = lastName;
-		}
-
-		if (field === 'membership_paid') {
-			payload.membership_expires_at =
-				value === true ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() : null;
 		}
 
 		if (field === 'is_verified' && typeof value === 'boolean') {

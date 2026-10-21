@@ -50,11 +50,20 @@
 		});
 		rawProfileStatus = (typedProfile?.status ?? '').toLowerCase();
 
-		// Priority: URL param > saved plan in DB > default 'student'
-		if (planParam === 'student' || planParam === 'standard') {
-			selectedPlan = planParam;
-		} else if (typedProfile?.membership_plan === 'student' || typedProfile?.membership_plan === 'standard') {
+		// Keep the saved plan authoritative; use the URL only before a plan has been saved.
+		if (typedProfile?.membership_plan === 'student' || typedProfile?.membership_plan === 'standard') {
 			selectedPlan = typedProfile.membership_plan as 'student' | 'standard';
+		} else if (planParam === 'student' || planParam === 'standard') {
+			selectedPlan = planParam;
+		}
+
+		const checkoutResult = params.get('checkout');
+		if (checkoutResult === 'success') {
+			message = typedProfile?.membership_paid
+				? 'Your Stripe payment is confirmed and your membership is active.'
+				: 'Stripe completed the checkout. We are waiting for payment confirmation; this can take a few moments. Refresh this page shortly if your membership is not active yet.';
+		} else if (checkoutResult === 'cancel') {
+			message = 'Checkout was cancelled. You have not been charged.';
 		}
 
 		loading = false;
@@ -167,6 +176,11 @@
 		{#if errorMessage}
 			<div class="mb-6 rounded-xl border border-red-300 bg-red-50 p-4 text-red-700">
 				{errorMessage}
+			</div>
+		{/if}
+		{#if message}
+			<div class="mb-6 rounded-xl border border-emerald-300 bg-emerald-50 p-4 text-emerald-800" role="status">
+				{message}
 			</div>
 		{/if}
 

@@ -942,62 +942,6 @@
 		await updateUserFlag(profile, 'is_verified', value);
 	}
 
-	async function simulatePaymentReceived() {
-		const profile = selectedProfile;
-		if (!profile || currentUser?.email?.toLowerCase() !== 'hizli.carpooling@gmail.com') return;
-		const enablePayment = profile.membership_paid !== true;
-		const confirmation = enablePayment
-			? `Simulate a test payment for ${profile.email ?? profile.id}? This will activate the membership for 30 days.`
-			: `Deactivate the test membership for ${profile.email ?? profile.id}?`;
-		if (!confirm(confirmation)) return;
-
-		actionUserId = profile.id;
-		try {
-			usersActionMessage = '';
-			const {
-				data: { session }
-			} = await supabase.auth.getSession();
-			if (!session?.access_token) {
-				usersActionMessage = 'Session expired. Please sign in again.';
-				return;
-			}
-
-			const response = await fetch('/api/admin/users', {
-				method: 'PATCH',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${session.access_token}`
-				},
-				body: JSON.stringify({ userId: profile.id, field: 'membership_paid', value: enablePayment })
-			});
-			const payload = await response.json();
-			if (!response.ok) {
-				usersActionMessage = payload?.error || 'Unable to update test membership.';
-				return;
-			}
-
-			const expiresAt = enablePayment
-				? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-				: null;
-			users = users.map((user) =>
-				user.id === profile.id
-					? { ...user, membership_paid: enablePayment, membership_expires_at: expiresAt }
-					: user
-			);
-			selectedProfile = {
-				...profile,
-				membership_paid: enablePayment,
-				membership_expires_at: expiresAt
-			};
-			usersActionMessage = enablePayment
-				? 'Test payment received. Membership activated for 30 days.'
-				: 'Test membership deactivated.';
-		} catch (error) {
-			usersActionMessage = error instanceof Error ? error.message : 'Unable to update test membership.';
-		} finally {
-			actionUserId = null;
-		}
-	}
 
 	async function updateProfilePhotoStatus(status: 'approved' | 'rejected') {
 		if (!selectedProfile?.id || !selectedProfile.profile_photo_url) return;
@@ -5899,17 +5843,6 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 								</div>
 								{#if selectedProfile.membership_paid !== true}
 									<p class="mt-2 text-xs text-gray-500">Payment must be confirmed before verification.</p>
-								{/if}
-								{#if currentUser?.email?.toLowerCase() === 'hizli.carpooling@gmail.com'}
-									<!-- TEST ONLY: simulates Stripe payment confirmation for testing before Stripe is live -->
-									<button
-										type="button"
-										disabled={actionUserId === selectedProfile.id}
-										on:click={simulatePaymentReceived}
-										class="mt-2 w-full px-3 py-2 rounded-lg border {selectedProfile.membership_paid ? 'border-red-300 text-red-700 bg-red-50 hover:bg-red-100' : 'border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100'} text-sm font-medium disabled:opacity-50"
-									>
-										{selectedProfile.membership_paid ? 'Deactivate test membership' : 'Simulate payment / renew 30 days (test)'}
-									</button>
 								{/if}
 							</div>
 
