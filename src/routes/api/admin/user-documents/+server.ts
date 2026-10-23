@@ -13,14 +13,6 @@ const DRIVER_REQUIRED_DOCUMENT_TYPES = [
   'vehicle_registration'
 ] as const;
 
-const DRIVER_DOCUMENT_TYPES = new Set<string>([
-  'driver_license',
-  'driver_license_front',
-  'driver_license_back',
-  'insurance',
-  'vehicle_registration'
-]);
-
 function normalizeLegacyStatus(status: 'approved' | 'rejected'): string {
   return status === 'approved' ? 'Approved' : 'Rejected';
 }
@@ -34,10 +26,6 @@ function normalizeDocumentType(value: string | null | undefined): string {
   if (normalized === 'registration' || normalized === 'vehicle_papers') return 'vehicle_registration';
 
   return normalized;
-}
-
-function isDriverDocument(value: string | null | undefined): boolean {
-  return DRIVER_DOCUMENT_TYPES.has(normalizeDocumentType(value));
 }
 
 function isApprovedStatus(value: string | null | undefined): boolean {
@@ -165,11 +153,16 @@ function resolveRowDocumentType(row: {
 
 async function shouldMarkProfileVerified(adminClient: any, userId: string): Promise<boolean> {
   try {
-    const { data: profile } = await adminClient
+    const { data: profile, error: profileError } = await adminClient
       .from('profiles')
       .select('plate_number, car_make, profile_photo_url, membership_plan')
       .eq('id', userId)
       .maybeSingle();
+
+    if (profileError) {
+      console.error('Verification eligibility profile lookup error:', profileError);
+      return false;
+    }
 
     const profilePhotoUrl =
       typeof profile?.profile_photo_url === 'string' ? profile.profile_photo_url.trim() : '';
@@ -180,7 +173,10 @@ async function shouldMarkProfileVerified(adminClient: any, userId: string): Prom
       .select('document_type, status')
       .eq('user_id', userId);
 
-    if (error) return false;
+    if (error) {
+      console.error('Verification eligibility document lookup error:', error);
+      return false;
+    }
 
     const rows = (data ?? []) as Array<{ document_type?: string | null; status?: string | null }>;
     const approvedTypes = new Set(
@@ -207,7 +203,8 @@ async function shouldMarkProfileVerified(adminClient: any, userId: string): Prom
     }
 
     return true;
-  } catch {
+  } catch (error) {
+    console.error('Unexpected error while checking verification eligibility:', error);
     return false;
   }
 }
@@ -414,11 +411,23 @@ export const PATCH: RequestHandler = async ({ request }) => {
     }
 
     const wasSameStatus = normalizeReviewStatus(existingDoc.status) === status;
+    let profileBecameApproved = false;
 
-    if (status === 'approved' && !isDriverDocument(existingDoc.document_type)) {
+    if (status === 'approved') {
       const allApproved = await shouldMarkProfileVerified(adminClient, existingDoc.user_id);
 
       if (allApproved) {
+        const { data: profile, error: profileError } = await adminClient
+          .from('profiles')
+          .select('status')
+          .eq('id', existingDoc.user_id)
+          .maybeSingle();
+        if (profileError) {
+          console.error('Profile approval status lookup error:', profileError);
+          return json({ error: 'Unable to check the profile approval status.' }, { status: 500 });
+        }
+
+        profileBecameApproved = (profile?.status ?? '').toLowerCase() !== 'approved';
         const { error: profileUpdateError } = await adminClient
           .from('profiles')
           .update({
@@ -429,11 +438,12 @@ export const PATCH: RequestHandler = async ({ request }) => {
           .eq('id', existingDoc.user_id);
         if (profileUpdateError) {
           console.error('Profile approval status update error:', profileUpdateError);
+          return json({ error: 'Documents were reviewed, but the profile approval status could not be updated.' }, { status: 500 });
         }
       }
     }
 
-    if (!wasSameStatus) {
+    if (!wasSameStatus || profileBecameApproved) {
       await sendReviewSummaryIfComplete(adminClient, existingDoc.user_id, existingDoc.id);
     }
 
