@@ -67,6 +67,7 @@
 	let allowedToPublish = false;
 	let isFemaleDriver = false;
 	let memberStatus: MemberStatus = 'free';
+	let canPublishAsFreeMember = false;
 	let freeProfileIncomplete = false;
 	let needsDriverDocumentsOnly = false;
 	let reviewPendingBlocked = false;
@@ -187,8 +188,12 @@
 			membershipPaid: profile?.membership_paid,
 			membershipExpiresAt: profile?.membership_expires_at
 		});
+		canPublishAsFreeMember =
+			!profile?.is_verified &&
+			!profile?.membership_paid &&
+			(memberStatus === 'free' || memberStatus === 'pending');
 		freeProfileIncomplete = false;
-		if (memberStatus === 'free') {
+		if (canPublishAsFreeMember) {
 			const token = await getSessionAccessToken();
 			if (!token) {
 				errorMessage = 'Session expired. Please sign in again.';
@@ -294,7 +299,7 @@
 		needsDriverDocumentsOnly = canUseVerifiedFeatures(memberStatus) && !missingCarInfo && missingDriverDocs.length > 0;
 
 		allowedToPublish =
-			memberStatus === 'free'
+			canPublishAsFreeMember
 				? !freeProfileIncomplete && !accountBlocked && !reviewPendingBlocked
 				: canUseVerifiedFeatures(memberStatus) &&
 					!accountBlocked &&
@@ -319,7 +324,7 @@
 				errorMessage = accountBlockedReason;
 			} else if (reviewPendingBlocked) {
 				errorMessage = 'You have a pending review. Please rate your last trip before booking or posting a new ride.';
-			} else if (freeProfileIncomplete) {
+			} else if (canPublishAsFreeMember && freeProfileIncomplete) {
 				errorMessage = 'Complete your profile and get your profile photo approved before publishing a ride.';
 			} else if (!canUseVerifiedFeatures(memberStatus)) {
 				errorMessage = VERIFIED_ONLY_MESSAGE;
@@ -443,7 +448,7 @@
 						>
 							Leave a review
 						</a>
-					{:else if memberStatus === 'free' && freeProfileIncomplete}
+					{:else if canPublishAsFreeMember && freeProfileIncomplete}
 						<p class="text-sm font-semibold text-amber-800 mb-2">
 							Complete your profile details and get your profile photo approved to publish a free ride. Driver documents are not verified for free rides.
 						</p>
@@ -453,9 +458,9 @@
 						>
 							Complete my profile
 						</a>
-					{:else if !canUseVerifiedFeatures(memberStatus) && memberStatus !== 'free'}
+					{:else if !canPublishAsFreeMember && !canUseVerifiedFeatures(memberStatus)}
 						<p class="text-sm font-semibold text-amber-800 mb-2">
-							{VERIFIED_ONLY_MESSAGE} An active verified membership is required to publish rides.
+							{VERIFIED_ONLY_MESSAGE}
 						</p>
 						<a
 							href={resolve('/pricing')}
@@ -605,7 +610,7 @@
 						</label>
 					</div>
 				{/if}
-					{#if memberStatus === 'free'}
+					{#if canPublishAsFreeMember}
 						<p class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
 							This ride is not safety-verified by Hizli. Members who choose to book it accept responsibility for assessing the risk.
 						</p>

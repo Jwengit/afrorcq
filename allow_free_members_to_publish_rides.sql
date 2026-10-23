@@ -1,4 +1,4 @@
--- Allow complete free members to publish unverified rides.
+-- Allow complete unpaid, unverified members to publish unverified rides.
 -- Verified members still need approved vehicle details and driver documents.
 BEGIN;
 
@@ -28,7 +28,7 @@ CREATE POLICY "Members can publish eligible rides" ON public.rides
         AND coalesce(nullif(btrim(p.profile_photo_url), ''), NULL) IS NOT NULL
         AND (
           (
-            p.status = 'free'
+            p.status IN ('free', 'pending')
             AND coalesce(p.is_verified, FALSE) IS FALSE
             AND coalesce(p.membership_paid, FALSE) IS FALSE
             AND coalesce(nullif(btrim(p.first_name), ''), NULL) IS NOT NULL
@@ -70,7 +70,7 @@ BEGIN
     SELECT 1
     FROM public.profiles p
     WHERE p.id = NEW.driver_id
-      AND p.status = 'free'
+      AND p.status IN ('free', 'pending')
       AND coalesce(p.is_verified, FALSE) IS FALSE
       AND coalesce(p.membership_paid, FALSE) IS FALSE
       AND coalesce(p.user_status, 'active') NOT IN ('suspended', 'banned')
@@ -111,7 +111,7 @@ BEGIN
   INTO eligible_verified_member;
 
   IF eligible_free_member IS NOT TRUE AND eligible_verified_member IS NOT TRUE THEN
-    RAISE EXCEPTION 'Complete your free profile and get your profile photo approved, or become a verified member with approved driver documents to publish a ride.'
+    RAISE EXCEPTION 'Complete your free profile and get your profile photo approved, or become an active verified member with approved driver documents to publish a ride.'
       USING ERRCODE = '23514';
   END IF;
 
