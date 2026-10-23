@@ -7,7 +7,9 @@ import {
 	sendBookingRequestReceivedEmail
 } from '$lib/email';
 import {
+	canAccessGirlsOnlyRides,
 	canUseVerifiedFeatures,
+	hasCompleteFreeMemberProfile,
 	resolveMemberStatus,
 	VERIFIED_ONLY_MESSAGE
 } from '$lib/membershipAccess';
@@ -63,6 +65,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		const body = await request.json().catch(() => ({}));
 		const rideId = typeof body?.rideId === 'string' ? body.rideId : '';
 		const seats = Number.isFinite(body?.seats) ? Number(body.seats) : Number.parseInt(body?.seats, 10);
+		const acceptsUnverifiedRisk = body?.acceptUnverifiedRisk === true;
 
 		if (!rideId || !Number.isFinite(seats) || seats <= 0) {
 			return json({ error: 'Invalid booking request.' }, { status: 400 });
@@ -73,7 +76,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		const { data: ride, error: rideError } = await adminClient
 			.from('rides')
-			.select('id, driver_id, departure, arrival, ride_date, seats, price')
+			.select('id, driver_id, departure, arrival, ride_date, seats, price, girls_only')
 			.eq('id', rideId)
 			.maybeSingle();
 
@@ -101,7 +104,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		const { data: passengerAccount, error: passengerAccountError } = await adminClient
 			.from('profiles')
-			.select('user_status, suspended_until, status, is_verified, membership_paid, membership_expires_at')
+			.select('user_status, suspended_until, status, is_verified, membership_paid, membership_expires_at, first_name, last_name, gender, profile_photo_url, profile_photo_status, phone_number, date_of_birth, city_of_birth, address, zip_code, bio, languages, ride_preferences')
 			.eq('id', user.id)
 			.maybeSingle();
 
@@ -133,9 +136,45 @@ export const POST: RequestHandler = async ({ request }) => {
 			membershipPaid: passengerAccount?.membership_paid,
 			membershipExpiresAt: passengerAccount?.membership_expires_at
 		});
+		const isVerifiedPassenger = canUseVerifiedFeatures(passengerMemberStatus);
 		if (
-			canUseVerifiedFeatures(driverMemberStatus) &&
-			!canUseVerifiedFeatures(passengerMemberStatus)
+			!hasCompleteFreeMemberProfile({
+				firstName: passengerAccount?.first_name,
+				lastName: passengerAccount?.last_name,
+				gender: passengerAccount?.gender,
+				profilePhotoApproved: passengerAccount?.profile_photo_status === 'approved',
+				profilePhotoUrl: passengerAccount?.profile_photo_url,
+				phoneNumber: passengerAccount?.phone_number,
+				dateOfBirth: passengerAccount?.date_of_birth,
+				cityOfBirth: passengerAccount?.city_of_birth,
+				address: passengerAccount?.address,
+				zipCode: passengerAccount?.zip_code,
+				bio: passengerAccount?.bio,
+				languages: passengerAccount?.languages,
+				ridePreferences: passengerAccount?.ride_preferences
+			}) &&
+			!isVerifiedPassenger
+		) {
+			return json(
+				{ error: 'Complete all required profile details and get your profile photo approved before booking.' },
+				{ status: 403 }
+			);
+		}
+		if (!isVerifiedPassenger && passengerMemberStatus !== 'free') {
+			return json({ error: VERIFIED_ONLY_MESSAGE }, { status: 403 });
+		}
+		if (!isVerifiedPassenger && driverMemberStatus !== 'free') {
+			return json({ error: VERIFIED_ONLY_MESSAGE }, { status: 403 });
+		}
+		if (!canUseVerifiedFeatures(driverMemberStatus) && !acceptsUnverifiedRisk) {
+			return json(
+				{ error: 'Confirm that you understand this ride has not been safety-verified before booking.' },
+				{ status: 400 }
+			);
+		}
+		if (
+			ride.girls_only &&
+			!canAccessGirlsOnlyRides(passengerMemberStatus, passengerAccount?.gender)
 		) {
 			return json({ error: VERIFIED_ONLY_MESSAGE }, { status: 403 });
 		}

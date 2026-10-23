@@ -7,10 +7,8 @@
 	import {
 		resolveMemberStatus,
 		canUseVerifiedFeatures,
-		canAccessGirlsOnlyRides,
 		hasPendingReviewBlock,
 		type MemberStatus,
-		VERIFIED_ONLY_MESSAGE
 	} from '$lib/membershipAccess';
 
 	type Ride = {
@@ -48,7 +46,6 @@
 	let searched = false;
 	let loading = false;
 	let errorMessage = '';
-	let isFemaleUser = false;
 	let currentMemberStatus: MemberStatus = 'free';
 	let reviewPendingBlocked = false;
 	let reviewPendingRideId: string | null = null;
@@ -113,7 +110,7 @@
 
 		const { data: profile, error: profileError } = await supabase
 			.from('profiles')
-			.select('gender, status, is_verified, membership_paid, membership_expires_at, review_pending, review_pending_ride_id')
+			.select('status, is_verified, membership_paid, membership_expires_at, review_pending, review_pending_ride_id')
 			.eq('id', userId)
 			.maybeSingle();
 		if (profileError) {
@@ -121,7 +118,6 @@
 			return;
 		}
 
-		isFemaleUser = (profile?.gender ?? '').toLowerCase() === 'female';
 		currentMemberStatus = resolveMemberStatus({
 			status: profile?.status,
 			isVerified: profile?.is_verified,
@@ -272,11 +268,7 @@
 
 				const seatsMatch = ride.seats >= seatsFilter;
 
-				const girlsOnlyMatch = ride.girls_only
-					? canAccessGirlsOnlyRides(currentMemberStatus, isFemaleUser ? 'female' : 'male')
-					: true;
-
-				return isUpcomingRide && routeMatches && dateMatches && seatsMatch && girlsOnlyMatch;
+				return isUpcomingRide && routeMatches && dateMatches && seatsMatch;
 			});
 		}
 
@@ -453,6 +445,11 @@
 								<h2 class="text-base font-semibold text-gray-900">
 									{ride.departure} → {ride.arrival}
 								</h2>
+								{#if ride.driver_profile && !ride.driver_profile.is_verified}
+									<p class="mt-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800">
+										This free ride has not been safety-verified by Hizli. Please assess the risk before booking.
+									</p>
+								{/if}
 								<p class="text-sm text-gray-500 mt-0.5">
 									{new Date(ride.ride_date).toLocaleString()}
 								</p>

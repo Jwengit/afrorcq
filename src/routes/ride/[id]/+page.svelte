@@ -9,6 +9,7 @@
 		resolveMemberStatus,
 		canUseVerifiedFeatures,
 		canAccessGirlsOnlyRides,
+		hasCompleteFreeMemberProfile,
 		type MemberStatus,
 		VERIFIED_ONLY_MESSAGE
 	} from '$lib/membershipAccess';
@@ -43,6 +44,7 @@ let currentUser: User | null = null;
 let ride: Ride | null = null;
 let loading = true;
 let bookingSeats = 1;
+let acceptsUnverifiedRisk = false;
 let processingBooking = false;
 let errorMessage = '';
 let successMessage = '';
@@ -52,10 +54,11 @@ let reportMessage = '';
 let reportError = '';
 let driverPublicProfileId: number | null = null;
 let driverName = 'Driver';
-let rideDriverIsVerifiedMember = false;
+let rideDriverMemberStatus: MemberStatus = 'free';
 let driverIsVerifiedMember = false;
 let currentMemberStatus: MemberStatus = 'free';
 let currentUserGender = '';
+let currentUserProfileReady = false;
 let existingBooking: { id: string; status: string; seats_booked: number } | null = null;
 let accountBlocked = false;
 let accountBlockedReason = '';
@@ -89,12 +92,15 @@ onMount(async () => {
 	currentUser = user;
 
 	if (user) {
-		const { data: profile } = await supabase
+		const { data: profile, error: profileError } = await supabase
 			.from('profiles')
-			.select('gender, status, is_verified, membership_paid, membership_expires_at, user_status, suspended_until')
+			.select('first_name, last_name, gender, profile_photo_url, profile_photo_status, status, is_verified, membership_paid, membership_expires_at, user_status, suspended_until, date_of_birth, city_of_birth, address, zip_code, bio, languages, ride_preferences')
 			.eq('id', user.id)
 			.maybeSingle();
 
+		if (profileError) {
+			console.error('Booking profile lookup error:', profileError);
+		}
 		currentUserGender = (profile?.gender ?? '').toLowerCase();
 		currentMemberStatus = resolveMemberStatus({
 			status: profile?.status,
@@ -102,6 +108,47 @@ onMount(async () => {
 			membershipPaid: profile?.membership_paid,
 			membershipExpiresAt: profile?.membership_expires_at
 		});
+		let phoneNumber: string | null = null;
+		if (!profileError && !canUseVerifiedFeatures(currentMemberStatus)) {
+			try {
+				const token = await getSessionAccessToken();
+				if (token) {
+					const contactResponse = await fetch('/api/profile', {
+						headers: { Authorization: `Bearer ${token}` }
+					});
+					const contactPayload = await contactResponse.json();
+					if (contactResponse.ok) {
+						phoneNumber = contactPayload?.contact?.phone_number ?? null;
+					} else {
+						console.error('Booking private profile load error:', contactPayload?.error);
+					}
+				}
+			} catch (contactError) {
+				console.error('Booking private profile load error:', contactError);
+			}
+		}
+		currentUserProfileReady =
+			!profileError &&
+			(canUseVerifiedFeatures(currentMemberStatus)
+				? Boolean(profile?.first_name?.trim()) &&
+					Boolean(profile?.last_name?.trim()) &&
+					Boolean(profile?.gender?.trim()) &&
+					profile?.profile_photo_status === 'approved'
+				: hasCompleteFreeMemberProfile({
+						firstName: profile?.first_name,
+						lastName: profile?.last_name,
+						gender: profile?.gender,
+						profilePhotoApproved: profile?.profile_photo_status === 'approved',
+						profilePhotoUrl: profile?.profile_photo_url,
+						phoneNumber,
+						dateOfBirth: profile?.date_of_birth,
+						cityOfBirth: profile?.city_of_birth,
+						address: profile?.address,
+						zipCode: profile?.zip_code,
+						bio: profile?.bio,
+						languages: profile?.languages,
+						ridePreferences: profile?.ride_preferences
+					}));
 		accountBlocked = profile?.user_status === 'suspended' || profile?.user_status === 'banned';
 		accountBlockedReason =
 			profile?.user_status === 'banned'
@@ -146,15 +193,14 @@ onMount(async () => {
 	const typedDriver = (driverProfile as DriverPublicProfile | null) ?? null;
 	driverPublicProfileId = typedDriver?.public_id ?? null;
 	driverName = `${typedDriver?.first_name ?? ''} ${typedDriver?.last_name ?? ''}`.trim() || 'Driver';
-	rideDriverIsVerifiedMember =
-		resolveMemberStatus({
+	rideDriverMemberStatus = resolveMemberStatus({
 			status: typedDriver?.status,
 			isVerified: typedDriver?.is_verified,
 			membershipPaid: typedDriver?.membership_paid,
 			membershipExpiresAt: typedDriver?.membership_expires_at
-		}) === 'verified';
+		});
 	driverIsVerifiedMember =
-		rideDriverIsVerifiedMember && Boolean(typedDriver?.profile_photo_url?.trim());
+		canUseVerifiedFeatures(rideDriverMemberStatus) && Boolean(typedDriver?.profile_photo_url?.trim());
 
 	if (currentUser && currentUser.id !== ride.driver_id) {
 		const { data: bookingData } = await supabase
@@ -188,7 +234,20 @@ onMount(async () => {
 			return;
 		}
 
-		if (rideDriverIsVerifiedMember && !canUseVerifiedFeatures(currentMemberStatus)) {
+		if (!currentUserProfileReady) {
+			errorMessage = 'Complete your profile and get your profile photo approved before booking.';
+			return;
+		}
+
+		if (
+			!canUseVerifiedFeatures(currentMemberStatus) &&
+			(currentMemberStatus !== 'free' || rideDriverMemberStatus !== 'free')
+		) {
+			errorMessage = VERIFIED_ONLY_MESSAGE;
+			return;
+		}
+
+		if (ride.girls_only && !canAccessGirlsOnlyRides(currentMemberStatus, currentUserGender)) {
 			errorMessage = VERIFIED_ONLY_MESSAGE;
 			return;
 		}
@@ -215,7 +274,11 @@ onMount(async () => {
 				'Content-Type': 'application/json',
 				Authorization: `Bearer ${token}`
 			},
-			body: JSON.stringify({ rideId: ride.id, seats: bookingSeats })
+			body: JSON.stringify({
+				rideId: ride.id,
+				seats: bookingSeats,
+				acceptUnverifiedRisk: acceptsUnverifiedRisk
+			})
 		});
 
 		const payload = await response.json().catch(() => null);
@@ -329,6 +392,11 @@ onMount(async () => {
 						</span>
 					{/if}
 				</div>
+				{#if !driverIsVerifiedMember}
+					<p class="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+						This free ride and its driver documents have not been safety-verified by Hizli. Please assess the risk before booking.
+					</p>
+				{/if}
 				<div class="mt-3">
 					{#if canUseVerifiedFeatures(currentMemberStatus)}
 						<button
@@ -365,6 +433,11 @@ onMount(async () => {
 						</p>
 						<p class="text-sm text-emerald-700">No online payment is required. Members arrange payment directly between each other.</p>
 					</div>
+				{:else if currentUser && currentUser.id !== ride.driver_id && !currentUserProfileReady}
+					<div class="mt-8 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+						<p>Complete your profile details and get your profile photo approved before booking.</p>
+						<a href={resolve('/profile')} class="mt-2 inline-flex items-center rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700">Complete my profile</a>
+					</div>
 				{:else if currentUser && currentUser.id !== ride.driver_id && ride.girls_only && !canAccessGirlsOnlyRides(currentMemberStatus, currentUserGender)}
 					<div class="mt-8 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
 						<p>{VERIFIED_ONLY_MESSAGE}</p>
@@ -378,8 +451,8 @@ onMount(async () => {
 					currentUser &&
 					currentUser.id !== ride.driver_id &&
 					ride.seats > 0 &&
-					rideDriverIsVerifiedMember &&
-					!canUseVerifiedFeatures(currentMemberStatus)}
+					!canUseVerifiedFeatures(currentMemberStatus) &&
+					(currentMemberStatus !== 'free' || rideDriverMemberStatus !== 'free')}
 					<div class="mt-8 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
 						<p>{VERIFIED_ONLY_MESSAGE}</p>
 						<a href="/pricing" class="mt-2 inline-flex items-center rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700">Upgrade now</a>
@@ -399,10 +472,20 @@ onMount(async () => {
 							<p>Total for this booking: <strong>${bookingTotalAmount.toFixed(2)}</strong> USD</p>
 							<p class="text-emerald-700">No online payment is required. Members arrange payment directly between each other.</p>
 						</div>
+						{#if !canUseVerifiedFeatures(rideDriverMemberStatus)}
+							<label class="flex items-start gap-2 text-sm text-amber-800">
+								<input
+									type="checkbox"
+									bind:checked={acceptsUnverifiedRisk}
+									class="mt-0.5 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+								/>
+								<span>I understand this ride and its driver documents have not been safety-verified by Hizli, and I accept responsibility for my choice.</span>
+							</label>
+						{/if}
 						<button
 							type="button"
 							on:click={createBooking}
-							disabled={processingBooking}
+							disabled={processingBooking || (!canUseVerifiedFeatures(rideDriverMemberStatus) && !acceptsUnverifiedRisk)}
 							class="mt-3 inline-flex items-center rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-60"
 						>
 							{processingBooking ? 'Submitting...' : 'Confirm booking'}

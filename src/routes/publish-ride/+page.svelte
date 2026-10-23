@@ -7,13 +7,27 @@
 	import { user } from '$lib/authStore';
 	import { supabase } from '$lib/supabaseClient';
 	import {
+		hasCompleteFreeMemberProfile,
+		canUseVerifiedFeatures,
 		resolveMemberStatus,
 		hasPendingReviewBlock,
 		type MemberStatus,
+		VERIFIED_ONLY_MESSAGE
 	} from '$lib/membershipAccess';
 
 	type DriverProfile = {
 		gender?: string | null;
+		first_name?: string | null;
+		last_name?: string | null;
+		date_of_birth?: string | null;
+		city_of_birth?: string | null;
+		address?: string | null;
+		zip_code?: string | null;
+		bio?: string | null;
+		languages?: string[] | null;
+		ride_preferences?: string[] | null;
+		profile_photo_url?: string | null;
+		profile_photo_status?: string | null;
 		car_make?: string | null;
 		car_year?: string | number | null;
 		color?: string | null;
@@ -53,6 +67,7 @@
 	let allowedToPublish = false;
 	let isFemaleDriver = false;
 	let memberStatus: MemberStatus = 'free';
+	let freeProfileIncomplete = false;
 	let needsDriverDocumentsOnly = false;
 	let reviewPendingBlocked = false;
 	let accountBlocked = false;
@@ -140,6 +155,13 @@
 		currentUser = data.user;
 	}
 
+	async function getSessionAccessToken(): Promise<string | null> {
+		const {
+			data: { session }
+		} = await supabase.auth.getSession();
+		return session?.access_token ?? null;
+	}
+
 	async function loadPublishingEligibility(userId: string) {
 		errorMessage = '';
 		missingRequirements = [];
@@ -148,7 +170,7 @@
 
 		const { data, error } = await supabase
 			.from('profiles')
-			.select('gender, car_make, car_year, color, status, is_verified, membership_paid, membership_expires_at, review_pending, review_pending_ride_id, user_status, suspended_until')
+			.select('first_name, last_name, gender, date_of_birth, city_of_birth, address, zip_code, bio, languages, ride_preferences, profile_photo_url, profile_photo_status, car_make, car_year, color, status, is_verified, membership_paid, membership_expires_at, review_pending, review_pending_ride_id, user_status, suspended_until')
 			.eq('id', userId)
 			.maybeSingle();
 
@@ -165,6 +187,51 @@
 			membershipPaid: profile?.membership_paid,
 			membershipExpiresAt: profile?.membership_expires_at
 		});
+		freeProfileIncomplete = false;
+		if (memberStatus === 'free') {
+			const token = await getSessionAccessToken();
+			if (!token) {
+				errorMessage = 'Session expired. Please sign in again.';
+				allowedToPublish = false;
+				return;
+			}
+
+			let phoneNumber: string | null = null;
+			try {
+				const contactResponse = await fetch('/api/profile', {
+					headers: { Authorization: `Bearer ${token}` }
+				});
+				const contactPayload = await contactResponse.json();
+				if (!contactResponse.ok) {
+					console.error('Private profile contact load error:', contactPayload?.error);
+					errorMessage = contactPayload?.error || 'Unable to load your profile details.';
+					allowedToPublish = false;
+					return;
+				}
+				phoneNumber = contactPayload?.contact?.phone_number ?? null;
+			} catch (contactError) {
+				console.error('Private profile contact load error:', contactError);
+				errorMessage = 'Unable to load your profile details.';
+				allowedToPublish = false;
+				return;
+			}
+
+			freeProfileIncomplete = !hasCompleteFreeMemberProfile({
+				firstName: profile?.first_name,
+				lastName: profile?.last_name,
+				gender: profile?.gender,
+				profilePhotoApproved: profile?.profile_photo_status === 'approved',
+				profilePhotoUrl: profile?.profile_photo_url,
+				phoneNumber,
+				dateOfBirth: profile?.date_of_birth,
+				cityOfBirth: profile?.city_of_birth,
+				address: profile?.address,
+				zipCode: profile?.zip_code,
+				bio: profile?.bio,
+				languages: profile?.languages,
+				ridePreferences: profile?.ride_preferences
+			});
+		}
 		reviewPendingBlocked = hasPendingReviewBlock({
 			status: profile?.status,
 			isVerified: profile?.is_verified,
@@ -181,58 +248,61 @@
 					: '';
 		isFemaleDriver = (profile?.gender ?? '').toLowerCase() === 'female';
 
-		// Check car information
-		const hasCarInfo =
-			Boolean((profile?.car_make ?? '').toString().trim()) &&
-			Boolean((profile?.car_year ?? '').toString().trim()) &&
-			Boolean((profile?.color ?? '').toString().trim());
+		if (canUseVerifiedFeatures(memberStatus)) {
+			const hasCarInfo =
+				Boolean((profile?.car_make ?? '').toString().trim()) &&
+				Boolean((profile?.car_year ?? '').toString().trim()) &&
+				Boolean((profile?.color ?? '').toString().trim());
 
-		if (!hasCarInfo) {
-			missingRequirements.push('car_info');
-		}
+			if (!hasCarInfo) {
+				missingRequirements.push('car_info');
+			}
 
-		// Check driver documents (license front/back, insurance, vehicle registration)
-		const DRIVER_DOCS: MissingRequirement[] = ['driver_license_front', 'driver_license_back', 'insurance', 'vehicle_registration'];
-
-		if (currentUser) {
+			const driverDocs: MissingRequirement[] = [
+				'driver_license_front',
+				'driver_license_back',
+				'insurance',
+				'vehicle_registration'
+			];
 			const { data: docs, error: docsError } = await supabase
 				.from('verification_documents')
 				.select('document_type, status')
-				.eq('user_id', currentUser.id);
+				.eq('user_id', userId);
 
 			if (!docsError && docs) {
 				const approvedTypes = new Set(
 					docs
-						.filter((d: { document_type?: string | null; status?: string | null }) =>
-							(d.status ?? '').toLowerCase() === 'approved'
+						.filter((doc: { document_type?: string | null; status?: string | null }) =>
+							(doc.status ?? '').toLowerCase() === 'approved'
 						)
-						.map((d: { document_type?: string | null }) =>
-							(d.document_type ?? '').trim().toLowerCase()
+						.map((doc: { document_type?: string | null }) =>
+							(doc.document_type ?? '').trim().toLowerCase()
 						)
 				);
 
-				for (const docType of DRIVER_DOCS) {
-					if (!approvedTypes.has(docType)) {
-						missingRequirements.push(docType);
-					}
+				for (const docType of driverDocs) {
+					if (!approvedTypes.has(docType)) missingRequirements.push(docType);
 				}
 			} else {
-				missingRequirements.push(...DRIVER_DOCS);
+				console.error('Driver documents lookup error:', docsError);
+				missingRequirements.push(...driverDocs);
 			}
 		}
 
 		const missingDriverDocs = missingRequirements.filter((requirement) => requirement !== 'car_info');
 		const missingCarInfo = missingRequirements.includes('car_info');
-
-		needsDriverDocumentsOnly = !missingCarInfo && missingDriverDocs.length > 0;
+		needsDriverDocumentsOnly = canUseVerifiedFeatures(memberStatus) && !missingCarInfo && missingDriverDocs.length > 0;
 
 		allowedToPublish =
-			!accountBlocked &&
-			!reviewPendingBlocked &&
-			!missingCarInfo &&
-			missingDriverDocs.length === 0;
+			memberStatus === 'free'
+				? !freeProfileIncomplete && !accountBlocked && !reviewPendingBlocked
+				: canUseVerifiedFeatures(memberStatus) &&
+					!accountBlocked &&
+					!reviewPendingBlocked &&
+					!missingCarInfo &&
+					missingDriverDocs.length === 0;
 
-		if (!isFemaleDriver) {
+		if (!isFemaleDriver || !canUseVerifiedFeatures(memberStatus)) {
 			form.girlsOnly = false;
 		}
 	}
@@ -249,6 +319,10 @@
 				errorMessage = accountBlockedReason;
 			} else if (reviewPendingBlocked) {
 				errorMessage = 'You have a pending review. Please rate your last trip before booking or posting a new ride.';
+			} else if (freeProfileIncomplete) {
+				errorMessage = 'Complete your profile and get your profile photo approved before publishing a ride.';
+			} else if (!canUseVerifiedFeatures(memberStatus)) {
+				errorMessage = VERIFIED_ONLY_MESSAGE;
 			}
 			return;
 		}
@@ -369,7 +443,27 @@
 						>
 							Leave a review
 						</a>
-					{:else if needsDriverDocumentsOnly}
+					{:else if memberStatus === 'free' && freeProfileIncomplete}
+						<p class="text-sm font-semibold text-amber-800 mb-2">
+							Complete your profile details and get your profile photo approved to publish a free ride. Driver documents are not verified for free rides.
+						</p>
+						<a
+							href={resolve('/profile')}
+							class="mt-3 inline-block rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 transition-colors"
+						>
+							Complete my profile
+						</a>
+					{:else if !canUseVerifiedFeatures(memberStatus) && memberStatus !== 'free'}
+						<p class="text-sm font-semibold text-amber-800 mb-2">
+							{VERIFIED_ONLY_MESSAGE} An active verified membership is required to publish rides.
+						</p>
+						<a
+							href={resolve('/pricing')}
+							class="mt-3 inline-block rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 transition-colors"
+						>
+							Become a verified member
+						</a>
+					{:else if canUseVerifiedFeatures(memberStatus) && needsDriverDocumentsOnly}
 						<p class="text-sm font-semibold text-amber-800 mb-2">
 							You need to upload your driver documents before publishing a ride.
 						</p>
@@ -379,7 +473,7 @@
 						>
 							Upload documents
 						</a>
-					{:else}
+					{:else if canUseVerifiedFeatures(memberStatus)}
 						<p class="text-sm font-semibold text-amber-800 mb-2">
 							You need to complete your driver profile before publishing a ride.
 						</p>
@@ -499,7 +593,7 @@
 						/>
 					</div>
 
-					{#if isFemaleDriver}
+					{#if isFemaleDriver && canUseVerifiedFeatures(memberStatus)}
 					<div class="rounded-md border border-gray-200 p-3">
 						<label class="inline-flex items-center gap-2 text-sm text-gray-700">
 							<input
@@ -511,6 +605,11 @@
 						</label>
 					</div>
 				{/if}
+					{#if memberStatus === 'free'}
+						<p class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+							This ride is not safety-verified by Hizli. Members who choose to book it accept responsibility for assessing the risk.
+						</p>
+					{/if}
 
 					<button
 						type="submit"

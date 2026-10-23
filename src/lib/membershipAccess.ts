@@ -8,6 +8,22 @@ type StatusInput = {
   reviewPending?: boolean | null;
 };
 
+export type FreeMemberProfileInput = {
+  firstName?: string | null;
+  lastName?: string | null;
+  gender?: string | null;
+  profilePhotoApproved?: boolean;
+  profilePhotoUrl?: string | null;
+  phoneNumber?: string | null;
+  dateOfBirth?: string | null;
+  cityOfBirth?: string | null;
+  address?: string | null;
+  zipCode?: string | null;
+  bio?: string | null;
+  languages?: readonly string[] | null;
+  ridePreferences?: readonly string[] | null;
+};
+
 function normalizeStatusLabel(value: string | null | undefined): string {
   return (value ?? '').trim().toLowerCase();
 }
@@ -21,22 +37,7 @@ function hasActiveMembership(membershipPaid: boolean, membershipExpiresAt: strin
 export function resolveMemberStatus(input: StatusInput): MemberStatus {
   const rawStatus = normalizeStatusLabel(input.status);
 
-  if (rawStatus === 'verified' || rawStatus === 'free' || rawStatus === 'pending') {
-    return rawStatus;
-  }
-
-  if (rawStatus === 'approved') {
-    return 'pending';
-  }
-
-  if (rawStatus === 'unverified' || rawStatus === 'inactive') {
-    return 'free';
-  }
-
-  if (rawStatus === 'under_review') {
-    return 'pending';
-  }
-
+  const hasVerificationEvidence = rawStatus === 'verified' || Boolean(input.isVerified);
   const verified = Boolean(input.isVerified);
   const activeMembership = hasActiveMembership(Boolean(input.membershipPaid), input.membershipExpiresAt);
 
@@ -44,7 +45,15 @@ export function resolveMemberStatus(input: StatusInput): MemberStatus {
     return 'verified';
   }
 
-  if (verified) {
+  if (hasVerificationEvidence) {
+    return 'pending';
+  }
+
+  if (rawStatus === 'free' || rawStatus === 'unverified' || rawStatus === 'inactive') {
+    return 'free';
+  }
+
+  if (rawStatus === 'pending' || rawStatus === 'approved' || rawStatus === 'under_review') {
     return 'pending';
   }
 
@@ -53,6 +62,24 @@ export function resolveMemberStatus(input: StatusInput): MemberStatus {
 
 export function canUseVerifiedFeatures(status: MemberStatus): boolean {
   return status === 'verified';
+}
+
+export function hasCompleteFreeMemberProfile(profile: FreeMemberProfileInput): boolean {
+  return Boolean(
+    profile.firstName?.trim() &&
+      profile.lastName?.trim() &&
+      profile.gender?.trim() &&
+      profile.profilePhotoApproved &&
+      profile.profilePhotoUrl?.trim() &&
+      profile.phoneNumber?.trim() &&
+      profile.dateOfBirth?.trim() &&
+      profile.cityOfBirth?.trim() &&
+      profile.address?.trim() &&
+      profile.zipCode?.trim() &&
+      profile.bio?.trim() &&
+      profile.languages?.some((language) => language.trim()) &&
+      profile.ridePreferences?.some((preference) => preference.trim())
+  );
 }
 
 export function canAccessGirlsOnlyRides(status: MemberStatus, gender: string | null | undefined): boolean {
