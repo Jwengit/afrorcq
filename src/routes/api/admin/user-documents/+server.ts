@@ -1,25 +1,11 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
-import {
-  sendDocumentApprovedEmail,
-  sendDocumentRejectedEmail,
-  sendDocumentsVerifiedEmail,
-  sendDriverDocumentsApprovedEmail
-} from '$lib/email';
+import { sendVerificationReviewSummaryEmail } from '$lib/email';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
 const BUCKET = 'verification-documents';
-const REQUIRED_VERIFICATION_DOCUMENT_TYPES = [
-  'identity_card_front',
-  'identity_card_back'
-] as const;
-
-const STUDENT_EXTRA_DOCUMENT_TYPES = [
-  'student_id'
-] as const;
-
 const DRIVER_REQUIRED_DOCUMENT_TYPES = [
   'driver_license_front',
   'driver_license_back',
@@ -35,123 +21,8 @@ const DRIVER_DOCUMENT_TYPES = new Set<string>([
   'vehicle_registration'
 ]);
 
-function resolveVerificationLabel(isVerified: boolean): 'Verified' | 'Unverified' {
-  return isVerified ? 'Verified' : 'Unverified';
-}
-
 function normalizeLegacyStatus(status: 'approved' | 'rejected'): string {
   return status === 'approved' ? 'Approved' : 'Rejected';
-}
-
-function buildApprovalInboxMessage(siteUrl: string): string {
-  const paymentUrl = `${siteUrl}/pricing`;
-  return (
-    `<div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">` +
-    `<p style="margin: 0 0 10px;"><strong>Your documents have been verified!</strong></p>` +
-    `<p style="margin: 0 0 12px;">Complete your membership to unlock full access.</p>` +
-    `<p style="margin: 0;">` +
-    `<a href="${paymentUrl}" style="display:inline-block;padding:9px 14px;border-radius:8px;background:#16a34a;color:#ffffff;text-decoration:none;font-weight:600;">Complete my membership</a>` +
-    `</p>` +
-    `</div>`
-  );
-}
-
-function buildRejectionInboxMessage(documentTypeLabel: string, note: string | null, siteUrl: string): string {
-  const uploadUrl = `${siteUrl}/profile#verification-documents`;
-  const noteHtml = note
-    ? `<p style="margin: 0 0 12px; padding: 10px 12px; background: #fef2f2; border-left: 4px solid #ef4444; font-size: 14px;"><strong>Reason:</strong> ${note}</p>`
-    : '';
-  return (
-    `<div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">` +
-    `<p style="margin: 0 0 10px;"><strong>Your document "${documentTypeLabel}" has been rejected.</strong></p>` +
-    noteHtml +
-    `<p style="margin: 0 0 12px;">Please upload a new version of this document to continue the verification process.</p>` +
-    `<p style="margin: 0;">` +
-    `<a href="${uploadUrl}" style="display:inline-block;padding:9px 14px;border-radius:8px;background:#dc2626;color:#ffffff;text-decoration:none;font-weight:600;">Re-upload document</a>` +
-    `</p>` +
-    `</div>`
-  );
-}
-
-async function notifyRejectedDocument(adminClient: any, userId: string, documentType: string, note: string | null, siteUrl: string) {
-  const { data: profile } = await adminClient
-    .from('profiles')
-    .select('first_name, email')
-    .eq('id', userId)
-    .maybeSingle();
-  const memberEmail = (profile?.email ?? '').trim();
-  if (memberEmail) {
-    await sendDocumentRejectedEmail({
-      to: memberEmail,
-      firstName: profile?.first_name,
-      reason: note || 'Please review and upload a new version of your document.'
-    });
-  }
-}
-
-async function notifyApprovedMember(adminClient: any, userId: string, siteUrl: string) {
-  const { data: profile } = await adminClient
-    .from('profiles')
-    .select('first_name, email')
-    .eq('id', userId)
-    .maybeSingle();
-  const memberEmail = (profile?.email ?? '').trim();
-  if (memberEmail) {
-    await sendDocumentsVerifiedEmail({
-      to: memberEmail,
-      firstName: profile?.first_name
-    });
-  }
-}
-
-async function notifyApprovedDocument(
-  adminClient: ReturnType<typeof createClient<any>>,
-  userId: string
-) {
-  const { data: profile } = await adminClient
-    .from('profiles')
-    .select('first_name, email')
-    .eq('id', userId)
-    .maybeSingle();
-  const memberEmail = (profile?.email ?? '').trim();
-  if (memberEmail) {
-    await sendDocumentApprovedEmail({
-      to: memberEmail,
-      firstName: profile?.first_name
-    });
-  }
-}
-
-async function notifyDriverDocumentsApproved(adminClient: any, userId: string) {
-  const { data: profile } = await adminClient
-    .from('profiles')
-    .select('first_name, email')
-    .eq('id', userId)
-    .maybeSingle();
-  const memberEmail = (profile?.email ?? '').trim();
-  if (memberEmail) {
-    await sendDriverDocumentsApprovedEmail({
-      to: memberEmail,
-      firstName: profile?.first_name
-    });
-  }
-}
-
-async function allDriverDocumentsApproved(adminClient: any, userId: string): Promise<boolean> {
-  const { data, error } = await adminClient
-    .from('verification_documents')
-    .select('document_type, status')
-    .eq('user_id', userId);
-
-  if (error) return false;
-
-  const approvedTypes = new Set(
-    (data ?? [])
-      .filter((doc: { status?: string | null }) => isApprovedStatus(doc.status))
-      .map((doc: { document_type?: string | null }) => normalizeDocumentType(doc.document_type))
-  );
-
-  return DRIVER_REQUIRED_DOCUMENT_TYPES.every((documentType) => approvedTypes.has(documentType));
 }
 
 function normalizeDocumentType(value: string | null | undefined): string {
@@ -171,6 +42,97 @@ function isDriverDocument(value: string | null | undefined): boolean {
 
 function isApprovedStatus(value: string | null | undefined): boolean {
   return (value || '').trim().toLowerCase() === 'approved';
+}
+
+function normalizeReviewStatus(value: string | null | undefined): string {
+  const status = (value || '').trim().toLowerCase();
+  if (status === 'approved') return 'approved';
+  if (status === 'rejected') return 'rejected';
+  return 'pending';
+}
+
+async function sendReviewSummaryIfComplete(
+  adminClient: Parameters<typeof shouldMarkProfileVerified>[0],
+  userId: string,
+  reviewedDocumentId: string
+): Promise<void> {
+  const { data: documents, error: documentsError } = await adminClient
+    .from('verification_documents')
+    .select('id, document_type, status, admin_note, created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (documentsError) {
+    console.error('Verification review summary document lookup error:', documentsError);
+    return;
+  }
+
+  const latestByType = new Map<string, { id: string; status: string; admin_note: string | null }>();
+  for (const document of documents ?? []) {
+    const documentType = normalizeDocumentType(document.document_type);
+    if (!latestByType.has(documentType)) {
+      latestByType.set(documentType, {
+        id: document.id,
+        status: normalizeReviewStatus(document.status),
+        admin_note: document.admin_note
+      });
+    }
+  }
+
+  const reviewedDocument = (documents ?? []).find(
+    (document: { id: string }) => document.id === reviewedDocumentId
+  );
+  if (
+    !reviewedDocument ||
+    latestByType.get(normalizeDocumentType(reviewedDocument.document_type))?.id !== reviewedDocumentId
+  ) {
+    return;
+  }
+
+  if (latestByType.size === 0 || [...latestByType.values()].some((document) => document.status === 'pending')) {
+    return;
+  }
+
+  const { data: profile, error: profileError } = await adminClient
+    .from('profiles')
+    .select('first_name, email, status')
+    .eq('id', userId)
+    .maybeSingle();
+  if (profileError) {
+    console.error('Verification review summary profile lookup error:', profileError);
+    return;
+  }
+
+  const email = (profile?.email ?? '').trim();
+  if (!email) {
+    console.warn('Verification review summary skipped: member email is missing.');
+    return;
+  }
+
+  const approvedDocuments: string[] = [];
+  const rejectedDocuments: Array<{ name: string; reason: string | null }> = [];
+  for (const [name, document] of latestByType) {
+    if (document.status === 'approved') {
+      approvedDocuments.push(name);
+    } else {
+      rejectedDocuments.push({ name, reason: document.admin_note });
+    }
+  }
+
+  const membershipReady =
+    rejectedDocuments.length === 0 &&
+    (profile?.status ?? '').toLowerCase() === 'approved' &&
+    (await shouldMarkProfileVerified(adminClient, userId));
+  const emailId = await sendVerificationReviewSummaryEmail({
+    to: email,
+    firstName: profile?.first_name,
+    approvedDocuments,
+    rejectedDocuments,
+    membershipReady
+  });
+  if (!emailId) {
+    console.error('Verification review summary email was not sent.');
+  }
 }
 
 function isStatusConstraintError(message: string | undefined): boolean {
@@ -200,11 +162,6 @@ function resolveRowDocumentType(row: {
 }): string {
   return row.document_type ?? 'other';
 }
-
-type VerificationDocumentStatusRow = {
-  document_type?: string | null;
-  status?: string | null;
-};
 
 async function shouldMarkProfileVerified(adminClient: any, userId: string): Promise<boolean> {
   try {
@@ -456,22 +413,13 @@ export const PATCH: RequestHandler = async ({ request }) => {
       return json({ error: effectiveUpdateError.message }, { status: 500 });
     }
 
-    const driverDocument = isDriverDocument(existingDoc.document_type);
-    const wasAlreadyApproved = isApprovedStatus(existingDoc.status);
+    const wasSameStatus = normalizeReviewStatus(existingDoc.status) === status;
 
-    if (status === 'approved' && driverDocument) {
-      if (!wasAlreadyApproved) {
-        if (await allDriverDocumentsApproved(adminClient, existingDoc.user_id)) {
-          await notifyDriverDocumentsApproved(adminClient, existingDoc.user_id);
-        } else {
-          await notifyApprovedDocument(adminClient, existingDoc.user_id);
-        }
-      }
-    } else if (status === 'approved') {
+    if (status === 'approved' && !isDriverDocument(existingDoc.document_type)) {
       const allApproved = await shouldMarkProfileVerified(adminClient, existingDoc.user_id);
 
       if (allApproved) {
-        await adminClient
+        const { error: profileUpdateError } = await adminClient
           .from('profiles')
           .update({
             is_verified: false,
@@ -479,20 +427,14 @@ export const PATCH: RequestHandler = async ({ request }) => {
             updated_at: new Date().toISOString()
           })
           .eq('id', existingDoc.user_id);
-
-        const siteUrl = (String(env.PUBLIC_SITE_URL ?? '').trim() || 'https://afrorcqvercelapp.vercel.app').replace(/\/$/, '');
-
-        if (!wasAlreadyApproved) {
-          await notifyApprovedMember(adminClient, existingDoc.user_id, siteUrl);
+        if (profileUpdateError) {
+          console.error('Profile approval status update error:', profileUpdateError);
         }
-      } else if (!wasAlreadyApproved) {
-        await notifyApprovedDocument(adminClient, existingDoc.user_id);
       }
-    } else {
-      // Doc rejected: keep profile in 'pending' so the member can re-upload without re-choosing a plan
-      const siteUrl = (String(env.PUBLIC_SITE_URL ?? '').trim() || 'https://afrorcqvercelapp.vercel.app').replace(/\/$/, '');
-      const rejectedDocType = resolveRowDocumentType(existingDoc);
-      await notifyRejectedDocument(adminClient, existingDoc.user_id, rejectedDocType, note, siteUrl);
+    }
+
+    if (!wasSameStatus) {
+      await sendReviewSummaryIfComplete(adminClient, existingDoc.user_id, existingDoc.id);
     }
 
     return json({ success: true });

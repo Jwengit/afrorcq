@@ -1354,7 +1354,11 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 								<a href={resolve('/pricing')} class="font-semibold text-emerald-700 hover:underline">See plans</a>
 							</p>
 						{/if}
-						{#if !profile.is_verified && isProfileStatusPending && allRequiredDocsUploaded}
+						{#if
+							!profile.is_verified &&
+							isProfileStatusPending &&
+							allRequiredDocsUploaded &&
+							!documentsMessage.startsWith('Your profile')}
 							<p class="text-xs text-amber-700 mt-1">Your documents are being reviewed by admin.</p>
 						{/if}
 						{#if !profile.is_verified && missingRequiredDocumentTypes.length > 0}
@@ -1922,7 +1926,11 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 				{/if}
 
 				<div class="mt-5 rounded-xl border border-slate-200 bg-white p-5">
-					{#if !profile.is_verified && isProfileStatusPending && allRequiredDocsUploaded}
+					{#if
+						!profile.is_verified &&
+						isProfileStatusPending &&
+						allRequiredDocsUploaded &&
+						!documentsMessage.startsWith('Your profile')}
 						<div class="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
 							Your profile documents are being reviewed by admin. We'll notify you once verified.
 						</div>

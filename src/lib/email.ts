@@ -27,8 +27,10 @@ type PasswordResetEmailInput = BaseEmailInput & {
 	resetUrl: string;
 };
 
-type DocumentRejectedEmailInput = BaseEmailInput & {
-	reason: string;
+type VerificationReviewSummaryInput = BaseEmailInput & {
+	approvedDocuments: string[];
+	rejectedDocuments: Array<{ name: string; reason?: string | null }>;
+	membershipReady: boolean;
 };
 
 type ReviewRejectedEmailInput = BaseEmailInput & {
@@ -420,28 +422,6 @@ export async function sendDocumentsUnderReviewEmail(input: BaseEmailInput): Prom
 	return null;
 }
 
-// ─── EMAIL 8 — Document rejeté ───
-
-export function buildDocumentRejectedEmail(input: { firstName?: string | null; reason: string }): EmailTemplate {
-	return buildEmailTemplate({
-		firstName: input.firstName,
-		subject: 'Action required: one of your documents was not accepted',
-		lines: [
-			'Unfortunately, one of your submitted documents could not be verified.',
-			`Reason: ${input.reason}`,
-			'Please log in to your dashboard, upload a new version of the document, and resubmit for review.',
-			'If you have any questions, reply to this email and our team will help you.',
-			'The Hizli Team'
-		],
-		buttonLabel: 'Update my documents',
-		buttonUrl: HIZLI_PROFILE_URL
-	});
-}
-
-export async function sendDocumentRejectedEmail(input: DocumentRejectedEmailInput): Promise<string | null> {
-	return sendEmail({ ...input, template: buildDocumentRejectedEmail(input) });
-}
-
 export function buildReviewRejectedEmail(input: ReviewRejectedEmailInput): EmailTemplate {
 	return buildEmailTemplate({
 		firstName: input.firstName,
@@ -461,61 +441,47 @@ export async function sendReviewRejectedEmail(input: ReviewRejectedEmailInput): 
 	return sendEmail({ ...input, template: buildReviewRejectedEmail(input) });
 }
 
-export function buildDocumentApprovedEmail(firstName?: string | null): EmailTemplate {
+export function buildVerificationReviewSummaryEmail(
+	input: Omit<VerificationReviewSummaryInput, 'to'>
+): EmailTemplate {
+	const hasRejections = input.rejectedDocuments.length > 0;
+	const documentLabel = (document: string) => document.replace(/_/g, ' ');
+	const lines = [
+		'The review of your submitted documents is complete.',
+		...(input.approvedDocuments.length > 0
+			? [`Approved: ${input.approvedDocuments.map(documentLabel).join(', ')}.`]
+			: []),
+		...(hasRejections
+			? [
+					`Needs attention: ${input.rejectedDocuments
+						.map(({ name, reason }) => `${documentLabel(name)}${reason ? ` (reason: ${reason})` : ''}`)
+						.join('; ')}.`,
+					'Please upload new versions of the documents that need attention. We will review them and send you another summary when that review is complete.'
+				]
+			: []),
+		...(!hasRejections && input.membershipReady
+			? [
+					"Your identity documents have been approved. Complete your membership to unlock full access to the verified community."
+				]
+			: []),
+		'The Hizli Team'
+	];
+
 	return buildEmailTemplate({
-		firstName,
-		subject: 'One of your documents has been approved',
-		lines: [
-			'One of your submitted documents has been reviewed and approved.',
-			'If any other documents are still required or under review, you can check their status in your profile.',
-			'The Hizli Team'
-		],
-		buttonLabel: 'View my documents',
-		buttonUrl: HIZLI_PROFILE_URL
+		firstName: input.firstName,
+		subject: hasRejections
+			? 'Your document review is complete: action required'
+			: 'Your document review is complete',
+		lines,
+		buttonLabel: !hasRejections && input.membershipReady ? 'Complete my membership' : 'View my documents',
+		buttonUrl: !hasRejections && input.membershipReady ? HIZLI_PRICING_URL : HIZLI_PROFILE_URL
 	});
 }
 
-export async function sendDocumentApprovedEmail(input: BaseEmailInput): Promise<string | null> {
-	return sendEmail({ ...input, template: buildDocumentApprovedEmail(input.firstName) });
-}
-
-// ─── EMAIL 9 — Documents vérifiés → Complete membership ───
-
-export function buildDocumentsVerifiedEmail(firstName?: string | null): EmailTemplate {
-	return buildEmailTemplate({
-		firstName,
-		subject: 'Great news! Your documents have been verified',
-		lines: [
-			'Your identity documents have been verified by our team.',
-			"You're one step away from becoming a verified Hizli member and unlocking full access to our community.",
-			'Complete your annual membership now to:',
-			'✓ Access verified member profiles',
-			'✓ Read and leave reviews',
-			'✓ Get your verified badge',
-			'✓ Access Girls Only rides (if applicable)',
-			'The Hizli Team'
-		],
-		buttonLabel: 'Complete my membership',
-		buttonUrl: HIZLI_PRICING_URL
-	});
-}
-
-export async function sendDocumentsVerifiedEmail(input: BaseEmailInput): Promise<string | null> {
-	return sendEmail({ ...input, template: buildDocumentsVerifiedEmail(input.firstName) });
-}
-
-export function buildDriverDocumentsApprovedEmail(firstName?: string | null): EmailTemplate {
-	return buildEmailTemplate({
-		firstName,
-		subject: 'Car documents approved',
-		lines: ['Your car documents have been reviewed and approved. You can now publish rides as a driver.'],
-		buttonLabel: 'View my profile',
-		buttonUrl: HIZLI_PROFILE_URL
-	});
-}
-
-export async function sendDriverDocumentsApprovedEmail(input: BaseEmailInput): Promise<string | null> {
-	return sendEmail({ ...input, template: buildDriverDocumentsApprovedEmail(input.firstName) });
+export async function sendVerificationReviewSummaryEmail(
+	input: VerificationReviewSummaryInput
+): Promise<string | null> {
+	return sendEmail({ ...input, template: buildVerificationReviewSummaryEmail(input) });
 }
 
 // ─── EMAIL 10 — Compte verified (après paiement Stripe) ───
