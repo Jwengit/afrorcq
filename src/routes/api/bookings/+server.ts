@@ -6,6 +6,11 @@ import {
 	sendBookingRejectedEmail,
 	sendBookingRequestReceivedEmail
 } from '$lib/email';
+import {
+	canUseVerifiedFeatures,
+	resolveMemberStatus,
+	VERIFIED_ONLY_MESSAGE
+} from '$lib/membershipAccess';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -80,11 +85,30 @@ export const POST: RequestHandler = async ({ request }) => {
 			return json({ error: 'You cannot book your own ride.' }, { status: 400 });
 		}
 
-		const { data: passengerAccount } = await adminClient
+		const { data: driverProfile, error: driverProfileError } = await adminClient
 			.from('profiles')
-			.select('user_status, suspended_until')
+			.select('status, is_verified, membership_paid, membership_expires_at')
+			.eq('id', ride.driver_id)
+			.maybeSingle();
+
+		if (driverProfileError) {
+			console.error('Booking driver profile lookup error:', driverProfileError);
+			return json({ error: 'Unable to verify the ride owner before booking.' }, { status: 500 });
+		}
+		if (!driverProfile) {
+			return json({ error: 'Ride owner not found.' }, { status: 404 });
+		}
+
+		const { data: passengerAccount, error: passengerAccountError } = await adminClient
+			.from('profiles')
+			.select('user_status, suspended_until, status, is_verified, membership_paid, membership_expires_at')
 			.eq('id', user.id)
 			.maybeSingle();
+
+		if (passengerAccountError) {
+			console.error('Booking passenger profile lookup error:', passengerAccountError);
+			return json({ error: 'Unable to verify your account before booking.' }, { status: 500 });
+		}
 
 		if (passengerAccount?.user_status === 'banned') {
 			return json({ error: 'Your account has been banned. You cannot book rides.' }, { status: 403 });
@@ -95,6 +119,25 @@ export const POST: RequestHandler = async ({ request }) => {
 				? ` until ${new Date(passengerAccount.suspended_until).toLocaleDateString()}`
 				: '';
 			return json({ error: `Your account is suspended${until}. You cannot book rides during this period.` }, { status: 403 });
+		}
+
+		const driverMemberStatus = resolveMemberStatus({
+			status: driverProfile?.status,
+			isVerified: driverProfile?.is_verified,
+			membershipPaid: driverProfile?.membership_paid,
+			membershipExpiresAt: driverProfile?.membership_expires_at
+		});
+		const passengerMemberStatus = resolveMemberStatus({
+			status: passengerAccount?.status,
+			isVerified: passengerAccount?.is_verified,
+			membershipPaid: passengerAccount?.membership_paid,
+			membershipExpiresAt: passengerAccount?.membership_expires_at
+		});
+		if (
+			canUseVerifiedFeatures(driverMemberStatus) &&
+			!canUseVerifiedFeatures(passengerMemberStatus)
+		) {
+			return json({ error: VERIFIED_ONLY_MESSAGE }, { status: 403 });
 		}
 
 		if (seats > ride.seats) {

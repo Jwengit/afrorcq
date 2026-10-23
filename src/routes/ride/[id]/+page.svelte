@@ -52,6 +52,7 @@ let reportMessage = '';
 let reportError = '';
 let driverPublicProfileId: number | null = null;
 let driverName = 'Driver';
+let rideDriverIsVerifiedMember = false;
 let driverIsVerifiedMember = false;
 let currentMemberStatus: MemberStatus = 'free';
 let currentUserGender = '';
@@ -145,14 +146,15 @@ onMount(async () => {
 	const typedDriver = (driverProfile as DriverPublicProfile | null) ?? null;
 	driverPublicProfileId = typedDriver?.public_id ?? null;
 	driverName = `${typedDriver?.first_name ?? ''} ${typedDriver?.last_name ?? ''}`.trim() || 'Driver';
-	driverIsVerifiedMember =
+	rideDriverIsVerifiedMember =
 		resolveMemberStatus({
 			status: typedDriver?.status,
 			isVerified: typedDriver?.is_verified,
 			membershipPaid: typedDriver?.membership_paid,
 			membershipExpiresAt: typedDriver?.membership_expires_at
-		}) === 'verified' &&
-		Boolean(typedDriver?.profile_photo_url?.trim());
+		}) === 'verified';
+	driverIsVerifiedMember =
+		rideDriverIsVerifiedMember && Boolean(typedDriver?.profile_photo_url?.trim());
 
 	if (currentUser && currentUser.id !== ride.driver_id) {
 		const { data: bookingData } = await supabase
@@ -183,6 +185,11 @@ onMount(async () => {
 		if (!currentUser) {
 			errorMessage = 'Session expired. Please sign in again.';
 			goto(resolve('/auth/login'));
+			return;
+		}
+
+		if (rideDriverIsVerifiedMember && !canUseVerifiedFeatures(currentMemberStatus)) {
+			errorMessage = VERIFIED_ONLY_MESSAGE;
 			return;
 		}
 
@@ -366,6 +373,16 @@ onMount(async () => {
 								{:else if currentUser && currentUser.id !== ride.driver_id && accountBlocked}
 					<div class="mt-8 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
 						{accountBlockedReason}
+					</div>
+				{:else if
+					currentUser &&
+					currentUser.id !== ride.driver_id &&
+					ride.seats > 0 &&
+					rideDriverIsVerifiedMember &&
+					!canUseVerifiedFeatures(currentMemberStatus)}
+					<div class="mt-8 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+						<p>{VERIFIED_ONLY_MESSAGE}</p>
+						<a href="/pricing" class="mt-2 inline-flex items-center rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700">Upgrade now</a>
 					</div>
 				{:else if currentUser && currentUser.id !== ride.driver_id && ride.seats > 0}
 					<div class="mt-8 space-y-4 border-t border-gray-200 pt-6">

@@ -104,7 +104,10 @@ async function notifyApprovedMember(adminClient: any, userId: string, siteUrl: s
   }
 }
 
-async function notifyApprovedDocument(adminClient: ReturnType<typeof createClient>, userId: string) {
+async function notifyApprovedDocument(
+  adminClient: ReturnType<typeof createClient<any>>,
+  userId: string
+) {
   const { data: profile } = await adminClient
     .from('profiles')
     .select('first_name, email')
