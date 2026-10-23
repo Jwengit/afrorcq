@@ -170,6 +170,19 @@ async function updateMembership(userId: string, paid: boolean, expiresAtIso: str
 
 	const verificationReady = isMembershipVerificationReady(typedProfile, documents ?? []);
 	const activateMembership = paid && verificationReady;
+	if (paid && !verificationReady) {
+		console.error('[stripe webhook] Payment received but verification requirements are not met.', {
+			userId,
+			membershipPlan: typedProfile.membership_plan,
+			profilePhotoPresent: Boolean(typedProfile.profile_photo_url?.trim()),
+			vehicleProfilePresent: Boolean(typedProfile.car_make?.trim() || typedProfile.color?.trim()),
+			documents: (documents ?? []).map((document) => ({
+				type: document.document_type,
+				status: document.status,
+				createdAt: document.created_at
+			}))
+		});
+	}
 	const nextStatus = activateMembership
 		? 'verified'
 		: wasVerified || (typedProfile.status ?? '').toLowerCase() === 'pending' || verificationReady
@@ -199,6 +212,14 @@ async function updateMembership(userId: string, paid: boolean, expiresAtIso: str
 			throw new Error(updateError.message);
 		}
 	}
+
+	console.info('[stripe webhook] Membership state updated.', {
+		userId,
+		paid,
+		verificationReady,
+		activated: activateMembership,
+		status: nextStatus
+	});
 
 	if (activateMembership && !wasVerified) {
 		await notifyMemberActivated(adminClient, userId, siteUrl);
@@ -301,6 +322,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			const message = error instanceof Error ? error.message : 'Invalid webhook signature';
 			return json({ error: message }, { status: 400 });
 		}
+		console.info('[stripe webhook] Event received.', { eventId: event.id, eventType: event.type });
 
 		if (event.type === 'checkout.session.completed') {
 			const session = event.data.object as Stripe.Checkout.Session;
@@ -310,6 +332,10 @@ export const POST: RequestHandler = async ({ request }) => {
 
 			const userId = await resolveUserId(stripe, session);
 			if (!userId) {
+				console.error('[stripe webhook] Checkout session could not be matched to a member.', {
+					eventId: event.id,
+					checkoutSessionId: session.id
+				});
 				return json({ received: true, ignored: 'no-user-id' });
 			}
 

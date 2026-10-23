@@ -1351,7 +1351,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 						<p class="text-sm text-slate-600">Status: {accountStatusLabel}</p>
 						{#if !profile.is_verified && profileVerificationReady}
 							<a href={resolve('/pricing')} class="mt-1 inline-block text-sm font-semibold text-emerald-700 hover:underline">
-								Your documents are approved. Complete payment to activate your membership.
+								Your documents are approved. Click here to complete payment and activate your membership.
 							</a>
 						{/if}
 						{#if isRealMembershipPlan}
