@@ -2,34 +2,20 @@ import { json, type RequestHandler } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
 import { sendVerificationReviewSummaryEmail } from '$lib/email';
+import {
+	isMembershipVerificationReady,
+	normalizeVerificationDocumentType
+} from '$lib/membershipVerification';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
 const BUCKET = 'verification-documents';
-const DRIVER_REQUIRED_DOCUMENT_TYPES = [
-  'driver_license_front',
-  'driver_license_back',
-  'insurance',
-  'vehicle_registration'
-] as const;
-
 function normalizeLegacyStatus(status: 'approved' | 'rejected'): string {
   return status === 'approved' ? 'Approved' : 'Rejected';
 }
 
 function normalizeDocumentType(value: string | null | undefined): string {
-  const normalized = (value || '').trim().toLowerCase();
-
-  if (normalized === 'identity' || normalized === 'id_card') return 'identity_card';
-  if (normalized === 'license' || normalized === 'driving_license') return 'driver_license_front';
-  if (normalized === 'insurance_proof') return 'insurance';
-  if (normalized === 'registration' || normalized === 'vehicle_papers') return 'vehicle_registration';
-
-  return normalized;
-}
-
-function isApprovedStatus(value: string | null | undefined): boolean {
-  return (value || '').trim().toLowerCase() === 'approved';
+  return normalizeVerificationDocumentType(value);
 }
 
 function normalizeReviewStatus(value: string | null | undefined): string {
@@ -83,7 +69,7 @@ async function sendReviewSummaryIfComplete(
 
   const { data: profile, error: profileError } = await adminClient
     .from('profiles')
-    .select('first_name, email, status')
+    .select('first_name, email, membership_plan, profile_photo_url, car_make, plate_number')
     .eq('id', userId)
     .maybeSingle();
   if (profileError) {
@@ -91,7 +77,15 @@ async function sendReviewSummaryIfComplete(
     return;
   }
 
-  const email = (profile?.email ?? '').trim();
+  let email = (profile?.email ?? '').trim();
+  if (!email) {
+    const { data, error } = await adminClient.auth.admin.getUserById(userId);
+    if (error) {
+      console.error('Verification review summary auth email lookup error:', error);
+      return;
+    }
+    email = (data.user?.email ?? '').trim();
+  }
   if (!email) {
     console.warn('Verification review summary skipped: member email is missing.');
     return;
@@ -108,9 +102,7 @@ async function sendReviewSummaryIfComplete(
   }
 
   const membershipReady =
-    rejectedDocuments.length === 0 &&
-    (profile?.status ?? '').toLowerCase() === 'approved' &&
-    (await shouldMarkProfileVerified(adminClient, userId));
+    rejectedDocuments.length === 0 && isMembershipVerificationReady(profile, documents ?? []);
   const emailId = await sendVerificationReviewSummaryEmail({
     to: email,
     firstName: profile?.first_name,
@@ -170,7 +162,7 @@ async function shouldMarkProfileVerified(adminClient: any, userId: string): Prom
 
     const { data, error } = await adminClient
       .from('verification_documents')
-      .select('document_type, status')
+      .select('document_type, status, created_at')
       .eq('user_id', userId);
 
     if (error) {
@@ -178,31 +170,7 @@ async function shouldMarkProfileVerified(adminClient: any, userId: string): Prom
       return false;
     }
 
-    const rows = (data ?? []) as Array<{ document_type?: string | null; status?: string | null }>;
-    const approvedTypes = new Set(
-      rows
-        .filter((doc) => isApprovedStatus(doc.status))
-        .map((doc) => normalizeDocumentType(doc.document_type ?? ''))
-        .filter(Boolean)
-    );
-
-    // Everyone needs both identity_card front and back
-    if (!approvedTypes.has('identity_card_front') || !approvedTypes.has('identity_card_back')) return false;
-
-    // Everyone also needs proof_of_address
-    if (!approvedTypes.has('proof_of_address')) return false;
-
-    // Student plan also needs student_id
-    const isStudent = (profile?.membership_plan ?? '').toLowerCase() === 'student';
-    if (isStudent && !approvedTypes.has('student_id')) return false;
-
-    // Drivers also need driver docs
-    const isDriver = Boolean(profile?.plate_number || profile?.car_make);
-    if (isDriver) {
-      return DRIVER_REQUIRED_DOCUMENT_TYPES.every((t) => approvedTypes.has(t));
-    }
-
-    return true;
+    return isMembershipVerificationReady(profile, data ?? []);
   } catch (error) {
     console.error('Unexpected error while checking verification eligibility:', error);
     return false;
@@ -410,29 +378,15 @@ export const PATCH: RequestHandler = async ({ request }) => {
       return json({ error: effectiveUpdateError.message }, { status: 500 });
     }
 
-    const wasSameStatus = normalizeReviewStatus(existingDoc.status) === status;
-    let profileBecameApproved = false;
-
     if (status === 'approved') {
       const allApproved = await shouldMarkProfileVerified(adminClient, existingDoc.user_id);
 
       if (allApproved) {
-        const { data: profile, error: profileError } = await adminClient
-          .from('profiles')
-          .select('status')
-          .eq('id', existingDoc.user_id)
-          .maybeSingle();
-        if (profileError) {
-          console.error('Profile approval status lookup error:', profileError);
-          return json({ error: 'Unable to check the profile approval status.' }, { status: 500 });
-        }
-
-        profileBecameApproved = (profile?.status ?? '').toLowerCase() !== 'approved';
         const { error: profileUpdateError } = await adminClient
           .from('profiles')
           .update({
             is_verified: false,
-            status: 'approved',
+            status: 'pending',
             updated_at: new Date().toISOString()
           })
           .eq('id', existingDoc.user_id);
@@ -443,7 +397,7 @@ export const PATCH: RequestHandler = async ({ request }) => {
       }
     }
 
-    if (!wasSameStatus || profileBecameApproved) {
+    if (status === 'approved') {
       await sendReviewSummaryIfComplete(adminClient, existingDoc.user_id, existingDoc.id);
     }
 

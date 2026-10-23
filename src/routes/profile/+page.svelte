@@ -6,6 +6,7 @@
 	import { browser } from '$app/environment';
 	import { onDestroy, onMount, tick } from 'svelte';
 	import type { User } from '@supabase/supabase-js';
+	import { isMembershipVerificationReady } from '$lib/membershipVerification';
 
 	type Profile = {
 		first_name: string;
@@ -24,6 +25,7 @@
 		languages: string[];
 		ride_preferences: string[];
 		profile_photo_url: string;
+		plate_number?: string | null;
 		status: string;
 		driver_contact_method: 'phone' | 'email' | null;
 		membership_plan?: string | null;
@@ -80,7 +82,7 @@
 
 	const MAX_PROFILE_PHOTO_SIZE_BYTES = 2 * 1024 * 1024;
 	const profileColumns =
-		'id, first_name, last_name, is_verified, date_of_birth, city_of_birth, address, zip_code, car_make, car_year, color, gender, bio, languages, ride_preferences, profile_photo_url, status, membership_plan';
+		'id, first_name, last_name, is_verified, date_of_birth, city_of_birth, address, zip_code, car_make, car_year, color, gender, bio, languages, ride_preferences, profile_photo_url, plate_number, status, membership_plan';
 
 	function getErrorMessage(error: unknown, fallback: string): string {
 		if (error instanceof Error) return error.message;
@@ -206,6 +208,7 @@
 	});
 
 	$: isProfileStatusPending = (profile.status ?? '').toLowerCase() === 'pending';
+	$: profileVerificationReady = isMembershipVerificationReady(profile, verificationDocuments);
 
 	$: allDriverDocsUploaded = driverOnlyDocumentTypes.every((type) => {
 		const status = docStatusByType.get(type);
@@ -281,13 +284,14 @@
 		(documentType) => !approvedRequiredDocumentTypes.has(documentType as RequiredVerificationDocumentType)
 	);
 
-	$: hasPendingRequiredDocuments = verificationDocuments.some((doc) => {
-		const documentType = normalizeVerificationDocumentType(doc.document_type);
-		return isRequiredVerificationDocumentType(documentType) && isPendingVerificationStatus(doc.status);
-	});
+	$: hasPendingRequiredDocuments = requiredVerificationDocumentTypes.some((documentType) =>
+		isPendingVerificationStatus(docStatusByType.get(documentType as RequiredVerificationDocumentType))
+	);
 
 	$: accountStatusLabel = profile.is_verified
 		? 'Verified'
+		: profileVerificationReady
+		? 'Documents approved — payment required'
 		: hasPendingRequiredDocuments
 			? 'Pending review'
 			: 'Unverified';
@@ -1346,6 +1350,11 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 						<h2 class="text-xl font-semibold text-slate-900">Account Status</h2>
 						<p class="text-sm text-slate-600 mt-1">Email: {currentUser.email}</p>
 						<p class="text-sm text-slate-600">Status: {accountStatusLabel}</p>
+						{#if !profile.is_verified && profileVerificationReady}
+							<a href={resolve('/pricing')} class="mt-1 inline-block text-sm font-semibold text-emerald-700 hover:underline">
+								Your documents are approved. Complete payment to activate your membership.
+							</a>
+						{/if}
 						{#if isRealMembershipPlan}
 							<p class="text-sm text-slate-600">Required documents approved: {approvedRequiredCount}/{requiredVerificationDocumentTypes.length}</p>
 						{:else}
@@ -1358,6 +1367,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 							!profile.is_verified &&
 							isProfileStatusPending &&
 							allRequiredDocsUploaded &&
+							!profileVerificationReady &&
 							!documentsMessage.startsWith('Your profile')}
 							<p class="text-xs text-amber-700 mt-1">Your documents are being reviewed by admin.</p>
 						{/if}
@@ -1930,6 +1940,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 						!profile.is_verified &&
 						isProfileStatusPending &&
 						allRequiredDocsUploaded &&
+						!profileVerificationReady &&
 						!documentsMessage.startsWith('Your profile')}
 						<div class="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
 							Your profile documents are being reviewed by admin. We'll notify you once verified.

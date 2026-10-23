@@ -2,6 +2,7 @@ import { json, type RequestHandler } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
 import { getStudentPriceId, getStandardPriceId, getStripeClient } from '$lib/server/stripe';
 import { env } from '$env/dynamic/private';
+import { isMembershipVerificationReady } from '$lib/membershipVerification';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -49,7 +50,7 @@ export const POST: RequestHandler = async ({ request, url }) => {
 		const adminClient = createClient(supabaseUrl, serviceRoleKey);
 		const { data: profile, error: profileError } = await adminClient
 			.from('profiles')
-			.select('status, membership_plan')
+			.select('status, membership_plan, profile_photo_url, car_make, plate_number')
 			.eq('id', user.id)
 			.maybeSingle();
 
@@ -57,11 +58,24 @@ export const POST: RequestHandler = async ({ request, url }) => {
 			console.error('Unable to verify membership eligibility for Stripe checkout:', profileError);
 			return json({ error: 'Unable to verify membership eligibility.' }, { status: 500 });
 		}
-		if (!profile || (profile.status ?? '').toLowerCase() !== 'approved') {
-			return json({ error: 'Your documents must be approved before paying for membership.' }, { status: 403 });
+		if (!profile) {
+			return json({ error: 'Membership profile not found.' }, { status: 403 });
 		}
 		if (profile.membership_plan !== selectedPlan) {
 			return json({ error: 'The selected plan does not match your saved membership plan.' }, { status: 400 });
+		}
+
+		const { data: documents, error: documentsError } = await adminClient
+			.from('verification_documents')
+			.select('document_type, status, created_at')
+			.eq('user_id', user.id);
+
+		if (documentsError) {
+			console.error('Unable to verify approved documents for Stripe checkout:', documentsError);
+			return json({ error: 'Unable to verify your approved documents.' }, { status: 500 });
+		}
+		if (!isMembershipVerificationReady(profile, documents ?? [])) {
+			return json({ error: 'Your documents must be approved before paying for membership.' }, { status: 403 });
 		}
 
 		const stripe = getStripeClient();

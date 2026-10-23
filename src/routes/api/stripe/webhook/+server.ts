@@ -4,12 +4,17 @@ import Stripe from 'stripe';
 import { env } from '$env/dynamic/private';
 import { getStripeClient, getStripeWebhookSecret } from '$lib/server/stripe';
 import { sendAccountVerifiedEmail, sendMembershipExpiredEmail } from '$lib/email';
+import { isMembershipVerificationReady } from '$lib/membershipVerification';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 
 type ProfileMembershipRow = {
 	is_verified: boolean | null;
 	status: string | null;
+	membership_plan: string | null;
+	profile_photo_url: string | null;
+	car_make: string | null;
+	plate_number: string | null;
 };
 
 function getNumberField(input: unknown, key: string): number | null {
@@ -57,14 +62,6 @@ function buildAdminClient() {
 		throw new Error('Supabase service role is not configured.');
 	}
 	return createClient(supabaseUrl, env.SUPABASE_SERVICE_ROLE_KEY);
-}
-
-function resolveStatusFromVerification(isVerified: boolean, profileStatus: string, paid: boolean): 'free' | 'pending' | 'verified' {
-	const isApproved = (profileStatus ?? '').toLowerCase() === 'approved';
-	if (paid && (isVerified || isApproved)) return 'verified';
-	if (paid) return 'pending';
-	if (isVerified || isApproved) return 'pending';
-	return 'free';
 }
 
 async function notifyMemberActivated(adminClient: ReturnType<typeof buildAdminClient>, userId: string, siteUrl: string) {
@@ -150,38 +147,43 @@ async function updateMembership(userId: string, paid: boolean, expiresAtIso: str
 	const adminClient = buildAdminClient();
 	const { data: profile, error: profileError } = await adminClient
 		.from('profiles')
-		.select('is_verified, status')
+		.select('is_verified, status, membership_plan, profile_photo_url, car_make, plate_number')
 		.eq('id', userId)
 		.maybeSingle();
 
 	if (profileError) throw new Error(profileError.message);
 
-	const typedProfile = (profile as ProfileMembershipRow | null) ?? { is_verified: false, status: null };
-	const wasApproved = (typedProfile.status ?? '').toLowerCase() === 'approved';
-	const isVerifiedNow = Boolean(typedProfile.is_verified) || (paid && wasApproved);
-	const nextStatus = resolveStatusFromVerification(Boolean(typedProfile.is_verified), typedProfile.status ?? '', paid);
+	const typedProfile = (profile as ProfileMembershipRow | null) ?? {
+		is_verified: false,
+		status: null,
+		membership_plan: null,
+		profile_photo_url: null,
+		car_make: null,
+		plate_number: null
+	};
+	const wasVerified = Boolean(typedProfile.is_verified);
+	const { data: documents, error: documentsError } = await adminClient
+		.from('verification_documents')
+		.select('document_type, status, created_at')
+		.eq('user_id', userId);
+	if (documentsError) throw new Error(documentsError.message);
+
+	const verificationReady = isMembershipVerificationReady(typedProfile, documents ?? []);
+	const activateMembership = paid && verificationReady;
+	const nextStatus = activateMembership
+		? 'verified'
+		: wasVerified || (typedProfile.status ?? '').toLowerCase() === 'pending' || verificationReady
+			? 'pending'
+			: 'free';
 	const siteUrl = (String(env.PUBLIC_SITE_URL ?? '').trim() || 'https://afrorcqvercelapp.vercel.app').replace(/\/$/, '');
 
 	const updatePayload: Record<string, unknown> = {
 		membership_paid: paid,
-		membership_expires_at: expiresAtIso,
+		membership_expires_at: paid ? expiresAtIso : null,
 		status: nextStatus,
+		is_verified: activateMembership,
 		updated_at: new Date().toISOString()
 	};
-
-	if (paid && wasApproved) {
-		updatePayload.is_verified = true;
-	}
-	if (!paid) {
-		// Keep is_verified=true but revoke active membership.
-		// Set status='approved' so the member can renew directly
-		// via the checkout without re-uploading their documents.
-		updatePayload.is_verified = false;
-		updatePayload.membership_expires_at = null;
-		if (Boolean(typedProfile.is_verified)) {
-			updatePayload.status = 'approved';
-		}
-	}
 
 	const { error: updateError } = await adminClient.from('profiles').update(updatePayload).eq('id', userId);
 
@@ -198,13 +200,11 @@ async function updateMembership(userId: string, paid: boolean, expiresAtIso: str
 		}
 	}
 
-	// Notify on first activation (approved → verified)
-	if (paid && wasApproved) {
+	if (activateMembership && !wasVerified) {
 		await notifyMemberActivated(adminClient, userId, siteUrl);
 	}
 
-	// Notify on expiration
-	if (!paid && isVerifiedNow) {
+	if (!paid && wasVerified) {
 		await notifyMemberExpired(adminClient, userId, siteUrl);
 	}
 }

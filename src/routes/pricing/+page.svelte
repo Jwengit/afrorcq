@@ -3,6 +3,7 @@
 	import { onMount } from 'svelte';
 	import { supabase } from '$lib/supabaseClient';
 	import { resolveMemberStatus, type MemberStatus } from '$lib/membershipAccess';
+	import { isMembershipVerificationReady } from '$lib/membershipVerification';
 
 	type ProfileLite = {
 		status?: string | null;
@@ -10,6 +11,9 @@
 		membership_paid?: boolean | null;
 		membership_expires_at?: string | null;
 		membership_plan?: string | null;
+		profile_photo_url?: string | null;
+		car_make?: string | null;
+		plate_number?: string | null;
 	};
 
 	let selectedPlan: 'student' | 'standard' = 'student';
@@ -18,9 +22,7 @@
 	let message = '';
 	let errorMessage = '';
 	let memberStatus: MemberStatus = 'free';
-	let rawProfileStatus: string = '';
-
-	$: isApproved = rawProfileStatus === 'approved';
+	let isApproved = false;
 
 	onMount(async () => {
 		const params = new URLSearchParams(window.location.search);
@@ -35,11 +37,17 @@
 			return;
 		}
 
-		const { data: profile } = await supabase
+		const { data: profile, error: profileError } = await supabase
 			.from('profiles')
-			.select('status, is_verified, membership_paid, membership_expires_at, membership_plan')
+			.select('status, is_verified, membership_paid, membership_expires_at, membership_plan, profile_photo_url, car_make, plate_number')
 			.eq('id', user.id)
 			.maybeSingle();
+
+		if (profileError) {
+			errorMessage = 'Unable to load your membership status. Please refresh the page.';
+			loading = false;
+			return;
+		}
 
 		const typedProfile = (profile as ProfileLite | null) ?? null;
 		memberStatus = resolveMemberStatus({
@@ -48,7 +56,17 @@
 			membershipPaid: typedProfile?.membership_paid,
 			membershipExpiresAt: typedProfile?.membership_expires_at
 		});
-		rawProfileStatus = (typedProfile?.status ?? '').toLowerCase();
+		const { data: documents, error: documentsError } = await supabase
+			.from('verification_documents')
+			.select('document_type, status, created_at')
+			.eq('user_id', user.id);
+
+		if (documentsError) {
+			errorMessage = 'Unable to check your approved documents. Please refresh the page.';
+			loading = false;
+			return;
+		}
+		isApproved = isMembershipVerificationReady(typedProfile, documents ?? []);
 
 		// Keep the saved plan authoritative; use the URL only before a plan has been saved.
 		if (typedProfile?.membership_plan === 'student' || typedProfile?.membership_plan === 'standard') {
