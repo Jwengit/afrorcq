@@ -258,15 +258,17 @@
 
 	$: isProfileInfoComplete =
 		Boolean(profile.first_name && profile.last_name && profile.gender) &&
+		isRealMembershipPlan &&
 		missingRequiredDocumentTypes.length === 0;
 
 	$: isDriver = Boolean(profile.color || profile.car_make);
 
-	$: requiredVerificationDocumentTypes = profile.membership_plan
+	$: isRealMembershipPlan =
+		profile.membership_plan === 'student' || profile.membership_plan === 'standard';
+
+	$: requiredVerificationDocumentTypes = isRealMembershipPlan
 		? (planRequiredDocTypes as readonly string[])
-		: (isDriver
-			? allKnownRequiredTypes
-			: baseRequiredDocumentTypes);
+		: ([] as readonly string[]);
 
 	$: approvedRequiredDocumentTypes = new Set(
 		verificationDocuments
@@ -578,6 +580,15 @@
 			}
 
 			if (data) {
+				// Copy the date of birth entered at sign-up into the profile if it is still empty
+				const metaDob = currentUser.user_metadata?.date_of_birth;
+				if (!data.date_of_birth && typeof metaDob === 'string' && metaDob) {
+					const { error: dobError } = await supabase
+						.from('profiles')
+						.update({ date_of_birth: metaDob })
+						.eq('id', currentUserId);
+					if (!dobError) data = { ...data, date_of_birth: metaDob };
+				}
 				profile = normalizeProfile(data);
 				const token = await getSessionAccessToken();
 				if (!token) throw new Error('Session expired. Please sign in again.');
@@ -1335,7 +1346,14 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 						<h2 class="text-xl font-semibold text-slate-900">Account Status</h2>
 						<p class="text-sm text-slate-600 mt-1">Email: {currentUser.email}</p>
 						<p class="text-sm text-slate-600">Status: {accountStatusLabel}</p>
-						<p class="text-sm text-slate-600">Required documents approved: {approvedRequiredCount}/{requiredVerificationDocumentTypes.length}</p>
+						{#if isRealMembershipPlan}
+							<p class="text-sm text-slate-600">Required documents approved: {approvedRequiredCount}/{requiredVerificationDocumentTypes.length}</p>
+						{:else}
+							<p class="text-xs text-slate-600 mt-1">
+								Choose a membership plan to start your verification.
+								<a href={resolve('/pricing')} class="font-semibold text-emerald-700 hover:underline">See plans</a>
+							</p>
+						{/if}
 						{#if !profile.is_verified && isProfileStatusPending && allRequiredDocsUploaded}
 							<p class="text-xs text-amber-700 mt-1">Your documents are being reviewed by admin.</p>
 						{/if}
@@ -1754,6 +1772,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 				{/if}
 			</div>
 
+			{#if isRealMembershipPlan}
 			<!-- Verification Documents -->
 			<div id="verification-documents" class="profile-card p-7 mt-6 scroll-mt-28">
 				<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -1989,6 +2008,17 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 					{/if}
 				</div>
 			</div>
+			{:else}
+			<div class="profile-card p-7 mt-6">
+				<h2 class="text-xl font-semibold text-slate-900">Profile Verification</h2>
+				<p class="text-sm text-slate-600 mt-1">
+					Choose a yearly membership to unlock document upload and verification.
+				</p>
+				<a href={resolve('/pricing')} class="mt-4 inline-block rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700">
+					Choose a plan
+				</a>
+			</div>
+			{/if}
 		</div>
 	</div>
 {:else}
