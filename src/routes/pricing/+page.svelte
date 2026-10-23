@@ -13,7 +13,7 @@
 		membership_plan?: string | null;
 		profile_photo_url?: string | null;
 		car_make?: string | null;
-		plate_number?: string | null;
+		color?: string | null;
 	};
 
 	let selectedPlan: 'student' | 'standard' = 'student';
@@ -39,7 +39,7 @@
 
 		const { data: profile, error: profileError } = await supabase
 			.from('profiles')
-			.select('status, is_verified, membership_paid, membership_expires_at, membership_plan, profile_photo_url, car_make, plate_number')
+			.select('status, is_verified, membership_paid, membership_expires_at, membership_plan, profile_photo_url, car_make, color')
 			.eq('id', user.id)
 			.maybeSingle();
 

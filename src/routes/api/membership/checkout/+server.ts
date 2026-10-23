@@ -1,8 +1,8 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
-import { getStudentPriceId, getStandardPriceId, getStripeClient } from '$lib/server/stripe';
 import { env } from '$env/dynamic/private';
 import { isMembershipVerificationReady } from '$lib/membershipVerification';
+import { createMembershipCheckoutSession } from '$lib/server/membership-checkout';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -50,7 +50,7 @@ export const POST: RequestHandler = async ({ request, url }) => {
 		const adminClient = createClient(supabaseUrl, serviceRoleKey);
 		const { data: profile, error: profileError } = await adminClient
 			.from('profiles')
-			.select('status, membership_plan, profile_photo_url, car_make, plate_number')
+			.select('status, membership_plan, profile_photo_url, car_make, color')
 			.eq('id', user.id)
 			.maybeSingle();
 
@@ -78,35 +78,14 @@ export const POST: RequestHandler = async ({ request, url }) => {
 			return json({ error: 'Your documents must be approved before paying for membership.' }, { status: 403 });
 		}
 
-		const stripe = getStripeClient();
-		const priceId = selectedPlan === 'student' ? getStudentPriceId() : getStandardPriceId();
-		const appBaseUrl = (env.PUBLIC_SITE_URL || url.origin).replace(/\/$/, '');
-
-		const checkoutSession = await stripe.checkout.sessions.create({
-			mode: 'subscription',
-			line_items: [{ price: priceId, quantity: 1 }],
-			client_reference_id: user.id,
-			customer_email: user.email ?? undefined,
-			allow_promotion_codes: true,
-			success_url: `${appBaseUrl}/pricing?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-			cancel_url: `${appBaseUrl}/pricing?checkout=cancel`,
-			metadata: {
-				supabase_user_id: user.id,
-				plan: selectedPlan
-			},
-			subscription_data: {
-				metadata: {
-					supabase_user_id: user.id,
-					plan: selectedPlan
-				}
-			}
+		const checkoutUrl = await createMembershipCheckoutSession({
+			userId: user.id,
+			email: user.email,
+			plan: selectedPlan,
+			appBaseUrl: env.PUBLIC_SITE_URL || url.origin
 		});
 
-		if (!checkoutSession.url) {
-			return json({ error: 'Unable to create checkout session' }, { status: 500 });
-		}
-
-		return json({ url: checkoutSession.url });
+		return json({ url: checkoutUrl });
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Internal server error';
 		return json({ error: message }, { status: 500 });

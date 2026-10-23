@@ -31,6 +31,7 @@ type VerificationReviewSummaryInput = BaseEmailInput & {
 	approvedDocuments: string[];
 	rejectedDocuments: Array<{ name: string; reason?: string | null }>;
 	membershipReady: boolean;
+	checkoutUrl?: string | null;
 };
 
 type ReviewRejectedEmailInput = BaseEmailInput & {
@@ -445,6 +446,7 @@ export function buildVerificationReviewSummaryEmail(
 	input: Omit<VerificationReviewSummaryInput, 'to'>
 ): EmailTemplate {
 	const hasRejections = input.rejectedDocuments.length > 0;
+	const paymentUrl = input.checkoutUrl?.trim() || HIZLI_PRICING_URL;
 	const documentLabel = (document: string) => document.replace(/_/g, ' ');
 	const lines = [
 		'The review of your submitted documents is complete.',
@@ -464,6 +466,11 @@ export function buildVerificationReviewSummaryEmail(
 					"Your identity documents have been approved. Complete your membership to unlock full access to the verified community."
 				]
 			: []),
+		...(!hasRejections && input.membershipReady && input.checkoutUrl
+			? [
+					'Use the secure Stripe link below to pay for your selected membership plan. This payment link expires after 24 hours; if it expires, sign in and visit the membership page to get a new one.'
+				]
+			: []),
 		'The Hizli Team'
 	];
 
@@ -473,8 +480,8 @@ export function buildVerificationReviewSummaryEmail(
 			? 'Your document review is complete: action required'
 			: 'Your document review is complete',
 		lines,
-		buttonLabel: !hasRejections && input.membershipReady ? 'Complete my membership' : 'View my documents',
-		buttonUrl: !hasRejections && input.membershipReady ? HIZLI_PRICING_URL : HIZLI_PROFILE_URL
+		buttonLabel: !hasRejections && input.membershipReady ? 'Pay securely with Stripe' : 'View my documents',
+		buttonUrl: !hasRejections && input.membershipReady ? paymentUrl : HIZLI_PROFILE_URL
 	});
 }
 

@@ -25,7 +25,6 @@
 		languages: string[];
 		ride_preferences: string[];
 		profile_photo_url: string;
-		plate_number?: string | null;
 		status: string;
 		driver_contact_method: 'phone' | 'email' | null;
 		membership_plan?: string | null;
@@ -82,7 +81,7 @@
 
 	const MAX_PROFILE_PHOTO_SIZE_BYTES = 2 * 1024 * 1024;
 	const profileColumns =
-		'id, first_name, last_name, is_verified, date_of_birth, city_of_birth, address, zip_code, car_make, car_year, color, gender, bio, languages, ride_preferences, profile_photo_url, plate_number, status, membership_plan';
+		'id, first_name, last_name, is_verified, date_of_birth, city_of_birth, address, zip_code, car_make, car_year, color, gender, bio, languages, ride_preferences, profile_photo_url, status, membership_plan';
 
 	function getErrorMessage(error: unknown, fallback: string): string {
 		if (error instanceof Error) return error.message;

@@ -14,7 +14,7 @@ type ProfileMembershipRow = {
 	membership_plan: string | null;
 	profile_photo_url: string | null;
 	car_make: string | null;
-	plate_number: string | null;
+	color: string | null;
 };
 
 function getNumberField(input: unknown, key: string): number | null {
@@ -147,7 +147,7 @@ async function updateMembership(userId: string, paid: boolean, expiresAtIso: str
 	const adminClient = buildAdminClient();
 	const { data: profile, error: profileError } = await adminClient
 		.from('profiles')
-		.select('is_verified, status, membership_plan, profile_photo_url, car_make, plate_number')
+		.select('is_verified, status, membership_plan, profile_photo_url, car_make, color')
 		.eq('id', userId)
 		.maybeSingle();
 
@@ -159,7 +159,7 @@ async function updateMembership(userId: string, paid: boolean, expiresAtIso: str
 		membership_plan: null,
 		profile_photo_url: null,
 		car_make: null,
-		plate_number: null
+		color: null
 	};
 	const wasVerified = Boolean(typedProfile.is_verified);
 	const { data: documents, error: documentsError } = await adminClient

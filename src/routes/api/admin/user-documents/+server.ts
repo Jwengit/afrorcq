@@ -6,6 +6,7 @@ import {
 	isMembershipVerificationReady,
 	normalizeVerificationDocumentType
 } from '$lib/membershipVerification';
+import { createMembershipCheckoutSession } from '$lib/server/membership-checkout';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -69,7 +70,7 @@ async function sendReviewSummaryIfComplete(
 
   const { data: profile, error: profileError } = await adminClient
     .from('profiles')
-    .select('first_name, email, membership_plan, profile_photo_url, car_make, plate_number')
+    .select('first_name, email, membership_plan, profile_photo_url, car_make, color')
     .eq('id', userId)
     .maybeSingle();
   if (profileError) {
@@ -103,12 +104,26 @@ async function sendReviewSummaryIfComplete(
 
   const membershipReady =
     rejectedDocuments.length === 0 && isMembershipVerificationReady(profile, documents ?? []);
+  let checkoutUrl: string | null = null;
+  if (membershipReady && (profile?.membership_plan === 'student' || profile?.membership_plan === 'standard')) {
+    try {
+      checkoutUrl = await createMembershipCheckoutSession({
+        userId,
+        email,
+        plan: profile.membership_plan,
+        appBaseUrl: env.PUBLIC_SITE_URL ?? ''
+      });
+    } catch (error) {
+      console.error('Unable to create Stripe checkout link for verification email:', error);
+    }
+  }
   const emailId = await sendVerificationReviewSummaryEmail({
     to: email,
     firstName: profile?.first_name,
     approvedDocuments,
     rejectedDocuments,
-    membershipReady
+    membershipReady: membershipReady && Boolean(checkoutUrl),
+    checkoutUrl
   });
   if (!emailId) {
     console.error('Verification review summary email was not sent.');
@@ -147,7 +162,7 @@ async function shouldMarkProfileVerified(adminClient: any, userId: string): Prom
   try {
     const { data: profile, error: profileError } = await adminClient
       .from('profiles')
-      .select('plate_number, car_make, profile_photo_url, membership_plan')
+      .select('car_make, color, profile_photo_url, membership_plan')
       .eq('id', userId)
       .maybeSingle();
 

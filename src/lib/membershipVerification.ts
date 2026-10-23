@@ -2,7 +2,7 @@ export type VerificationProfile = {
 	membership_plan?: string | null;
 	profile_photo_url?: string | null;
 	car_make?: string | null;
-	plate_number?: string | null;
+	color?: string | null;
 };
 
 export type VerificationDocument = {
@@ -47,7 +47,7 @@ export function isMembershipVerificationReady(
 		'identity_card_back',
 		'proof_of_address',
 		...(profile.membership_plan === 'student' ? ['student_id'] : []),
-		...(profile.car_make?.trim() || profile.plate_number?.trim()
+		...(profile.car_make?.trim() || profile.color?.trim()
 			? REQUIRED_DRIVER_DOCUMENT_TYPES
 			: [])
 	];
