@@ -2,7 +2,6 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { supabase } from '$lib/supabaseClient';
-	import { resolveMemberStatus, type MemberStatus } from '$lib/membershipAccess';
 	import { isMembershipVerificationReady } from '$lib/membershipVerification';
 
 	type ProfileLite = {
@@ -21,8 +20,8 @@
 	let processing = false;
 	let message = '';
 	let errorMessage = '';
-	let memberStatus: MemberStatus = 'free';
 	let isApproved = false;
+	let isAccountVerified = false;
 
 	onMount(async () => {
 		const params = new URLSearchParams(window.location.search);
@@ -50,12 +49,8 @@
 		}
 
 		const typedProfile = (profile as ProfileLite | null) ?? null;
-		memberStatus = resolveMemberStatus({
-			status: typedProfile?.status,
-			isVerified: typedProfile?.is_verified,
-			membershipPaid: typedProfile?.membership_paid,
-			membershipExpiresAt: typedProfile?.membership_expires_at
-		});
+		isAccountVerified =
+			Boolean(typedProfile?.is_verified) || (typedProfile?.status ?? '').trim().toLowerCase() === 'verified';
 		const { data: documents, error: documentsError } = await supabase
 			.from('verification_documents')
 			.select('document_type, status, created_at')
@@ -88,6 +83,8 @@
 	});
 
 	async function startCheckout() {
+		if (isAccountVerified) return;
+
 		processing = true;
 		errorMessage = '';
 		message = '';
@@ -126,7 +123,9 @@
 		}
 	}
 
-		async function savePlanAndContinue() {
+	async function savePlanAndContinue() {
+		if (isAccountVerified) return;
+
 		processing = true;
 		errorMessage = '';
 		message = '';
@@ -180,10 +179,12 @@
 	<div class="mx-auto max-w-2xl">
 		<div class="mb-8 text-center">
 			<h1 class="text-3xl font-bold tracking-tight text-gray-900 md:text-4xl">
-				{isApproved ? 'Complete your membership' : 'Choose your plan'}
+				{isAccountVerified ? 'Verified member' : isApproved ? 'Complete your membership' : 'Choose your plan'}
 			</h1>
 			<p class="mt-3 text-gray-600">
-				{#if isApproved}
+				{#if isAccountVerified}
+					Your account is verified. Plan selection is locked.
+				{:else if isApproved}
 					Your documents have been verified. Complete your membership to unlock full access.
 				{:else}
 					Select the plan that fits you. You'll upload your documents in the next step.
@@ -204,7 +205,7 @@
 
 		{#if !loading}
 			<div class="grid gap-6 md:grid-cols-2">
-				<label class="rounded-2xl border-2 p-6 shadow-sm transition {isApproved ? 'cursor-default' : 'cursor-pointer hover:shadow-md'} {selectedPlan === 'student' ? 'border-emerald-400 bg-white' : 'border-gray-200 bg-gray-50'}">
+				<label class="rounded-2xl border-2 p-6 shadow-sm transition {isApproved || isAccountVerified ? 'cursor-default' : 'cursor-pointer hover:shadow-md'} {isAccountVerified ? 'border-gray-300 bg-gray-100 opacity-60 grayscale' : selectedPlan === 'student' ? 'border-emerald-400 bg-white' : 'border-gray-200 bg-gray-50'}">
 					<div class="flex items-start justify-between gap-4">
 						<div>
 							<div class="mb-2 inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700">
@@ -226,11 +227,11 @@
 						class="sr-only"
 						bind:group={selectedPlan}
 						value="student"
-						disabled={isApproved}
+						disabled={isApproved || isAccountVerified}
 					/>
 				</label>
 
-				<label class="rounded-2xl border-2 p-6 shadow-sm transition {isApproved ? 'cursor-default' : 'cursor-pointer hover:shadow-md'} {selectedPlan === 'standard' ? 'border-emerald-400 bg-white' : 'border-gray-200 bg-gray-50'}">
+				<label class="rounded-2xl border-2 p-6 shadow-sm transition {isApproved || isAccountVerified ? 'cursor-default' : 'cursor-pointer hover:shadow-md'} {isAccountVerified ? 'border-gray-300 bg-gray-100 opacity-60 grayscale' : selectedPlan === 'standard' ? 'border-emerald-400 bg-white' : 'border-gray-200 bg-gray-50'}">
 					<div class="flex items-start justify-between gap-4">
 						<div>
 							<div class="mb-2 inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-gray-700">
@@ -252,13 +253,15 @@
 						class="sr-only"
 						bind:group={selectedPlan}
 						value="standard"
-						disabled={isApproved}
+						disabled={isApproved || isAccountVerified}
 					/>
 				</label>
 			</div>
 
 			<div class="mt-8 flex flex-wrap items-center gap-3">
-				{#if isApproved}
+				{#if isAccountVerified}
+					<p class="text-sm font-medium text-gray-500">Your current plan cannot be changed here.</p>
+				{:else if isApproved}
 					<button
 						type="button"
 						on:click={startCheckout}

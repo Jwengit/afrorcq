@@ -28,18 +28,27 @@ function normalizeStatusLabel(value: string | null | undefined): string {
   return (value ?? '').trim().toLowerCase();
 }
 
-function hasActiveMembership(membershipPaid: boolean, membershipExpiresAt: string | null | undefined): boolean {
+function hasActiveMembership(
+	membershipPaid: boolean,
+	membershipExpiresAt: string | null | undefined,
+	hasVerificationEvidence: boolean
+): boolean {
   if (!membershipPaid) return false;
   const timestamp = Date.parse(membershipExpiresAt ?? '');
-  return Number.isFinite(timestamp) && timestamp > Date.now();
+  if (Number.isFinite(timestamp)) return timestamp > Date.now();
+  return hasVerificationEvidence;
 }
 
 export function resolveMemberStatus(input: StatusInput): MemberStatus {
   const rawStatus = normalizeStatusLabel(input.status);
 
   const hasVerificationEvidence = rawStatus === 'verified' || Boolean(input.isVerified);
-  const verified = Boolean(input.isVerified);
-  const activeMembership = hasActiveMembership(Boolean(input.membershipPaid), input.membershipExpiresAt);
+  const verified = hasVerificationEvidence;
+  const activeMembership = hasActiveMembership(
+    Boolean(input.membershipPaid),
+    input.membershipExpiresAt,
+    hasVerificationEvidence
+  );
 
   if (verified && activeMembership) {
     return 'verified';
