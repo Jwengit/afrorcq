@@ -1602,23 +1602,12 @@
 						<p class="text-sm text-amber-900">You're on the free plan. Click on "Become a member" to start the verification process..</p>
 					</div>
 				</section>
-			{:else if memberStatus === 'pending'}
+			{:else if memberStatus === 'pending' && (verificationReviewState === 'review' || verificationReviewState === 'unknown')}
 				<section class="rounded-xl border border-emerald-300 bg-emerald-50 px-5 py-4 shadow-sm">
 					<div class="flex items-start gap-3">
 						<span class="mt-0.5 text-2xl">✅</span>
 						<div>
-							{#if verificationReviewState === 'ready'}
-								<p class="font-semibold text-emerald-900">Your documents have been approved.</p>
-								<p class="mt-1 text-sm text-emerald-800">
-									Complete your membership payment to activate your verified account.
-									<a href={resolve('/pricing')} class="font-semibold underline">Complete payment</a>
-								</p>
-							{:else if verificationReviewState === 'approved'}
-								<p class="font-semibold text-emerald-900">Your documents have been approved.</p>
-								<p class="mt-1 text-sm text-emerald-800">
-									Add your profile photo to complete the verification requirements.
-								</p>
-							{:else if verificationReviewState === 'review'}
+							{#if verificationReviewState === 'review'}
 								<p class="font-semibold text-emerald-900">Your documents are under review.</p>
 								<p class="mt-1 text-sm text-emerald-800">
 									We'll notify you once your account is verified. This usually takes 24–48 hours.
@@ -1689,7 +1678,7 @@
 								<p class="text-xs text-gray-500 mt-1">Last membership expiry: {new Date(membershipExpiresAt).toLocaleDateString()}</p>
 							{/if}
 						{:else if memberStatus === 'pending' && verificationReviewState === 'ready'}
-							<p class="text-sm text-gray-600 mt-1">Your documents are approved. Complete your membership payment to unlock verified member features.</p>
+							<p class="text-sm text-gray-600 mt-1">Your documents are approved.</p>
 						{:else if memberStatus === 'pending' && verificationReviewState === 'approved'}
 							<p class="text-sm text-gray-600 mt-1">Your documents are approved. Add your profile photo to complete verification.</p>
 						{:else}
