@@ -1348,11 +1348,6 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 						<h2 class="text-xl font-semibold text-slate-900">Account Status</h2>
 						<p class="text-sm text-slate-600 mt-1">Email: {currentUser.email}</p>
 						<p class="text-sm text-slate-600">Status: {accountStatusLabel}</p>
-						{#if !profile.is_verified && profileVerificationReady}
-							<a href={resolve('/pricing')} class="mt-1 inline-block text-sm font-semibold text-emerald-700 hover:underline">
-								Your documents are approved. Click here to complete payment and activate your membership.
-							</a>
-						{/if}
 						{#if isRealMembershipPlan}
 							<p class="text-sm text-slate-600">Required documents approved: {approvedRequiredCount}/{requiredVerificationDocumentTypes.length}</p>
 						{:else}

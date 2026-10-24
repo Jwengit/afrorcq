@@ -160,6 +160,7 @@
 	let memberStatus: MemberStatus = 'free';
 	let verificationReviewState: 'ready' | 'approved' | 'review' | 'unknown' = 'unknown';
 	let isCurrentUserVerified = false;
+	let hasPaidMembership = false;
 	let hasActiveMembership = false;
 	let membershipExpiresAt: string | null = null;
 	let reviewPendingBlocked = false;
@@ -744,6 +745,7 @@
 				console.error('Profile eligibility load error:', fallback.error);
 				isFemaleDriver = false;
 				isCurrentUserVerified = false;
+				hasPaidMembership = false;
 				hasActiveMembership = false;
 				membershipExpiresAt = null;
 				reviewPendingBlocked = false;
@@ -753,6 +755,9 @@
 
 			const fallbackProfile = (fallback.data as DriverProfile | null) ?? null;
 			await loadVerificationReviewState(userId, fallbackProfile);
+			const fallbackExpiresAt = fallbackProfile?.membership_expires_at
+				? Date.parse(fallbackProfile.membership_expires_at)
+				: NaN;
 			isFemaleDriver = (fallbackProfile?.gender ?? '').toLowerCase() === 'female';
 			memberStatus = resolveMemberStatus({
 				status: fallbackProfile?.status,
@@ -760,9 +765,15 @@
 				membershipPaid: fallbackProfile?.membership_paid,
 				membershipExpiresAt: fallbackProfile?.membership_expires_at
 			});
-			isCurrentUserVerified = Boolean(fallbackProfile?.is_verified);
-			hasActiveMembership = false;
-			membershipExpiresAt = null;
+			isCurrentUserVerified =
+				Boolean(fallbackProfile?.is_verified) ||
+				(fallbackProfile?.status ?? '').trim().toLowerCase() === 'verified';
+			hasPaidMembership = Boolean(fallbackProfile?.membership_paid);
+			hasActiveMembership =
+				hasPaidMembership &&
+				Number.isFinite(fallbackExpiresAt) &&
+				fallbackExpiresAt > Date.now();
+			membershipExpiresAt = fallbackProfile?.membership_expires_at ?? null;
 			reviewPendingBlocked = hasPendingReviewBlock({
 				status: fallbackProfile?.status,
 				isVerified: fallbackProfile?.is_verified,
@@ -787,7 +798,9 @@
 			membershipPaid: profile?.membership_paid,
 			membershipExpiresAt: profile?.membership_expires_at
 		});
-		isCurrentUserVerified = Boolean(profile?.is_verified);
+		isCurrentUserVerified =
+			Boolean(profile?.is_verified) || (profile?.status ?? '').trim().toLowerCase() === 'verified';
+		hasPaidMembership = Boolean(profile?.membership_paid);
 		hasActiveMembership = isMembershipPaid && isMembershipNotExpired;
 		membershipExpiresAt = profile?.membership_expires_at ?? null;
 		reviewPendingBlocked = hasPendingReviewBlock({
@@ -1670,29 +1683,36 @@
 				<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
 					<div>
 						<h2 class="text-xl font-semibold text-gray-900">Become a member</h2>
-						{#if isCurrentUserVerified && hasActiveMembership}
-							<p class="text-sm text-gray-600 mt-1">Your profile is verified and your membership is active. You can still review your submitted documents in your profile.</p>
-						{:else if isCurrentUserVerified && !hasActiveMembership}
+						{#if isCurrentUserVerified && hasPaidMembership}
+							<p class="text-sm text-gray-600 mt-1">Your profile is verified and your membership payment is confirmed. You can still review your submitted documents in your profile.</p>
+						{:else if isCurrentUserVerified}
 							<p class="text-sm text-gray-600 mt-1">Your profile is verified but your membership is not active. Complete renewal and review your documents to keep full member access.</p>
 							{#if membershipExpiresAt}
 								<p class="text-xs text-gray-500 mt-1">Last membership expiry: {new Date(membershipExpiresAt).toLocaleDateString()}</p>
 							{/if}
-						{:else if memberStatus === 'pending' && verificationReviewState === 'ready'}
-							<p class="text-sm text-gray-600 mt-1">Your documents are approved.</p>
 						{:else if memberStatus === 'pending' && verificationReviewState === 'approved'}
-							<p class="text-sm text-gray-600 mt-1">Your documents are approved. Add your profile photo to complete verification.</p>
-						{:else}
+							<p class="text-sm text-gray-600 mt-1">Add your profile photo to complete verification.</p>
+						{:else if memberStatus !== 'pending'}
 							<p class="text-sm text-gray-600 mt-1">Upload your documents to get validated and unlock verified member features.</p>
 						{/if}
 					</div>
-					{#if isCurrentUserVerified && hasActiveMembership}
+					{#if isCurrentUserVerified && hasPaidMembership}
 						<button
 							type="button"
 							disabled
 							class="inline-flex items-center justify-center px-4 py-2 rounded-lg font-semibold text-white cursor-not-allowed"
 							style="background-color: #9CA3AF;"
 						>
-							Already verified
+							Verified member
+						</button>
+					{:else if isCurrentUserVerified}
+						<button
+							type="button"
+							on:click={goToBecomeAMember}
+							class="inline-flex items-center justify-center px-4 py-2 rounded-lg font-semibold text-white hover:opacity-90 transition cursor-pointer"
+							style="background-color: #00B050;"
+						>
+							Renew membership
 						</button>
 					{:else if memberStatus === 'pending'}
 						{#if verificationReviewState === 'ready'}
