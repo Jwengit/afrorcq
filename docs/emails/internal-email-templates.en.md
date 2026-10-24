@@ -49,6 +49,7 @@ Each template should include:
 <p>Here are the essential steps to get started:</p>
 <ol>
   <li><strong>Complete your profile</strong> and personalize your information.</li>
+  <li><strong>Choose a paid plan</strong> to become a verified member.</li>
   <li><strong>Upload your documents</strong> to verify your identity and build trust.</li>
   <li><strong>Become a driver (optional)</strong> by adding your car details.</li>
 </ol>
@@ -69,8 +70,9 @@ We are delighted to welcome you to our carpooling community.
 
 Here are the essential steps to get started:
 1) Complete your profile and personalize your information
-2) Upload your documents to verify your identity
-3) Become a driver (optional) by adding your car details
+2) Choose a paid plan to become a verified member
+3) Upload your documents to verify your identity
+4) Become a driver (optional) by adding your car details
 
 Tip: Verified profiles receive more requests and interactions.
 

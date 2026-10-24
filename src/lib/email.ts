@@ -168,7 +168,8 @@ export function buildWelcomeEmail(firstName?: string | null): EmailTemplate {
 		lines: [
 			"Welcome to Hizli Carpooling! We're excited to have you in our community.",
 			'You can start searching and posting rides right away with your free account.',
-			'Want to travel with verified members and access all features? Upload your documents and become a verified member.',
+			'Want to travel with verified members and access all features? First, choose a paid plan.',
+			'Then upload your documents to become a verified member.',
 			'See you on the road,',
 			'The Hizli Team'
 		],
