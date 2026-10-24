@@ -75,6 +75,7 @@
 	let accountBlockedReason = '';
 	let errorMessage = '';
 	let successMessage = '';
+	const PUBLISH_REQUEST_TIMEOUT_MS = 30_000;
 
 	let form: RideForm = {
 		departure: '',
@@ -367,6 +368,11 @@
 		}
 
 		submitting = true;
+		const publishController = new AbortController();
+		const publishTimeout = window.setTimeout(
+			() => publishController.abort(),
+			PUBLISH_REQUEST_TIMEOUT_MS
+		);
 
 		try {
 			const { error } = await supabase.from('rides').insert({
@@ -379,9 +385,14 @@
 				seats: form.seats,
 				price: form.price,
 				girls_only: isFemaleDriver ? form.girlsOnly : false
-			});
+			}).abortSignal(publishController.signal);
 
 			if (error) {
+				if (publishController.signal.aborted) {
+					errorMessage =
+						'Publishing timed out. Check My rides before trying again, as your ride may already have been published.';
+					return;
+				}
 				console.error('Ride insert error:', error);
 				errorMessage = error.message || 'Failed to publish the ride.';
 				return;
@@ -399,9 +410,15 @@
 				girlsOnly: false
 			};
 		} catch (error) {
+			if (publishController.signal.aborted) {
+				errorMessage =
+					'Publishing timed out. Check My rides before trying again, as your ride may already have been published.';
+				return;
+			}
 			console.error('Unexpected publish error:', error);
 			errorMessage = 'An unexpected error occurred.';
 		} finally {
+			window.clearTimeout(publishTimeout);
 			submitting = false;
 		}
 	}
