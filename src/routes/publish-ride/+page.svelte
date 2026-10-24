@@ -450,7 +450,7 @@
 						</a>
 					{:else if canPublishAsFreeMember && freeProfileIncomplete}
 						<p class="text-sm font-semibold text-amber-800 mb-2">
-							Complete your profile details and get your profile photo approved to publish a free ride. Driver documents are not verified for free rides.
+							Complete your profile details and get your profile photo approved to publish rides with your free account. Driver documents are not verified for free accounts.
 						</p>
 						<a
 							href={resolve('/profile')}

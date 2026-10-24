@@ -132,7 +132,10 @@
 	let reviewsSectionLoading = false;
 	let reviewsSectionError = '';
 
-	const profileDocumentTypes = ['identity_card_front', 'identity_card_back', 'proof_of_address'] as const;
+	$: profileDocumentTypes =
+		profile.membership_plan === 'student'
+			? (['identity_card_front', 'identity_card_back', 'student_id', 'proof_of_address'] as const)
+			: (['identity_card_front', 'identity_card_back', 'proof_of_address'] as const);
 
 	const documentTypeOptions = [
 		{ value: 'identity_card_front', label: 'Proof of ID (front)' },
@@ -168,10 +171,6 @@
 		registration: 'Vehicle registration',
 		vehicle_papers: 'Vehicle registration'
 	};
-
-	$: planRequiredDocTypes = profile.membership_plan === 'student'
-		? (['identity_card_front', 'identity_card_back', 'student_id', 'proof_of_address'] as const)
-		: (['identity_card_front', 'identity_card_back', 'proof_of_address'] as const);
 
 	$: docStatusByType = new Map(
 		(['identity_card_front', 'identity_card_back', 'student_id', 'proof_of_address', 'driver_license_front', 'driver_license_back', 'insurance', 'vehicle_registration'] as const).map(
@@ -269,7 +268,7 @@
 		profile.membership_plan === 'student' || profile.membership_plan === 'standard';
 
 	$: requiredVerificationDocumentTypes = isRealMembershipPlan
-		? (planRequiredDocTypes as readonly string[])
+		? (profileDocumentTypes as readonly string[])
 		: ([] as readonly string[]);
 
 	$: approvedRequiredDocumentTypes = new Set(
@@ -1809,7 +1808,7 @@ if (!trimmedFirstName || !trimmedLastName || !formData.gender) {
 					</div>
 					<div class="flex items-center justify-between">
 						<h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Required documents</h4>
-						<span class="text-xs font-semibold text-slate-600">{profileApprovedCount}/3 documents validated</span>
+						<span class="text-xs font-semibold text-slate-600">{profileApprovedCount}/{profileDocumentTypes.length} documents validated</span>
 					</div>
 					<div class="space-y-2">
 						{#each profileDocumentTypes as type (type)}
