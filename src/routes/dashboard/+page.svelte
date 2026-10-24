@@ -12,6 +12,11 @@
 		hasPendingReviewBlock,
 		type MemberStatus
 	} from '$lib/membershipAccess';
+	import {
+		areRequiredMembershipDocumentsApproved,
+		isMembershipVerificationReady,
+		type VerificationDocument
+	} from '$lib/membershipVerification';
 	import type { User } from '@supabase/supabase-js';
 
 	type DriverProfile = {
@@ -25,6 +30,10 @@
 		user_status?: string | null;
 		suspended_until?: string | null;
 		status_reason?: string | null;
+		membership_plan?: string | null;
+		profile_photo_url?: string | null;
+		car_make?: string | null;
+		color?: string | null;
 	};
 
 	type Ride = {
@@ -149,6 +158,7 @@
 	let currentUser: User | null = null;
 	let isFemaleDriver = false;
 	let memberStatus: MemberStatus = 'free';
+	let verificationReviewState: 'ready' | 'approved' | 'review' | 'unknown' = 'unknown';
 	let isCurrentUserVerified = false;
 	let hasActiveMembership = false;
 	let membershipExpiresAt: string | null = null;
@@ -714,18 +724,19 @@
 	}
 
 	async function loadDriverEligibility(userId: string) {
+		verificationReviewState = 'unknown';
 		await supabase.rpc('refresh_review_pending_for_member', { p_user_id: userId });
 
 		const { data, error } = await supabase
 			.from('profiles')
-			.select('gender, status, is_verified, membership_paid, membership_expires_at, review_pending, review_pending_ride_id')
+			.select('gender, status, is_verified, membership_paid, membership_expires_at, review_pending, review_pending_ride_id, membership_plan, profile_photo_url, car_make, color')
 			.eq('id', userId)
 			.maybeSingle();
 
 		if (error) {
 			const fallback = await supabase
 				.from('profiles')
-				.select('gender, status, is_verified, membership_paid, membership_expires_at, review_pending, review_pending_ride_id, user_status, suspended_until, status_reason')
+				.select('gender, status, is_verified, membership_paid, membership_expires_at, review_pending, review_pending_ride_id, user_status, suspended_until, status_reason, membership_plan, profile_photo_url, car_make, color')
 				.eq('id', userId)
 				.maybeSingle();
 
@@ -741,6 +752,7 @@
 			}
 
 			const fallbackProfile = (fallback.data as DriverProfile | null) ?? null;
+			await loadVerificationReviewState(userId, fallbackProfile);
 			isFemaleDriver = (fallbackProfile?.gender ?? '').toLowerCase() === 'female';
 			memberStatus = resolveMemberStatus({
 				status: fallbackProfile?.status,
@@ -763,6 +775,7 @@
 		}
 
 		const profile = (data as DriverProfile | null) ?? null;
+		await loadVerificationReviewState(userId, profile);
 		const expiresAt = profile?.membership_expires_at ? Date.parse(profile.membership_expires_at) : NaN;
 		const isMembershipPaid = Boolean(profile?.membership_paid);
 		const isMembershipNotExpired = Number.isFinite(expiresAt) && expiresAt > Date.now();
@@ -788,6 +801,26 @@
 		accountUserStatus = profile?.user_status ?? 'active';
 		accountSuspendedUntil = profile?.suspended_until ?? null;
 		accountStatusReason = profile?.status_reason ?? null;
+	}
+
+	async function loadVerificationReviewState(userId: string, profile: DriverProfile | null) {
+		const { data: documents, error } = await supabase
+			.from('verification_documents')
+			.select('document_type, status, created_at')
+			.eq('user_id', userId);
+
+		if (error) {
+			console.error('Membership verification documents load error:', error);
+			verificationReviewState = 'unknown';
+			return;
+		}
+
+		const typedDocuments = (documents ?? []) as VerificationDocument[];
+		verificationReviewState = isMembershipVerificationReady(profile, typedDocuments)
+			? 'ready'
+			: areRequiredMembershipDocumentsApproved(profile, typedDocuments)
+				? 'approved'
+				: 'review';
 	}
 
 	async function goToPendingReview() {
@@ -1574,11 +1607,27 @@
 					<div class="flex items-start gap-3">
 						<span class="mt-0.5 text-2xl">✅</span>
 						<div>
-							<p class="font-semibold text-emerald-900">Your documents are under review.</p>
-							<p class="mt-1 text-sm text-emerald-800">
-								We'll notify you once your account is verified. This usually takes 24–48 hours.
-								In the meantime, you can continue using your free account.
-							</p>
+							{#if verificationReviewState === 'ready'}
+								<p class="font-semibold text-emerald-900">Your documents have been approved.</p>
+								<p class="mt-1 text-sm text-emerald-800">
+									Complete your membership payment to activate your verified account.
+									<a href={resolve('/pricing')} class="font-semibold underline">Complete payment</a>
+								</p>
+							{:else if verificationReviewState === 'approved'}
+								<p class="font-semibold text-emerald-900">Your documents have been approved.</p>
+								<p class="mt-1 text-sm text-emerald-800">
+									Add your profile photo to complete the verification requirements.
+								</p>
+							{:else if verificationReviewState === 'review'}
+								<p class="font-semibold text-emerald-900">Your documents are under review.</p>
+								<p class="mt-1 text-sm text-emerald-800">
+									We'll notify you once your account is verified. This usually takes 24–48 hours.
+									In the meantime, you can continue using your free account.
+								</p>
+							{:else}
+								<p class="font-semibold text-emerald-900">Your verification status is unavailable.</p>
+								<p class="mt-1 text-sm text-emerald-800">Refresh the page to check your latest document status.</p>
+							{/if}
 						</div>
 					</div>
 				</section>
@@ -1639,6 +1688,10 @@
 							{#if membershipExpiresAt}
 								<p class="text-xs text-gray-500 mt-1">Last membership expiry: {new Date(membershipExpiresAt).toLocaleDateString()}</p>
 							{/if}
+						{:else if memberStatus === 'pending' && verificationReviewState === 'ready'}
+							<p class="text-sm text-gray-600 mt-1">Your documents are approved. Complete your membership payment to unlock verified member features.</p>
+						{:else if memberStatus === 'pending' && verificationReviewState === 'approved'}
+							<p class="text-sm text-gray-600 mt-1">Your documents are approved. Add your profile photo to complete verification.</p>
 						{:else}
 							<p class="text-sm text-gray-600 mt-1">Upload your documents to get validated and unlock verified member features.</p>
 						{/if}
@@ -1653,14 +1706,24 @@
 							Already verified
 						</button>
 					{:else if memberStatus === 'pending'}
-						<button
-							type="button"
-							on:click={goToBecomeAMember}
-							class="inline-flex items-center justify-center px-4 py-2 rounded-lg font-semibold text-white hover:opacity-90 transition cursor-pointer"
-							style="background-color: #F59E0B;"
-						>
-							View my documents
-						</button>
+						{#if verificationReviewState === 'ready'}
+							<a
+								href={resolve('/pricing')}
+								class="inline-flex items-center justify-center px-4 py-2 rounded-lg font-semibold text-white hover:opacity-90 transition cursor-pointer"
+								style="background-color: #F59E0B;"
+							>
+								Complete payment
+							</a>
+						{:else}
+							<button
+								type="button"
+								on:click={goToBecomeAMember}
+								class="inline-flex items-center justify-center px-4 py-2 rounded-lg font-semibold text-white hover:opacity-90 transition cursor-pointer"
+								style="background-color: #F59E0B;"
+							>
+								View my documents
+							</button>
+						{/if}
 					{:else}
 						<button
 							type="button"

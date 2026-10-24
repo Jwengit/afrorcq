@@ -19,11 +19,15 @@ const REQUIRED_DRIVER_DOCUMENT_TYPES = [
 ] as const;
 
 export function normalizeVerificationDocumentType(value: string | null | undefined): string {
-	const normalized = (value ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+	const normalized = (value ?? '')
+		.trim()
+		.toLowerCase()
+		.replace(/[\s-]+/g, '_');
 	if (normalized === 'identity' || normalized === 'id_card') return 'identity_card';
 	if (normalized === 'license' || normalized === 'driving_license') return 'driver_license_front';
 	if (normalized === 'insurance_proof') return 'insurance';
-	if (normalized === 'registration' || normalized === 'vehicle_papers') return 'vehicle_registration';
+	if (normalized === 'registration' || normalized === 'vehicle_papers')
+		return 'vehicle_registration';
 	return normalized;
 }
 
@@ -32,7 +36,15 @@ export function isMembershipVerificationReady(
 	documents: VerificationDocument[]
 ): boolean {
 	if (!profile?.profile_photo_url?.trim()) return false;
-	if (profile.membership_plan !== 'student' && profile.membership_plan !== 'standard') return false;
+	return areRequiredMembershipDocumentsApproved(profile, documents);
+}
+
+export function areRequiredMembershipDocumentsApproved(
+	profile: VerificationProfile | null | undefined,
+	documents: VerificationDocument[]
+): boolean {
+	if (!profile || (profile.membership_plan !== 'student' && profile.membership_plan !== 'standard'))
+		return false;
 
 	const latestByType = new Map<string, VerificationDocument>();
 	for (const document of [...documents].sort(
@@ -47,9 +59,7 @@ export function isMembershipVerificationReady(
 		'identity_card_back',
 		'proof_of_address',
 		...(profile.membership_plan === 'student' ? ['student_id'] : []),
-		...(profile.car_make?.trim() || profile.color?.trim()
-			? REQUIRED_DRIVER_DOCUMENT_TYPES
-			: [])
+		...(profile.car_make?.trim() || profile.color?.trim() ? REQUIRED_DRIVER_DOCUMENT_TYPES : [])
 	];
 
 	return requiredTypes.every(
