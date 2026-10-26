@@ -1,4 +1,5 @@
 <script lang="ts">
+	// VERSION: publish-ride safe-loading 2026-10-26
 	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -76,6 +77,7 @@
 	let errorMessage = '';
 	let successMessage = '';
 	const PUBLISH_REQUEST_TIMEOUT_MS = 30_000;
+	const LOAD_TIMEOUT_MS = 10_000;
 
 	let form: RideForm = {
 		departure: '',
@@ -92,9 +94,26 @@
 		currentUser = u;
 	});
 
+	// Stops waiting after `ms` so the page never stays stuck on "Loading..."
+	function withTimeout<T>(promise: PromiseLike<T>, ms: number): Promise<T> {
+		return new Promise<T>((resolvePromise, rejectPromise) => {
+			const timer = setTimeout(() => rejectPromise(new Error('timeout')), ms);
+			Promise.resolve(promise).then(
+				(value) => {
+					clearTimeout(timer);
+					resolvePromise(value);
+				},
+				(err) => {
+					clearTimeout(timer);
+					rejectPromise(err);
+				}
+			);
+		});
+	}
+
 	function refreshPublishingEligibilityOnFocus() {
 		if (currentUser) {
-			void loadPublishingEligibility(currentUser.id);
+			void loadPublishingEligibilitySafe(currentUser.id);
 		}
 	}
 
@@ -108,21 +127,24 @@
 	onMount(async () => {
 		applyPrefilledRouteFromUrl();
 
-		await ensureAuthenticatedUser();
+		try {
+			await ensureAuthenticatedUser();
 
-		if (!currentUser) {
-			loading = false;
-			if (browser) {
-				goto(resolve('/auth/login'));
+			if (!currentUser) {
+				if (browser) {
+					goto(resolve('/auth/login'));
+				}
+				return;
 			}
-			return;
-		}
 
-		if (browser) {
-			window.addEventListener('focus', refreshPublishingEligibilityOnFocus);
+			if (browser) {
+				window.addEventListener('focus', refreshPublishingEligibilityOnFocus);
+			}
+			await loadPublishingEligibilitySafe(currentUser.id);
+		} finally {
+			// Always stop the spinner, whatever happens above
+			loading = false;
 		}
-		await loadPublishingEligibility(currentUser.id);
-		loading = false;
 	});
 
 	function applyPrefilledRouteFromUrl() {
@@ -148,13 +170,16 @@
 			return;
 		}
 
-		const { data, error } = await supabase.auth.getUser();
-		if (error) {
-			console.error('Auth check error:', error);
-			return;
+		try {
+			const { data, error } = await withTimeout(supabase.auth.getUser(), LOAD_TIMEOUT_MS);
+			if (error) {
+				console.error('Auth check error:', error);
+				return;
+			}
+			currentUser = data.user;
+		} catch (err) {
+			console.error('Auth check failed:', err);
 		}
-
-		currentUser = data.user;
 	}
 
 	async function getSessionAccessToken(): Promise<string | null> {
@@ -164,21 +189,47 @@
 		return session?.access_token ?? null;
 	}
 
+	// Wrapper: any unexpected error becomes a clear message instead of an endless spinner
+	async function loadPublishingEligibilitySafe(userId: string) {
+		try {
+			await loadPublishingEligibility(userId);
+		} catch (err) {
+			console.error('Publishing eligibility error:', err);
+			allowedToPublish = false;
+			errorMessage =
+				err instanceof Error && err.message === 'timeout'
+					? 'The server took too long to answer. Please reload the page (Ctrl+Shift+R).'
+					: 'Unable to check your account right now. Please reload the page or sign in again.';
+		}
+	}
+
 	async function loadPublishingEligibility(userId: string) {
 		errorMessage = '';
 		missingRequirements = [];
 
-		await supabase.rpc('refresh_review_pending_for_member', { p_user_id: userId });
+		// This refresh is optional: if it fails or is slow, we continue anyway
+		try {
+			await withTimeout(
+				supabase.rpc('refresh_review_pending_for_member', { p_user_id: userId }),
+				LOAD_TIMEOUT_MS
+			);
+		} catch (rpcError) {
+			console.error('refresh_review_pending_for_member skipped:', rpcError);
+		}
 
-		const { data, error } = await supabase
-			.from('profiles')
-			.select('first_name, last_name, gender, date_of_birth, city_of_birth, address, zip_code, bio, languages, ride_preferences, profile_photo_url, profile_photo_status, car_make, car_year, color, status, is_verified, membership_paid, membership_expires_at, review_pending, review_pending_ride_id, user_status, suspended_until')
-			.eq('id', userId)
-			.maybeSingle();
+		const { data, error } = await withTimeout(
+			supabase
+				.from('profiles')
+				.select('first_name, last_name, gender, date_of_birth, city_of_birth, address, zip_code, bio, languages, ride_preferences, profile_photo_url, profile_photo_status, car_make, car_year, color, status, is_verified, membership_paid, membership_expires_at, review_pending, review_pending_ride_id, user_status, suspended_until')
+				.eq('id', userId)
+				.maybeSingle(),
+			LOAD_TIMEOUT_MS
+		);
 
 		if (error) {
 			console.error('Profile fetch error:', error);
 			allowedToPublish = false;
+			errorMessage = 'Unable to load your profile. Please reload the page.';
 			return;
 		}
 
@@ -203,11 +254,27 @@
 			}
 
 			let phoneNumber: string | null = null;
+			const contactController = new AbortController();
+			const contactTimer = window.setTimeout(() => contactController.abort(), LOAD_TIMEOUT_MS);
 			try {
 				const contactResponse = await fetch('/api/profile', {
-					headers: { Authorization: `Bearer ${token}` }
+					headers: { Authorization: `Bearer ${token}` },
+					signal: contactController.signal
 				});
-				const contactPayload = await contactResponse.json();
+
+				// Read as text first: the server may answer with a non-JSON page
+				const rawText = await contactResponse.text();
+				let contactPayload: any = null;
+				try {
+					contactPayload = JSON.parse(rawText);
+				} catch {
+					console.error('Private profile: non-JSON answer from server:', rawText.slice(0, 200));
+					errorMessage =
+						'The server sent an unexpected answer. Please reload the page (Ctrl+Shift+R) or sign in again.';
+					allowedToPublish = false;
+					return;
+				}
+
 				if (!contactResponse.ok) {
 					console.error('Private profile contact load error:', contactPayload?.error);
 					errorMessage = contactPayload?.error || 'Unable to load your profile details.';
@@ -217,9 +284,11 @@
 				phoneNumber = contactPayload?.contact?.phone_number ?? null;
 			} catch (contactError) {
 				console.error('Private profile contact load error:', contactError);
-				errorMessage = 'Unable to load your profile details.';
+				errorMessage = contactcontactErrorMessage(contactController.signal.aborted);
 				allowedToPublish = false;
 				return;
+			} finally {
+				window.clearTimeout(contactTimer);
 			}
 
 			freeProfileIncomplete = !hasCompleteFreeMemberProfile({
@@ -270,10 +339,13 @@
 				'insurance',
 				'vehicle_registration'
 			];
-			const { data: docs, error: docsError } = await supabase
-				.from('verification_documents')
-				.select('document_type, status')
-				.eq('user_id', userId);
+			const { data: docs, error: docsError } = await withTimeout(
+				supabase
+					.from('verification_documents')
+					.select('document_type, status')
+					.eq('user_id', userId),
+				LOAD_TIMEOUT_MS
+			);
 
 			if (!docsError && docs) {
 				const approvedTypes = new Set(
@@ -311,6 +383,12 @@
 		if (!isFemaleDriver || !canUseVerifiedFeatures(memberStatus)) {
 			form.girlsOnly = false;
 		}
+	}
+
+	function contactContactErrorMessage(timedOut: boolean): string {
+		return timedOut
+			? 'The server took too long to answer. Please reload the page (Ctrl+Shift+R).'
+			: 'Unable to load your profile details.';
 	}
 
 	function swapCities() {
@@ -501,7 +579,7 @@
 						</p>
 						<ul class="list-disc list-inside space-y-1 text-sm text-amber-700">
 							{#if missingRequirements.includes('car_info')}
-								<li>Car information (make, year, and plate number) — complete in your profile</li>
+								<li>Car information (make, year, and color) — complete in your profile</li>
 							{/if}
 							{#if missingRequirements.includes('driver_license_front')}
 								<li>Driver license (front) — upload and get it approved in your profile</li>
