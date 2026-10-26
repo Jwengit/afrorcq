@@ -73,6 +73,13 @@ export function canUseVerifiedFeatures(status: MemberStatus): boolean {
   return status === 'verified';
 }
 
+function hasNonEmptySelection(values: readonly string[] | null | undefined): boolean {
+  return (
+    Array.isArray(values) &&
+    values.some((value) => typeof value === 'string' && value.trim().length > 0)
+  );
+}
+
 export function hasCompleteFreeMemberProfile(profile: FreeMemberProfileInput): boolean {
   return Boolean(
     profile.firstName?.trim() &&
@@ -86,8 +93,8 @@ export function hasCompleteFreeMemberProfile(profile: FreeMemberProfileInput): b
       profile.address?.trim() &&
       profile.zipCode?.trim() &&
       profile.bio?.trim() &&
-      profile.languages?.some((language) => language.trim()) &&
-      profile.ridePreferences?.some((preference) => preference.trim())
+      hasNonEmptySelection(profile.languages) &&
+      hasNonEmptySelection(profile.ridePreferences)
   );
 }
 

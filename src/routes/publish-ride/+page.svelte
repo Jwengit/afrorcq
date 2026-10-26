@@ -196,10 +196,12 @@
 		} catch (err) {
 			console.error('Publishing eligibility error:', err);
 			allowedToPublish = false;
-			errorMessage =
-				err instanceof Error && err.message === 'timeout'
-					? 'The server took too long to answer. Please reload the page (Ctrl+Shift+R).'
-					: 'Unable to check your account right now. Please reload the page or sign in again.';
+			if (err instanceof Error && err.message === 'timeout') {
+				errorMessage = 'The server took too long to answer. Please reload the page (Ctrl+Shift+R).';
+			} else {
+				const errorType = err instanceof Error ? err.name : 'UnknownError';
+				errorMessage = `Your account check failed (${errorType}). Please sign out and back in, then try again.`;
+			}
 		}
 	}
 
@@ -284,7 +286,7 @@
 				phoneNumber = contactPayload?.contact?.phone_number ?? null;
 			} catch (contactError) {
 				console.error('Private profile contact load error:', contactError);
-				errorMessage = contactcontactErrorMessage(contactController.signal.aborted);
+				errorMessage = contactContactErrorMessage(contactController.signal.aborted);
 				allowedToPublish = false;
 				return;
 			} finally {
