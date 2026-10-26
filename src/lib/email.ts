@@ -8,6 +8,7 @@ const HIZLI_PROFILE_URL = `${HIZLI_BASE_URL}/profile`;
 const HIZLI_PRICING_URL = `${HIZLI_BASE_URL}/pricing`;
 const HIZLI_SEARCH_URL = `${HIZLI_BASE_URL}/search`;
 const HIZLI_LOGO_URL = `${HIZLI_BASE_URL}/logo.png`;
+const ADMIN_NOTIFICATION_EMAIL = 'hizli.carpooling@gmail.com';
 const EMAIL_FROM = 'Hizli Carpooling <service@hizli-carpooling.com>';
 const FOOTER_COPY =
 	'Hizli Carpooling — hizli-carpooling.com You received this email because you have an account on Hizli Carpooling. © 2026 Hizli Carpooling. All rights reserved.';
@@ -71,9 +72,15 @@ function normalizeTextLine(value: string): string {
 	return value.replace(/\s+/g, ' ').trim();
 }
 
-function buildTextBody(firstName: string, lines: string[], buttonLabel: string, buttonUrl: string): string {
+function buildTextBody(
+	firstName: string,
+	lines: string[],
+	buttonLabel: string,
+	buttonUrl: string,
+	greeting?: string
+): string {
 	return [
-		`Hi ${firstName},`,
+		greeting ?? `Hi ${firstName},`,
 		'',
 		...lines.map(normalizeTextLine),
 		'',
@@ -89,9 +96,10 @@ function buildEmailTemplate(input: {
 	lines: string[];
 	buttonLabel: string;
 	buttonUrl: string;
+	greeting?: string;
 }): EmailTemplate {
 	const firstName = getFirstName(input.firstName);
-	const safeFirstName = escapeHtml(firstName);
+	const safeGreeting = escapeHtml(input.greeting ?? `Hi ${firstName},`);
 	const safeButtonLabel = escapeHtml(input.buttonLabel);
 	const safeButtonUrl = escapeHtml(input.buttonUrl);
 	const htmlLines = input.lines.map((line) => `<p style="margin:0 0 16px;">${escapeHtml(line)}</p>`).join('');
@@ -103,7 +111,7 @@ function buildEmailTemplate(input: {
 					<img src="${HIZLI_LOGO_URL}" alt="" style="max-width:168px;width:100%;height:auto;display:inline-block;" />
 				</div>
 				<div style="padding:32px;font-family:Arial,sans-serif;color:#000000;line-height:1.6;background:#ffffff;">
-					<p style="margin:0 0 16px;">Hi ${safeFirstName},</p>
+					<p style="margin:0 0 16px;">${safeGreeting}</p>
 					${htmlLines}
 					<p style="margin:24px 0 0;">
 						<a href="${safeButtonUrl}" style="display:inline-block;padding:14px 24px;background:#00B050;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:700;">${safeButtonLabel}</a>
@@ -121,7 +129,7 @@ function buildEmailTemplate(input: {
 	return {
 		subject: input.subject,
 		html,
-		text: buildTextBody(firstName, input.lines, input.buttonLabel, input.buttonUrl)
+		text: buildTextBody(firstName, input.lines, input.buttonLabel, input.buttonUrl, input.greeting)
 	};
 }
 
@@ -157,6 +165,27 @@ async function sendEmail(payload: SendEmailPayload): Promise<string | null> {
 	}
 
 	return data.id;
+}
+
+export async function sendAdminTaskAlertEmail(): Promise<string | null> {
+	try {
+		return await sendEmail({
+			to: ADMIN_NOTIFICATION_EMAIL,
+			template: buildEmailTemplate({
+				greeting: 'Bonjour,',
+				subject: 'Une action demande votre attention sur Hizli Carpooling',
+				lines: [
+					'Un nouvel élément nécessite une vérification ou une action dans votre espace d’administration.',
+					'Ouvrez l’administration du site pour le consulter et le gérer.'
+				],
+				buttonLabel: 'Ouvrir l’administration',
+				buttonUrl: `${HIZLI_BASE_URL}/admin`
+			})
+		});
+	} catch (error) {
+		console.error('Admin task alert email failed:', error);
+		return null;
+	}
 }
 
 // ─── EMAIL 1 — Welcome (envoyé à l'inscription Google ET email/mdp) ───

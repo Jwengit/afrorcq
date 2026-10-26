@@ -1,6 +1,7 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
+import { sendAdminTaskAlertEmail } from '$lib/email';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -158,7 +159,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		// Check if profile exists
 		const { data: existingProfile, error: checkError } = await supabaseClient
 			.from('profiles')
-			.select('id')
+			.select('id, profile_photo_url')
 			.eq('id', user.id)
 			.maybeSingle();
 
@@ -168,6 +169,10 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 
 		let error;
+		const hasNewProfilePhoto =
+			typeof profile_photo_url === 'string' &&
+			profile_photo_url.trim().length > 0 &&
+			profile_photo_url !== existingProfile?.profile_photo_url;
 
 		if (existingProfile) {
 			// Update existing profile
@@ -206,6 +211,10 @@ export const POST: RequestHandler = async ({ request }) => {
 				{ error: error.message || 'Failed to save profile' },
 				{ status: 400 }
 			);
+		}
+
+		if (hasNewProfilePhoto) {
+			await sendAdminTaskAlertEmail();
 		}
 
 		return json({ success: true });

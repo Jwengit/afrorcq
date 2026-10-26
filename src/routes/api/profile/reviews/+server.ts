@@ -51,7 +51,7 @@ export const GET: RequestHandler = async ({ request }) => {
 		// et seulement celles déjà approuvées par l'admin
 		const { data: reviews, error: reviewsError } = await adminClient
 			.from('reviews')
-			.select('id, reviewer_id, rating, comment, status, created_at, ride_id')
+			.select('id, reviewer_id, rating, comment, transaction_confirmed, safe_trip_confirmed, status, created_at, ride_id')
 			.eq('reviewee_id', user.id)
 			.eq('status', 'approved')
 			.order('created_at', { ascending: false });
@@ -103,6 +103,8 @@ export const GET: RequestHandler = async ({ request }) => {
 			id: review.id,
 			rating: review.rating,
 			comment: review.comment,
+			transaction_confirmed: review.transaction_confirmed,
+			safe_trip_confirmed: review.safe_trip_confirmed,
 			created_at: review.created_at,
 			reviewer_profile: profileMap[review.reviewer_id] ?? null,
 			ride: rideMap[review.ride_id] ?? null

@@ -269,6 +269,8 @@
 		ride_id: string;
 		rating: number;
 		comment: string | null;
+		transaction_confirmed: boolean;
+		safe_trip_confirmed: boolean;
 		status: 'pending' | 'approved' | 'rejected';
 		admin_note: string | null;
 		reviewed_by: string | null;
@@ -4542,6 +4544,11 @@ ${p?.bio ? `<div class="card"><div class="card-header"><span class="section-icon
 															Reviewee: {review.reviewee_profile?.first_name} {review.reviewee_profile?.last_name}
 														</p>
 														<p class="text-sm text-gray-700 mt-2">{review.comment || 'No comment'}</p>
+														<p class="text-xs text-gray-600 mt-2">
+															Payment: {review.transaction_confirmed ? 'confirmed' : 'no confirmation'}
+															<span class="mx-1">|</span>
+															Safe trip: {review.safe_trip_confirmed ? 'confirmed' : 'no confirmation'}
+														</p>
 														{#if review.admin_note}
 															<p class="text-xs text-gray-500 mt-1">Admin note: {review.admin_note}</p>
 														{/if}

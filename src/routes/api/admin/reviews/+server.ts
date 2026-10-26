@@ -81,7 +81,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
 		let query = adminClient
 			.from('reviews')
 			.select(
-				'id, reviewer_id, reviewee_id, ride_id, rating, comment, status, admin_note, reviewed_by, reviewed_at, created_at, updated_at'
+				'id, reviewer_id, reviewee_id, ride_id, rating, comment, transaction_confirmed, safe_trip_confirmed, status, admin_note, reviewed_by, reviewed_at, created_at, updated_at'
 			)
 			.order('created_at', { ascending: false });
 

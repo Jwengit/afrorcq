@@ -6,6 +6,8 @@ type Review = {
 id: string;
 rating: number;
 comment: string | null;
+transaction_confirmed: boolean;
+safe_trip_confirmed: boolean;
 created_at: string;
 profiles: {
 id: string;
@@ -135,6 +137,17 @@ Verified
 </div>
 {#if review.comment}
 <p class="comment">{review.comment}</p>
+{/if}
+{#if review.transaction_confirmed || review.safe_trip_confirmed}
+<ul class="confirmations" aria-label="Trip confirmations">
+{#if review.transaction_confirmed}
+<li>Agreed payment confirmed by reviewer</li>
+{/if}
+{#if review.safe_trip_confirmed}
+<li>Safe trip confirmed by reviewer</li>
+{/if}
+</ul>
+<p class="confirmation-note">Member confirmations only; payment is not verified by Hizli.</p>
 {/if}
 </article>
 {/each}
@@ -295,6 +308,27 @@ color: #334155;
 margin: 0.7rem 0 0;
 line-height: 1.45;
 color: #1f2937;
+}
+.confirmations {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem;
+	margin: 0.7rem 0 0;
+	padding: 0;
+	list-style: none;
+}
+.confirmations li {
+	padding: 0.2rem 0.5rem;
+	border-radius: 999px;
+	background: #ecfdf5;
+	color: #065f46;
+	font-size: 0.75rem;
+	font-weight: 600;
+}
+.confirmation-note {
+	margin: 0.35rem 0 0;
+	color: #64748b;
+	font-size: 0.75rem;
 }
 .error {
 color: #b91c1c;

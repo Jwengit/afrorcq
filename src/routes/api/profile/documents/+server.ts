@@ -2,6 +2,7 @@ import { json, type RequestHandler } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
 import { buildVerificationDocumentInsertPayload, resolveExistingDocumentType } from '$lib/verification-documents';
+import { sendAdminTaskAlertEmail } from '$lib/email';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -284,6 +285,7 @@ export const POST: RequestHandler = async ({ request }) => {
         : { is_verified: false, updated_at: new Date().toISOString() };
 
       await adminClient.from('profiles').update(profileUpdate).eq('id', user.id);
+      await sendAdminTaskAlertEmail();
 
       return json({ success: true });
     }
@@ -321,6 +323,7 @@ export const POST: RequestHandler = async ({ request }) => {
       : { is_verified: false, updated_at: new Date().toISOString() };
 
     await adminClient.from('profiles').update(profileUpdate).eq('id', user.id);
+    await sendAdminTaskAlertEmail();
 
     return json({ success: true });
   } catch (error) {

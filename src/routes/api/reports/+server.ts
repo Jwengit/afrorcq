@@ -1,6 +1,7 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
+import { sendAdminTaskAlertEmail } from '$lib/email';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -165,6 +166,7 @@ export const POST: RequestHandler = async ({ request }) => {
 	}
 
 	console.log('[REPORTS_POST] Report created successfully:', { reportId, insertPayload });
+	await sendAdminTaskAlertEmail();
 
 	return json({ success: true, reportId });
 };

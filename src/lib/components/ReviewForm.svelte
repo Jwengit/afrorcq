@@ -11,6 +11,8 @@ export let onSuccess: (() => void) | undefined = undefined;
 
 let rating = 5;
 let comment = '';
+let transactionConfirmed = false;
+let safeTripConfirmed = false;
 let loading = false;
 let error: string | null = null;
 let existingReviewStatus: 'pending' | 'approved' | 'rejected' | null = null;
@@ -40,6 +42,8 @@ return;
 const reviews = (await response.json()) as Array<{
 rating: number;
 comment: string | null;
+transaction_confirmed: boolean;
+safe_trip_confirmed: boolean;
 status: 'pending' | 'approved' | 'rejected';
 admin_note: string | null;
 }>;
@@ -49,6 +53,8 @@ rejectionNote = existingReview?.admin_note ?? '';
 if (existingReview?.status === 'rejected') {
 rating = existingReview.rating;
 comment = existingReview.comment ?? '';
+transactionConfirmed = existingReview.transaction_confirmed ?? false;
+safeTripConfirmed = existingReview.safe_trip_confirmed ?? false;
 }
 }
 
@@ -84,7 +90,9 @@ body: JSON.stringify({
 reviewee_id: revieweeId,
 ride_id: rideId,
 rating,
-comment
+comment,
+transaction_confirmed: transactionConfirmed,
+safe_trip_confirmed: safeTripConfirmed
 })
 });
 
@@ -143,6 +151,19 @@ rows="4"
 required
 ></textarea>
 
+<fieldset class="confirmation-options">
+	<legend>Trip confirmations</legend>
+	<label>
+		<input type="checkbox" bind:checked={transactionConfirmed} />
+		I confirm the agreed payment was completed.
+	</label>
+	<label>
+		<input type="checkbox" bind:checked={safeTripConfirmed} />
+		I confirm the trip took place safely.
+	</label>
+	<p>These are member confirmations, not payment verification by Hizli. Leave a box unchecked if you cannot confirm it.</p>
+</fieldset>
+
 {#if error}
 <p class="error">{error}</p>
 {/if}
@@ -183,6 +204,31 @@ padding: 0.65rem;
 border: 1px solid #cbd5e1;
 border-radius: 0.5rem;
 margin-bottom: 0.75rem;
+}
+.confirmation-options {
+	display: grid;
+	gap: 0.6rem;
+	margin: 0 0 0.75rem;
+	padding: 0.75rem;
+	border: 1px solid #cbd5e1;
+	border-radius: 0.5rem;
+}
+.confirmation-options legend {
+	padding: 0 0.25rem;
+	font-weight: 600;
+}
+.confirmation-options label {
+	display: flex;
+	align-items: flex-start;
+	gap: 0.5rem;
+}
+.confirmation-options input {
+	margin-top: 0.25rem;
+}
+.confirmation-options p {
+	margin: 0;
+	color: #64748b;
+	font-size: 0.8rem;
 }
 button[type='button'] {
 padding: 0.55rem 0.9rem;

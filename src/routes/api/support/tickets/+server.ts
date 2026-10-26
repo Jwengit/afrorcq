@@ -2,7 +2,7 @@ import { json, type RequestHandler } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
 import { resolveMemberStatus, canUseVerifiedFeatures } from '$lib/membershipAccess';
-import { sendMemberSupportReplyEmail } from '$lib/email';
+import { sendAdminTaskAlertEmail, sendMemberSupportReplyEmail } from '$lib/email';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -278,6 +278,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		});
 		if (createMsgError) return json({ error: createMsgError.message }, { status: 500 });
 
+		await sendAdminTaskAlertEmail();
 		return json({ success: true, ticketId: createdTicket.id });
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Internal server error';

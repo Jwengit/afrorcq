@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import { createClient } from '@supabase/supabase-js';
-import { sendWelcomeEmail } from '$lib/email';
+import { sendAdminTaskAlertEmail, sendWelcomeEmail } from '$lib/email';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 
@@ -119,6 +119,7 @@ export async function POST({ request }) {
 			return json({ error: 'Failed to update welcome metadata' }, { status: 500 });
 		}
 
+		await sendAdminTaskAlertEmail();
 		return json({ success: true });
 	} catch (err) {
 		console.error('Unexpected error:', err);

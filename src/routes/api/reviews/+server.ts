@@ -2,6 +2,7 @@ import { json, type RequestHandler } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
 import { resolveMemberStatus, canUseVerifiedFeatures } from '$lib/membershipAccess';
+import { sendAdminTaskAlertEmail } from '$lib/email';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -79,7 +80,7 @@ return json(
 }
 
 const body = await request.json();
-const { reviewee_id, ride_id, rating, comment } = body;
+const { reviewee_id, ride_id, rating, comment, transaction_confirmed, safe_trip_confirmed } = body;
 const normalizedComment = typeof comment === 'string' ? comment.trim() : '';
 
 if (!reviewee_id || !ride_id || !rating) {
@@ -93,6 +94,9 @@ return json({ error: 'Rating must be between 1 and 5' }, { status: 400 });
 }
 if (!normalizedComment) {
 return json({ error: 'Comment is required' }, { status: 400 });
+}
+if (typeof transaction_confirmed !== 'boolean' || typeof safe_trip_confirmed !== 'boolean') {
+return json({ error: 'Trip confirmations must be provided' }, { status: 400 });
 }
 
 const { data: ride, error: rideError } = await supabase
@@ -167,6 +171,8 @@ const { data: updated, error: updateError } = await adminClient
 .update({
 rating,
 comment: normalizedComment,
+transaction_confirmed,
+safe_trip_confirmed,
 status: 'pending',
 admin_note: null,
 reviewed_by: null,
@@ -176,7 +182,7 @@ updated_at: new Date().toISOString()
 .eq('id', existingReview.id)
 .eq('reviewer_id', user.id)
 .eq('status', 'rejected')
-.select('id,rating,comment,status,created_at,reviewer_id,reviewee_id,ride_id')
+.select('id,rating,comment,transaction_confirmed,safe_trip_confirmed,status,created_at,reviewer_id,reviewee_id,ride_id')
 .maybeSingle();
 
 if (updateError) {
@@ -186,6 +192,7 @@ if (!updated) {
 return json({ error: 'This review is no longer available to resubmit' }, { status: 409 });
 }
 
+await sendAdminTaskAlertEmail();
 return json(updated);
 }
 if (existingReview) {
@@ -200,15 +207,18 @@ reviewee_id,
 ride_id,
 rating,
 comment: normalizedComment,
+transaction_confirmed,
+safe_trip_confirmed,
 status: 'pending'
 })
-.select('id,rating,comment,status,created_at,reviewer_id,reviewee_id,ride_id')
+.select('id,rating,comment,transaction_confirmed,safe_trip_confirmed,status,created_at,reviewer_id,reviewee_id,ride_id')
 .single();
 
 if (insertError) {
 return json({ error: insertError.message }, { status: 400 });
 }
 
+await sendAdminTaskAlertEmail();
 return json(inserted);
 };
 
@@ -235,7 +245,7 @@ return json({ error: 'Unauthorized' }, { status: 401 });
 
 const { data: ownReviews, error: ownReviewsError } = await getAuthedClient(token)
 .from('reviews')
-.select('id,rating,comment,status,admin_note,reviewer_id,ride_id')
+.select('id,rating,comment,transaction_confirmed,safe_trip_confirmed,status,admin_note,reviewer_id,ride_id')
 .eq('reviewer_id', user.id)
 .eq('ride_id', rideId);
 
@@ -259,7 +269,7 @@ const client = createClient(supabaseUrl, serviceRoleKey);
 const { data: reviews, error } = await client
 .from('reviews')
 .select(
-'id,rating,comment,status,created_at,reviewer_id,ride_id'
+'id,rating,comment,transaction_confirmed,safe_trip_confirmed,status,created_at,reviewer_id,ride_id'
 )
 .eq('reviewee_id', userId)
 .eq('status', 'approved')
@@ -273,6 +283,8 @@ type ReviewRow = {
 	id: string;
 	rating: number;
 	comment: string | null;
+	transaction_confirmed: boolean;
+	safe_trip_confirmed: boolean;
 	status: 'pending' | 'approved' | 'rejected';
 	created_at: string;
 	reviewer_id: string;
@@ -311,6 +323,8 @@ const mapped = ((reviews || []) as ReviewRow[]).map((item) => ({
 id: item.id,
 rating: item.rating,
 comment: item.comment,
+transaction_confirmed: item.transaction_confirmed,
+safe_trip_confirmed: item.safe_trip_confirmed,
 status: item.status,
 created_at: item.created_at,
 reviewer_id: item.reviewer_id,

@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS public.reviews (
   ride_id UUID NOT NULL REFERENCES public.rides(id) ON DELETE CASCADE,
   rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
   comment TEXT,
+  transaction_confirmed BOOLEAN NOT NULL DEFAULT FALSE,
+  safe_trip_confirmed BOOLEAN NOT NULL DEFAULT FALSE,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
   admin_note TEXT,
   reviewed_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
@@ -20,6 +22,8 @@ CREATE TABLE IF NOT EXISTS public.reviews (
 -- Ensure moderation columns exist for pre-existing deployments
 ALTER TABLE public.reviews
   ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending',
+  ADD COLUMN IF NOT EXISTS transaction_confirmed BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS safe_trip_confirmed BOOLEAN NOT NULL DEFAULT FALSE,
   ADD COLUMN IF NOT EXISTS admin_note TEXT,
   ADD COLUMN IF NOT EXISTS reviewed_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP WITH TIME ZONE,
@@ -121,5 +125,4 @@ DROP POLICY IF EXISTS "Prevent review deletion" ON public.reviews;
 CREATE POLICY "Prevent review deletion" ON public.reviews
   FOR DELETE
   USING (false);
-
 
