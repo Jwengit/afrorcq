@@ -624,20 +624,34 @@
 
 	async function getSessionAccessToken(): Promise<string | null> {
 		const {
-			data: { session }
+			data: { session },
+			error
 		} = await supabase.auth.getSession();
-
+		if (error) throw error;
+		if (session?.expires_at && session.expires_at <= Math.floor(Date.now() / 1000) + 60) {
+			const { data, error: refreshError } = await supabase.auth.refreshSession();
+			if (refreshError) throw refreshError;
+			return data.session?.access_token ?? null;
+		}
 		return session?.access_token ?? null;
+	}
+
+	async function refreshSessionAccessToken(): Promise<string> {
+		const { data, error } = await supabase.auth.refreshSession();
+		if (error) throw error;
+		const token = data.session?.access_token;
+		if (!token) throw new Error('Session expired. Please sign in again.');
+		return token;
 	}
 
 	async function updatePrivateContact(payload: {
 		phone_number?: string | null;
 		driver_contact_method?: 'phone' | 'email' | null;
 	}) {
-		const token = await getSessionAccessToken();
+		let token = await getSessionAccessToken();
 		if (!token) throw new Error('Session expired. Please sign in again.');
 
-		const response = await fetch('/api/profile', {
+		let response = await fetch('/api/profile', {
 			method: 'PATCH',
 			headers: {
 				'Content-Type': 'application/json',
@@ -645,6 +659,16 @@
 			},
 			body: JSON.stringify(payload)
 		});
+		if (response.status === 401) {
+			token = await refreshSessionAccessToken();
+			const headers = new Headers({ 'Content-Type': 'application/json' });
+			headers.set('Authorization', ['Bearer', token].join(' '));
+			response = await fetch('/api/profile', {
+				method: 'PATCH',
+				headers,
+				body: JSON.stringify(payload)
+			});
+		}
 		const result = await response.json();
 		if (!response.ok) {
 			throw new Error(result?.error || 'Unable to save private contact details.');
@@ -1108,6 +1132,9 @@
 		profileError = '';
 
 		try {
+			const accessToken = await getSessionAccessToken();
+			if (!accessToken) throw new Error('Session expired. Please sign in again.');
+
 			const trimmedFirstName = formData.first_name.trim();
 			const trimmedLastName = formData.last_name.trim();
 			const normalizedGender = formData.gender.trim().toLowerCase();
