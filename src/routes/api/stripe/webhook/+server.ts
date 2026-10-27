@@ -1,3 +1,4 @@
+// VERSION: webhook period-end fix 2026-10-27
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
@@ -29,12 +30,21 @@ function getStringField(input: unknown, key: string): string | null {
 	return typeof value === 'string' && value.trim().length > 0 ? value : null;
 }
 
+// End of the paid period. Recent Stripe API versions put it on the first
+// subscription item; older ones put it on the subscription itself.
+// We never use `cancel_at` here: it is a cancellation date, not an expiry date.
 function extractSubscriptionPeriodEnd(subscription: unknown): number | null {
-	return (
-		getNumberField(subscription, 'current_period_end') ??
-		getNumberField(subscription, 'cancel_at') ??
-		null
-	);
+	if (subscription && typeof subscription === 'object') {
+		const items = (subscription as Record<string, unknown>).items;
+		if (items && typeof items === 'object') {
+			const data = (items as Record<string, unknown>).data;
+			if (Array.isArray(data) && data.length > 0) {
+				const fromItem = getNumberField(data[0], 'current_period_end');
+				if (fromItem) return fromItem;
+			}
+		}
+	}
+	return getNumberField(subscription, 'current_period_end');
 }
 
 function extractInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
@@ -64,7 +74,7 @@ function buildAdminClient() {
 	return createClient(supabaseUrl, env.SUPABASE_SERVICE_ROLE_KEY);
 }
 
-async function notifyMemberActivated(adminClient: ReturnType<typeof buildAdminClient>, userId: string, siteUrl: string) {
+async function notifyMemberActivated(adminClient: ReturnType<typeof buildAdminClient>, userId: string) {
 	const { data: profile } = await adminClient
 		.from('profiles')
 		.select('first_name, email')
@@ -79,7 +89,7 @@ async function notifyMemberActivated(adminClient: ReturnType<typeof buildAdminCl
 	}
 }
 
-async function notifyMemberExpired(adminClient: ReturnType<typeof buildAdminClient>, userId: string, siteUrl: string) {
+async function notifyMemberExpired(adminClient: ReturnType<typeof buildAdminClient>, userId: string) {
 	const { data: profile } = await adminClient
 		.from('profiles')
 		.select('first_name, email')
@@ -188,7 +198,6 @@ async function updateMembership(userId: string, paid: boolean, expiresAtIso: str
 		: wasVerified || (typedProfile.status ?? '').toLowerCase() === 'pending' || verificationReady
 			? 'pending'
 			: 'free';
-	const siteUrl = (String(env.PUBLIC_SITE_URL ?? '').trim() || 'https://afrorcqvercelapp.vercel.app').replace(/\/$/, '');
 
 	const updatePayload: Record<string, unknown> = {
 		membership_paid: paid,
@@ -218,15 +227,20 @@ async function updateMembership(userId: string, paid: boolean, expiresAtIso: str
 		paid,
 		verificationReady,
 		activated: activateMembership,
-		status: nextStatus
+		status: nextStatus,
+		expiresAt: expiresAtIso
 	});
 
-	if (activateMembership && !wasVerified) {
-		await notifyMemberActivated(adminClient, userId, siteUrl);
-	}
-
-	if (!paid && wasVerified) {
-		await notifyMemberExpired(adminClient, userId, siteUrl);
+	// Emails must never make the webhook fail (Stripe would retry and create duplicates)
+	try {
+		if (activateMembership && !wasVerified) {
+			await notifyMemberActivated(adminClient, userId);
+		}
+		if (!paid && wasVerified) {
+			await notifyMemberExpired(adminClient, userId);
+		}
+	} catch (emailError) {
+		console.error('[stripe webhook] Email notification failed (membership already updated).', emailError);
 	}
 }
 

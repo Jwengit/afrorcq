@@ -1,7 +1,13 @@
+// VERSION: profile-delete-with-stripe 2026-10-27
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
 import { sendAdminTaskAlertEmail } from '$lib/email';
+import {
+	cancelStripeMembership,
+	notifyAccountClosed,
+	type StripeClosureResult
+} from '$lib/server/account-closure';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -258,7 +264,7 @@ export const DELETE: RequestHandler = async ({ request }) => {
 			data: { user },
 			error: userError
 		} = await supabaseClient.auth.getUser(token);
-		
+
 		if (userError) {
 			console.error('Auth getUser error:', userError);
 			return json({ error: `Unauthorized: ${userError.message}` }, { status: 401 });
@@ -272,7 +278,37 @@ export const DELETE: RequestHandler = async ({ request }) => {
 		console.log('Deleting account for user:', user.id);
 
 		const adminClient = createClient(supabaseUrl, serviceRoleKey);
-		
+
+		// --- Read what we need BEFORE anything is deleted (for Stripe and the emails) ---
+		const { data: profileBefore } = await adminClient
+			.from('profiles')
+			.select('first_name, last_name, membership_plan, membership_paid, membership_expires_at, is_verified, status')
+			.eq('id', user.id)
+			.maybeSingle();
+
+		const hadMembership = Boolean(
+			profileBefore?.membership_paid ||
+				profileBefore?.is_verified ||
+				(profileBefore?.status ?? '').toLowerCase() === 'verified'
+		);
+
+		// --- Stop the Stripe subscription first, so the member is never billed again ---
+		let stripeResult: StripeClosureResult | null = null;
+		if (hadMembership) {
+			try {
+				stripeResult = await cancelStripeMembership(user.id, user.email ?? null);
+			} catch (stripeError) {
+				console.error('Stripe cancellation failed during account deletion:', stripeError);
+				return json(
+					{
+						error:
+							'We could not cancel your membership right now, so your account was not deleted. Please try again in a few minutes or contact service@hizli-carpooling.com.'
+					},
+					{ status: 500 }
+				);
+			}
+		}
+
 		// First, manually cascade delete related data to avoid foreign key constraint violations
 		try {
 			// Delete only the reviews this user RECEIVED. Reviews they wrote about other
@@ -308,12 +344,30 @@ export const DELETE: RequestHandler = async ({ request }) => {
 			// Continue to delete auth user anyway
 		}
 
+		const closureInfo = {
+			memberEmail: user.email ?? null,
+			firstName: profileBefore?.first_name ?? null,
+			lastName: profileBefore?.last_name ?? null,
+			plan: profileBefore?.membership_plan ?? null,
+			isVerified: Boolean(profileBefore?.is_verified),
+			membershipPaid: Boolean(profileBefore?.membership_paid),
+			membershipExpiresAt: profileBefore?.membership_expires_at ?? null,
+			stripe: stripeResult
+		};
+
 		// Finally delete the auth user
 		const { error: deleteAuthError } = await adminClient.auth.admin.deleteUser(user.id);
 		if (deleteAuthError) {
 			console.error('Auth user delete error:', deleteAuthError);
+			// Warn the admin if the Stripe subscription was already cancelled
+			if (stripeResult?.cancelled) {
+				await notifyAccountClosed({ ...closureInfo, accountDeleted: false });
+			}
 			return json({ error: `Failed to delete account: ${deleteAuthError.message}` }, { status: 500 });
 		}
+
+		// Emails: alert to the admin + goodbye to the member (never blocks the deletion)
+		await notifyAccountClosed({ ...closureInfo, accountDeleted: true });
 
 		console.log('User deleted successfully');
 		return json({ success: true, authDeleted: true });
