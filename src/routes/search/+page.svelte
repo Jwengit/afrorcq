@@ -338,7 +338,7 @@
 						id="dep"
 						type="text"
 						bind:value={departure}
-						placeholder="e.g. Casablanca"
+						placeholder="e.g. salt lake city"
 						class="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
 					/>
 				</div>
@@ -348,7 +348,7 @@
 						id="arr"
 						type="text"
 						bind:value={arrival}
-						placeholder="e.g. Marrakech"
+						placeholder="e.g. idaho"
 						class="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
 					/>
 				</div>
