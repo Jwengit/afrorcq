@@ -6,7 +6,7 @@ import { getStripeClient } from '$lib/server/stripe';
 // Written in the Stripe cancellation details so the webhook knows the member deleted their account
 export const ACCOUNT_DELETED_COMMENT = 'account_deleted_by_member';
 
-const ADMIN_EMAIL = 'hizli.carpooling@gmail.com';
+export const ADMIN_EMAIL = 'hizli.carpooling@gmail.com';
 const EMAIL_FROM = 'Hizli Carpooling <service@hizli-carpooling.com>';
 
 export type StripeClosureResult = {
@@ -14,6 +14,7 @@ export type StripeClosureResult = {
 	subscriptionId: string | null;
 	periodEndIso: string | null;
 	refundEstimate: number | null;
+	planAmount: number | null;
 };
 
 function readNumber(source: unknown, key: string): number | null {
@@ -74,7 +75,7 @@ export async function cancelStripeMembership(userId: string, email: string | nul
 	);
 
 	if (live.length === 0) {
-		return { cancelled: false, subscriptionId: null, periodEndIso: null, refundEstimate: null };
+		return { cancelled: false, subscriptionId: null, periodEndIso: null, refundEstimate: null, planAmount: null };
 	}
 
 	let result: StripeClosureResult | null = null;
@@ -102,7 +103,8 @@ export async function cancelStripeMembership(userId: string, email: string | nul
 				cancelled: true,
 				subscriptionId: subscription.id,
 				periodEndIso: end ? new Date(end * 1000).toISOString() : null,
-				refundEstimate
+				refundEstimate,
+				planAmount: unitAmount > 0 ? unitAmount / 100 : null
 			};
 		}
 	}
@@ -110,18 +112,18 @@ export async function cancelStripeMembership(userId: string, email: string | nul
 	return result as StripeClosureResult;
 }
 
-async function sendSimpleEmail(input: {
+export async function sendSimpleEmail(input: {
 	to: string;
 	subject: string;
 	lines: string[];
 	buttonLabel: string;
 	buttonUrl: string;
-}) {
+}): Promise<boolean> {
 	const apiKey = env.RESEND_API_KEY?.trim();
 	const recipient = input.to.trim();
 	if (!apiKey || !recipient) {
 		console.warn('[account closure] Email skipped (missing RESEND_API_KEY or recipient).');
-		return;
+		return false;
 	}
 
 	const htmlLines = input.lines.map((line) => `<p style="margin:0 0 16px;">${escapeHtml(line)}</p>`).join('');
@@ -151,9 +153,14 @@ async function sendSimpleEmail(input: {
 			html,
 			text
 		});
-		if (error) console.error('[account closure] Resend error:', error.message);
+		if (error) {
+			console.error('[account closure] Resend error:', error.message);
+			return false;
+		}
+		return true;
 	} catch (emailError) {
 		console.error('[account closure] Email failed:', emailError);
+		return false;
 	}
 }
 
@@ -180,8 +187,16 @@ export async function notifyAccountClosed(input: {
 		stripeLines.push(`Stripe subscription ${input.stripe.subscriptionId} was cancelled automatically.`);
 		stripeLines.push(`Paid period ends on: ${formatDate(input.stripe.periodEndIso)}`);
 		if (input.stripe.refundEstimate !== null) {
+			const planAmount = input.stripe.planAmount ?? 0;
+			const feeEstimate = planAmount > 0 ? Math.round((planAmount * 0.029 + 0.3) * 100) / 100 : 0;
+			const suggested = Math.max(0, Math.round((input.stripe.refundEstimate - feeEstimate) * 100) / 100);
+			stripeLines.push(`Unused part of the membership: $${input.stripe.refundEstimate.toFixed(2)}`);
 			stripeLines.push(
-				`Estimated refund for the unused part: $${input.stripe.refundEstimate.toFixed(2)} (based on the plan price; check the real amount paid in Stripe, as a promo code may have applied).`
+				`Estimated Stripe processing fee (about 2.9% + $0.30, check the real fee in Stripe): $${feeEstimate.toFixed(2)}`
+			);
+			stripeLines.push(`Suggested refund (unused part minus processing fee): $${suggested.toFixed(2)}`);
+			stripeLines.push(
+				'Calculated from the plan price. If a promo code was used, check the real amount paid in Stripe.'
 			);
 		}
 		stripeLines.push('Next step: contact the member to ask how they want to be refunded, then refund from Stripe.');
@@ -222,7 +237,7 @@ export async function notifyAccountClosed(input: {
 		if (input.stripe?.cancelled) {
 			memberLines.push(
 				'Your membership has been cancelled, and you will not be charged again.',
-				'If there is anything left to refund for the unused part of your membership, we will contact you to ask how you would like to receive it.'
+				'If there is anything left to refund, we will contact you to ask how you would like to receive it. The refund is the unused part of your membership, minus the payment processing fee charged by our payment provider.'
 			);
 		}
 		memberLines.push(
