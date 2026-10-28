@@ -1,4 +1,4 @@
-// VERSION: webhook period-end fix 2026-10-27
+// VERSION: webhook period-end fix + account-closed skip 2026-10-28
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
@@ -6,6 +6,7 @@ import { env } from '$env/dynamic/private';
 import { getStripeClient, getStripeWebhookSecret } from '$lib/server/stripe';
 import { sendAccountVerifiedEmail, sendMembershipExpiredEmail } from '$lib/email';
 import { isMembershipVerificationReady } from '$lib/membershipVerification';
+import { ACCOUNT_DELETED_COMMENT } from '$lib/server/account-closure';
 
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
 
@@ -65,6 +66,13 @@ function isInvoicePaid(invoice: Stripe.Invoice): boolean {
 	const paidFlag = (invoice as unknown as Record<string, unknown>).paid;
 	if (typeof paidFlag === 'boolean') return paidFlag;
 	return (invoice.status ?? '').toLowerCase() === 'paid';
+}
+
+// True when the subscription was cancelled because the member deleted their account
+function isClosedByMember(subscription: Stripe.Subscription): boolean {
+	const details = (subscription as unknown as Record<string, unknown>).cancellation_details;
+	if (!details || typeof details !== 'object') return false;
+	return (details as Record<string, unknown>).comment === ACCOUNT_DELETED_COMMENT;
 }
 
 function buildAdminClient() {
@@ -162,6 +170,12 @@ async function updateMembership(userId: string, paid: boolean, expiresAtIso: str
 		.maybeSingle();
 
 	if (profileError) throw new Error(profileError.message);
+
+	// The member no longer exists (account deleted): nothing to update, no email to send
+	if (!profile) {
+		console.info('[stripe webhook] Profile not found, update skipped.', { userId });
+		return;
+	}
 
 	const typedProfile = (profile as ProfileMembershipRow | null) ?? {
 		is_verified: false,
@@ -387,6 +401,9 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		if (event.type === 'customer.subscription.updated') {
 			const subscription = event.data.object as Stripe.Subscription;
+			if (isClosedByMember(subscription)) {
+				return json({ received: true, ignored: 'account-closed-by-member' });
+			}
 			const userId = await resolveUserId(stripe, subscription);
 			if (!userId) {
 				return json({ received: true, ignored: 'no-user-id' });
@@ -402,6 +419,9 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		if (event.type === 'customer.subscription.deleted') {
 			const payload = event.data.object as Stripe.Subscription;
+			if (isClosedByMember(payload)) {
+				return json({ received: true, ignored: 'account-closed-by-member' });
+			}
 			const userId = await resolveUserId(stripe, payload);
 			if (!userId) {
 				return json({ received: true, ignored: 'no-user-id' });

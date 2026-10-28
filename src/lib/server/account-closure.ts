@@ -3,6 +3,9 @@ import { env } from '$env/dynamic/private';
 import { Resend } from 'resend';
 import { getStripeClient } from '$lib/server/stripe';
 
+// Written in the Stripe cancellation details so the webhook knows the member deleted their account
+export const ACCOUNT_DELETED_COMMENT = 'account_deleted_by_member';
+
 const ADMIN_EMAIL = 'hizli.carpooling@gmail.com';
 const EMAIL_FROM = 'Hizli Carpooling <service@hizli-carpooling.com>';
 
@@ -90,7 +93,9 @@ export async function cancelStripeMembership(userId: string, email: string | nul
 		}
 
 		// Cancel immediately, without proration and without creating a final invoice
-		await stripe.subscriptions.cancel(subscription.id);
+		await stripe.subscriptions.cancel(subscription.id, {
+			cancellation_details: { comment: ACCOUNT_DELETED_COMMENT }
+		});
 
 		if (!result) {
 			result = {
@@ -217,7 +222,7 @@ export async function notifyAccountClosed(input: {
 		if (input.stripe?.cancelled) {
 			memberLines.push(
 				'Your membership has been cancelled, and you will not be charged again.',
-				'We will contact you shortly about the refund of the unused part of your membership, and ask how you would like to receive it.'
+				'If there is anything left to refund for the unused part of your membership, we will contact you to ask how you would like to receive it.'
 			);
 		}
 		memberLines.push(
