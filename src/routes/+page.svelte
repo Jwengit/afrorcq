@@ -183,9 +183,7 @@
 
 <div class="min-h-screen flex flex-col font-sans text-gray-900">
 	<!-- Hero Section -->
-	<!-- Assurez-vous que votre image (ex: header-bg.jpg) est bien dans le dossier 'static' -->
 	<section id="search" class="relative text-white py-24 md:py-28 px-4 md:px-8 bg-cover bg-center" style="background-image: url('/header-bg.jpg');">
-		<!-- Calque sombre (overlay) pour que le texte reste lisible sur l'image -->
 		<div class="absolute inset-0 bg-black/50"></div>
 		
 		<div class="relative max-w-5xl mx-auto text-center z-10">
@@ -200,10 +198,10 @@
 			<!-- Search Box -->
 			<form
 				on:submit|preventDefault={handleSearchSubmit}
-				class="bg-white p-4 rounded-xl shadow-2xl w-full max-w-5xl mx-auto flex flex-wrap gap-2 text-gray-900"
+				class="bg-white p-4 rounded-xl shadow-2xl w-full max-w-5xl mx-auto flex flex-col md:flex-row gap-2 text-gray-900"
 			>
-				<div class="flex-1 flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 min-w-0">
-					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 h-5 w-5">
+				<div class="flex-1 flex items-center gap-2 p-2 rounded-lg border border-gray-200 md:border-transparent hover:bg-gray-50 min-w-0">
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 h-5 w-5 shrink-0">
 						<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
 						<circle cx="12" cy="10" r="3"/>
 					</svg>
@@ -214,8 +212,8 @@
 						class="w-full min-w-0 bg-transparent focus:outline-none"
 					/>
 				</div>
-				<div class="flex-1 flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 min-w-45">
-					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 h-5 w-5">
+				<div class="flex-1 flex items-center gap-2 p-2 rounded-lg border border-gray-200 md:border-transparent hover:bg-gray-50 min-w-0">
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 h-5 w-5 shrink-0">
 						<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
 						<circle cx="12" cy="10" r="3"/>
 					</svg>
@@ -226,8 +224,8 @@
 						class="w-full min-w-0 bg-transparent focus:outline-none"
 					/>
 				</div>
-				<div class="flex-1 flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 min-w-45">
-					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 h-5 w-5">
+				<div class="flex-1 flex items-center gap-2 p-2 rounded-lg border border-gray-200 md:border-transparent hover:bg-gray-50 min-w-0">
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 h-5 w-5 shrink-0">
 						<rect width="18" height="18" x="3" y="4" rx="2" ry="2"/>
 						<line x1="16" x2="16" y1="2" y2="6"/>
 						<line x1="8" x2="8" y1="2" y2="6"/>
@@ -235,23 +233,26 @@
 					</svg>
 					<input type="date" bind:value={searchDate} class="w-full min-w-0 bg-transparent focus:outline-none text-gray-500" />
 				</div>
-				<div class="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50">
-					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 h-5 w-5">
-						<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-						<circle cx="9" cy="7" r="4"/>
-						<path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
-						<path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-					</svg>
+				<div class="flex items-center justify-between md:justify-start gap-2 p-2 rounded-lg border border-gray-200 md:border-transparent hover:bg-gray-50 shrink-0">
+					<div class="flex items-center gap-2">
+						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 h-5 w-5 shrink-0">
+							<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+							<circle cx="9" cy="7" r="4"/>
+							<path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+							<path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+						</svg>
+						<span class="text-sm text-gray-500 md:hidden">Seats:</span>
+					</div>
 					<input
 						type="number"
 						min="1"
 						bind:value={searchSeats}
-						class="w-16 bg-transparent focus:outline-none"
+						class="w-16 bg-transparent focus:outline-none text-center md:text-left font-medium"
 					/>
 				</div>
 				<button
 					type="submit"
-					class="w-full sm:w-auto min-h-11 shrink-0 text-white px-5 py-2.5 rounded-lg font-bold hover:opacity-90 transition flex items-center justify-center gap-2 cursor-pointer"
+					class="w-full md:w-auto min-h-11 shrink-0 text-white px-5 py-2.5 rounded-lg font-bold hover:opacity-90 transition flex items-center justify-center gap-2 cursor-pointer mt-2 md:mt-0"
 					style="background-color: #00B050;"
 				>
 					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5 block">
@@ -269,21 +270,23 @@
 		<div class="max-w-7xl mx-auto text-center">
 			<h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Most popular rides</h2>
 			<p class="text-gray-600 mb-10 max-w-2xl mx-auto">Post a trip or find a seat in our busiest travel corridors.</p>
-			<div class="grid md:grid-cols-3 gap-6 text-gray-800">
-				<div class="bg-white border border-green-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition">
-					<h3 class="text-2xl font-semibold text-gray-900 mb-6">Utah &harr; Idaho</h3>
-					<div class="flex justify-center gap-3">
+			
+			<!-- Cartes avec hauteur égale et boutons alignés -->
+			<div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-gray-800 items-stretch">
+				<div class="bg-white border border-green-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition flex flex-col h-full">
+					<h3 class="text-2xl font-semibold text-gray-900 mb-6 min-h-[4rem] flex items-center justify-center text-center">Utah &harr; Idaho</h3>
+					<div class="mt-auto flex justify-center gap-3">
 						<button
 							type="button"
 							on:click={() => handlePublishClick('Utah', 'Idaho')}
-							class="bg-white text-gray-900 border border-gray-300 px-6 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition cursor-pointer"
+							class="flex-1 md:flex-none bg-white text-gray-900 border border-gray-300 px-6 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition cursor-pointer"
 						>
 							Post
 						</button>
 						<button
 							type="button"
 							on:click={() => handlePopularRideSearch('Utah', 'Idaho')}
-							class="text-white px-6 py-3 rounded-lg font-bold text-center transition hover:opacity-90"
+							class="flex-1 md:flex-none text-white px-6 py-3 rounded-lg font-bold text-center transition hover:opacity-90"
 							style="background-color: #00B050;"
 						>
 							Search
@@ -291,20 +294,20 @@
 					</div>
 				</div>
 
-				<div class="bg-white border border-green-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition">
-					<h3 class="text-2xl font-semibold text-gray-900 mb-6">Utah &harr; California</h3>
-					<div class="flex justify-center gap-3">
+				<div class="bg-white border border-green-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition flex flex-col h-full">
+					<h3 class="text-2xl font-semibold text-gray-900 mb-6 min-h-[4rem] flex items-center justify-center text-center">Utah &harr; California</h3>
+					<div class="mt-auto flex justify-center gap-3">
 						<button
 							type="button"
 							on:click={() => handlePublishClick('Utah', 'California')}
-							class="bg-white text-gray-900 border border-gray-300 px-6 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition cursor-pointer"
+							class="flex-1 md:flex-none bg-white text-gray-900 border border-gray-300 px-6 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition cursor-pointer"
 						>
 							Post
 						</button>
 						<button
 							type="button"
 							on:click={() => handlePopularRideSearch('Utah', 'California')}
-							class="text-white px-6 py-3 rounded-lg font-bold text-center transition hover:opacity-90"
+							class="flex-1 md:flex-none text-white px-6 py-3 rounded-lg font-bold text-center transition hover:opacity-90"
 							style="background-color: #00B050;"
 						>
 							Search
@@ -312,20 +315,20 @@
 					</div>
 				</div>
 
-				<div class="bg-white border border-green-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition">
-					<h3 class="text-2xl font-semibold text-gray-900 mb-6">Utah &harr; Nevada</h3>
-					<div class="flex justify-center gap-3">
+				<div class="bg-white border border-green-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition flex flex-col h-full">
+					<h3 class="text-2xl font-semibold text-gray-900 mb-6 min-h-[4rem] flex items-center justify-center text-center">Utah &harr; Nevada</h3>
+					<div class="mt-auto flex justify-center gap-3">
 						<button
 							type="button"
 							on:click={() => handlePublishClick('Utah', 'Nevada')}
-							class="bg-white text-gray-900 border border-gray-300 px-6 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition cursor-pointer"
+							class="flex-1 md:flex-none bg-white text-gray-900 border border-gray-300 px-6 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition cursor-pointer"
 						>
 							Post
 						</button>
 						<button
 							type="button"
 							on:click={() => handlePopularRideSearch('Utah', 'Nevada')}
-							class="text-white px-6 py-3 rounded-lg font-bold text-center transition hover:opacity-90"
+							class="flex-1 md:flex-none text-white px-6 py-3 rounded-lg font-bold text-center transition hover:opacity-90"
 							style="background-color: #00B050;"
 						>
 							Search
@@ -345,17 +348,17 @@
 			</div>
 
 			<div class="grid grid-cols-2 xl:grid-cols-5 gap-4 md:gap-6">
-    <div class="p-5 text-center rounded-2xl border border-green-100 bg-white shadow-sm">
-        <div class="w-12 h-12 mx-auto mb-3 rounded-full flex items-center justify-center text-2xl" style="background-color: #e8f7ee;">♀️</div>
-        <h3 class="text-lg font-semibold mb-2">Girls Only</h3>
-        <p class="text-sm text-gray-600">Female drivers can offer rides exclusively to verified women.</p>
-    </div>
+				<div class="p-5 text-center rounded-2xl border border-green-100 bg-white shadow-sm">
+					<div class="w-12 h-12 mx-auto mb-3 rounded-full flex items-center justify-center text-2xl" style="background-color: #e8f7ee;">♀️</div>
+					<h3 class="text-lg font-semibold mb-2">Girls Only</h3>
+					<p class="text-sm text-gray-600">Female drivers can offer rides exclusively to verified women.</p>
+				</div>
 
-    <div class="p-5 text-center rounded-2xl border border-green-100 bg-white shadow-sm">
-        <div class="w-12 h-12 mx-auto mb-3 rounded-full flex items-center justify-center text-2xl" style="background-color: #e8f7ee;">🛡️</div>
-        <h3 class="text-lg font-semibold mb-2">Legality</h3>
-        <p class="text-sm text-gray-600">Verified profiles and manual validation for every driver.</p>
-    </div>
+				<div class="p-5 text-center rounded-2xl border border-green-100 bg-white shadow-sm">
+					<div class="w-12 h-12 mx-auto mb-3 rounded-full flex items-center justify-center text-2xl" style="background-color: #e8f7ee;">🛡️</div>
+					<h3 class="text-lg font-semibold mb-2">Legality</h3>
+					<p class="text-sm text-gray-600">Verified profiles and manual validation for every driver.</p>
+				</div>
 
 				<div class="p-5 text-center rounded-2xl border border-green-100 bg-white shadow-sm">
 					<div class="w-12 h-12 mx-auto mb-3 rounded-full flex items-center justify-center text-2xl" style="background-color: #e8f7ee;">⭐</div>
@@ -561,72 +564,4 @@
 			<div class="grid md:grid-cols-5 items-start gap-8 mb-8">
 				<!-- Brand -->
 				<div class="col-span-1 md:col-span-1">
-					<div class="flex items-center gap-2 mb-4">
-						<img src="/logo.png" alt="Hizli Logo" class="h-12 w-auto object-contain footer-logo-contrast" />
-						<span class="text-xl font-bold">Hizli</span>
-					</div>
-					<p class="text-gray-50 text-sm">
-						{footerBrandDescription}
-					</p>
-				</div>
-
-				<!-- About -->
-				<div>
-					<h4 class="text-lg font-bold mb-4">About</h4>
-					<ul class="space-y-2 text-gray-50">
-						<li><a href={normalizeFooterHref(footerAboutUsUrl)} class="hover:text-white transition">{footerAboutUsLabel}</a></li>
-						<li><a href={normalizeFooterHref(footerHowItWorksUrl)} class="hover:text-white transition">{footerHowItWorksLabel}</a></li>
-					</ul>
-				</div>
-
-				<!-- Support -->
-				<div>
-					<h4 class="text-lg font-bold mb-4">Support</h4>
-					<ul class="space-y-2 text-gray-50">
-						<li><a href={normalizeFooterHref(footerFaqUrl)} class="hover:text-white transition">{footerFaqLabel}</a></li>
-						<li><a href={normalizeFooterHref(footerHelpCenterUrl)} class="hover:text-white transition">{footerHelpCenterLabel}</a></li>
-					</ul>
-				</div>
-
-				<!-- Legal -->
-				<div>
-					<h4 class="text-lg font-bold mb-4">Legal</h4>
-					<ul class="space-y-2 text-gray-50">
-						<li><a href={normalizeFooterHref(footerPrivacyPolicyUrl)} class="hover:text-white transition">{footerPrivacyPolicyLabel}</a></li>
-						<li><a href={normalizeFooterHref(footerTermsOfServiceUrl)} class="hover:text-white transition">{footerTermsOfServiceLabel}</a></li>
-					</ul>
-				</div>
-
-				<!-- Socials -->
-				<div>
-					<h4 class="text-lg font-bold mb-4">Follow Us</h4>
-					<div class="flex space-x-4">
-						<a href={socialFacebookUrl} class="hover:text-white transition text-gray-50" target="_blank" rel="noreferrer">
-							<span class="sr-only">Facebook</span>
-							<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-facebook"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
-						</a>
-						<a href={socialInstagramUrl} class="hover:text-white transition text-gray-50" target="_blank" rel="noreferrer">
-							<span class="sr-only">Instagram</span>
-							<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-instagram"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
-						</a>
-						<a href={socialYoutubeUrl} class="hover:text-white transition text-gray-50" target="_blank" rel="noreferrer">
-							<span class="sr-only">YouTube</span>
-							<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-youtube"><path d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17"/><path d="m10 15 5-3-5-3z"/></svg>
-						</a>
-					</div>
-				</div>
-			</div>
-			
-			<div class="border-t border-white/20 pt-8 text-center">
-				<p class="text-gray-50">&copy; {new Date().getFullYear()} Hizli Carpooling. All rights reserved.</p>
-			</div>
-		</div>
-	</footer>
-</div>
-
-<style>
-	.footer-logo-contrast {
-		/* Makes the green accent readable on the green footer background. */
-		filter: brightness(0) invert(1);
-	}
-</style>
+					<div class="flex items-center gap-
