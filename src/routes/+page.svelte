@@ -130,6 +130,9 @@
 			return;
 		}
 
+		// If a plan is already chosen and locked in, clicking any plan button
+		// should never try to silently switch it — just take the member back
+		// to their profile, where the real (already-saved) plan is shown.
 		const { data: existingProfile } = await supabase
 			.from('profiles')
 			.select('membership_plan')
@@ -180,7 +183,9 @@
 
 <div class="min-h-screen flex flex-col font-sans text-gray-900">
 	<!-- Hero Section -->
+	<!-- Assurez-vous que votre image (ex: header-bg.jpg) est bien dans le dossier 'static' -->
 	<section id="search" class="relative text-white py-24 md:py-28 px-4 md:px-8 bg-cover bg-center" style="background-image: url('/header-bg.jpg');">
+		<!-- Calque sombre (overlay) pour que le texte reste lisible sur l'image -->
 		<div class="absolute inset-0 bg-black/50"></div>
 		
 		<div class="relative max-w-5xl mx-auto text-center z-10">
@@ -193,68 +198,12 @@
 			</div>
 
 			<!-- Search Box -->
-			<!-- Search Box -->
 			<form
 				on:submit|preventDefault={handleSearchSubmit}
-				class="bg-white p-4 rounded-xl shadow-2xl w-full max-w-5xl mx-auto flex flex-col lg:flex-row gap-3 text-gray-900"
+				class="bg-white p-4 rounded-xl shadow-2xl w-full max-w-5xl mx-auto flex flex-wrap gap-2 text-gray-900"
 			>
-				<!-- Bloc 1 : Départ et Arrivée -->
-				<div class="flex flex-col sm:flex-row gap-3 w-full lg:w-auto flex-1">
-					<div class="flex-1 flex items-center gap-2 p-2 rounded-lg border border-gray-200 hover:bg-gray-50 min-w-0">
-						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 h-5 w-5 shrink-0">
-							<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
-							<circle cx="12" cy="10" r="3"/>
-						</svg>
-						<input type="text" placeholder="Leaving from..." bind:value={searchDeparture} class="w-full min-w-0 bg-transparent focus:outline-none" />
-					</div>
-					<div class="flex-1 flex items-center gap-2 p-2 rounded-lg border border-gray-200 hover:bg-gray-50 min-w-0">
-						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 h-5 w-5 shrink-0">
-							<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
-							<circle cx="12" cy="10" r="3"/>
-						</svg>
-						<input type="text" placeholder="Going to..." bind:value={searchArrival} class="w-full min-w-0 bg-transparent focus:outline-none" />
-					</div>
-				</div>
-
-				<!-- Bloc 2 : Date et Sièges -->
-				<div class="flex flex-col sm:flex-row gap-3 w-full lg:w-auto flex-1">
-					<div class="flex-1 flex items-center gap-2 p-2 rounded-lg border border-gray-200 hover:bg-gray-50 min-w-0">
-						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 h-5 w-5 shrink-0">
-							<rect width="18" height="18" x="3" y="4" rx="2" ry="2"/>
-							<line x1="16" x2="16" y1="2" y2="6"/>
-							<line x1="8" x2="8" y1="2" y2="6"/>
-							<line x1="3" x2="21" y1="10" y2="10"/>
-						</svg>
-						<input type="date" bind:value={searchDate} class="w-full min-w-0 bg-transparent focus:outline-none text-gray-500" />
-					</div>
-					<div class="flex-1 flex items-center gap-2 p-2 rounded-lg border border-gray-200 hover:bg-gray-50 min-w-0">
-						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 h-5 w-5 shrink-0">
-							<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-							<circle cx="9" cy="7" r="4"/>
-							<path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
-							<path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-						</svg>
-						<input type="number" min="1" bind:value={searchSeats} class="w-full bg-transparent focus:outline-none" />
-					</div>
-				</div>
-
-				<!-- Bouton Search -->
-				<button
-					type="submit"
-					class="w-full lg:w-auto min-h-11 shrink-0 text-white px-8 py-2.5 rounded-lg font-bold hover:opacity-90 transition flex items-center justify-center gap-2 cursor-pointer"
-					style="background-color: #00B050;"
-				>
-					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5 block">
-						<circle cx="11" cy="11" r="8"/>
-						<path d="m21 21-4.3-4.3"/>
-					</svg>
-					<span class="leading-none">Search</span>
-				</button>
-			</form>
-				class="bg-white p-4 rounded-xl shadow-2xl w-full max-w-5xl mx-auto flex flex-wrap gap-3 text-gray-900"
-			>
-				<div class="flex-1 min-w-[45%] flex items-center gap-2 p-2 rounded-lg border border-gray-200 hover:bg-gray-50">
-					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 h-5 w-5 shrink-0">
+				<div class="flex-1 flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 min-w-45">
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 h-5 w-5">
 						<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
 						<circle cx="12" cy="10" r="3"/>
 					</svg>
@@ -265,8 +214,8 @@
 						class="w-full min-w-0 bg-transparent focus:outline-none"
 					/>
 				</div>
-				<div class="flex-1 min-w-[45%] flex items-center gap-2 p-2 rounded-lg border border-gray-200 hover:bg-gray-50">
-					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 h-5 w-5 shrink-0">
+				<div class="flex-1 flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 min-w-45">
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 h-5 w-5">
 						<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
 						<circle cx="12" cy="10" r="3"/>
 					</svg>
@@ -277,8 +226,8 @@
 						class="w-full min-w-0 bg-transparent focus:outline-none"
 					/>
 				</div>
-				<div class="flex-1 min-w-[45%] flex items-center gap-2 p-2 rounded-lg border border-gray-200 hover:bg-gray-50">
-					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 h-5 w-5 shrink-0">
+				<div class="flex-1 flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 min-w-45">
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 h-5 w-5">
 						<rect width="18" height="18" x="3" y="4" rx="2" ry="2"/>
 						<line x1="16" x2="16" y1="2" y2="6"/>
 						<line x1="8" x2="8" y1="2" y2="6"/>
@@ -286,8 +235,8 @@
 					</svg>
 					<input type="date" bind:value={searchDate} class="w-full min-w-0 bg-transparent focus:outline-none text-gray-500" />
 				</div>
-				<div class="flex-1 min-w-[45%] flex items-center gap-2 p-2 rounded-lg border border-gray-200 hover:bg-gray-50">
-					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 h-5 w-5 shrink-0">
+				<div class="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50">
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 h-5 w-5">
 						<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
 						<circle cx="9" cy="7" r="4"/>
 						<path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
@@ -297,12 +246,12 @@
 						type="number"
 						min="1"
 						bind:value={searchSeats}
-						class="w-full bg-transparent focus:outline-none"
+						class="w-16 bg-transparent focus:outline-none"
 					/>
 				</div>
 				<button
 					type="submit"
-					class="w-full md:w-auto min-h-11 shrink-0 text-white px-5 py-2.5 rounded-lg font-bold hover:opacity-90 transition flex items-center justify-center gap-2 cursor-pointer"
+					class="w-full sm:w-auto min-h-11 shrink-0 text-white px-5 py-2.5 rounded-lg font-bold hover:opacity-90 transition flex items-center justify-center gap-2 cursor-pointer"
 					style="background-color: #00B050;"
 				>
 					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5 block">
@@ -311,7 +260,7 @@
 					</svg>
 					<span class="leading-none">Search</span>
 				</button>
-			
+			</form>
 		</div>
 	</section>
 
@@ -320,21 +269,21 @@
 		<div class="max-w-7xl mx-auto text-center">
 			<h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Most popular rides</h2>
 			<p class="text-gray-600 mb-10 max-w-2xl mx-auto">Post a trip or find a seat in our busiest travel corridors.</p>
-			<div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-gray-800 items-stretch">
-				<div class="bg-white border border-green-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition flex flex-col h-full">
-					<h3 class="text-2xl font-semibold text-gray-900 mb-6 min-h-[3rem] flex items-center justify-center">Utah &harr; Idaho</h3>
-					<div class="mt-auto flex justify-center gap-3">
+			<div class="grid md:grid-cols-3 gap-6 text-gray-800">
+				<div class="bg-white border border-green-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition">
+					<h3 class="text-2xl font-semibold text-gray-900 mb-6">Utah &harr; Idaho</h3>
+					<div class="flex justify-center gap-3">
 						<button
 							type="button"
 							on:click={() => handlePublishClick('Utah', 'Idaho')}
-							class="bg-white text-gray-900 border border-gray-300 px-6 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition cursor-pointer flex-1"
+							class="bg-white text-gray-900 border border-gray-300 px-6 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition cursor-pointer"
 						>
 							Post
 						</button>
 						<button
 							type="button"
 							on:click={() => handlePopularRideSearch('Utah', 'Idaho')}
-							class="text-white px-6 py-3 rounded-lg font-bold text-center transition hover:opacity-90 flex-1"
+							class="text-white px-6 py-3 rounded-lg font-bold text-center transition hover:opacity-90"
 							style="background-color: #00B050;"
 						>
 							Search
@@ -342,20 +291,20 @@
 					</div>
 				</div>
 
-				<div class="bg-white border border-green-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition flex flex-col h-full">
-<h3 class="text-2xl font-semibold text-gray-900 mb-6 min-h-[4rem] flex items-center justify-center">Utah &harr; Idaho</h3>
-					<div class="mt-auto flex justify-center gap-3">
+				<div class="bg-white border border-green-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition">
+					<h3 class="text-2xl font-semibold text-gray-900 mb-6">Utah &harr; California</h3>
+					<div class="flex justify-center gap-3">
 						<button
 							type="button"
 							on:click={() => handlePublishClick('Utah', 'California')}
-							class="bg-white text-gray-900 border border-gray-300 px-6 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition cursor-pointer flex-1"
+							class="bg-white text-gray-900 border border-gray-300 px-6 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition cursor-pointer"
 						>
 							Post
 						</button>
 						<button
 							type="button"
 							on:click={() => handlePopularRideSearch('Utah', 'California')}
-							class="text-white px-6 py-3 rounded-lg font-bold text-center transition hover:opacity-90 flex-1"
+							class="text-white px-6 py-3 rounded-lg font-bold text-center transition hover:opacity-90"
 							style="background-color: #00B050;"
 						>
 							Search
@@ -363,20 +312,20 @@
 					</div>
 				</div>
 
-				<div class="bg-white border border-green-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition flex flex-col h-full">
-					<h3 class="text-2xl font-semibold text-gray-900 mb-6 min-h-[3rem] flex items-center justify-center">Utah &harr; Nevada</h3>
-					<div class="mt-auto flex justify-center gap-3">
+				<div class="bg-white border border-green-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition">
+					<h3 class="text-2xl font-semibold text-gray-900 mb-6">Utah &harr; Nevada</h3>
+					<div class="flex justify-center gap-3">
 						<button
 							type="button"
 							on:click={() => handlePublishClick('Utah', 'Nevada')}
-							class="bg-white text-gray-900 border border-gray-300 px-6 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition cursor-pointer flex-1"
+							class="bg-white text-gray-900 border border-gray-300 px-6 py-3 rounded-lg font-bold text-center hover:bg-gray-100 transition cursor-pointer"
 						>
 							Post
 						</button>
 						<button
 							type="button"
 							on:click={() => handlePopularRideSearch('Utah', 'Nevada')}
-							class="text-white px-6 py-3 rounded-lg font-bold text-center transition hover:opacity-90 flex-1"
+							class="text-white px-6 py-3 rounded-lg font-bold text-center transition hover:opacity-90"
 							style="background-color: #00B050;"
 						>
 							Search
@@ -396,17 +345,17 @@
 			</div>
 
 			<div class="grid grid-cols-2 xl:grid-cols-5 gap-4 md:gap-6">
-				<div class="p-5 text-center rounded-2xl border border-green-100 bg-white shadow-sm">
-					<div class="w-12 h-12 mx-auto mb-3 rounded-full flex items-center justify-center text-2xl" style="background-color: #e8f7ee;">♀️</div>
-					<h3 class="text-lg font-semibold mb-2">Girls Only</h3>
-					<p class="text-sm text-gray-600">Female drivers can offer rides exclusively to verified women.</p>
-				</div>
+    <div class="p-5 text-center rounded-2xl border border-green-100 bg-white shadow-sm">
+        <div class="w-12 h-12 mx-auto mb-3 rounded-full flex items-center justify-center text-2xl" style="background-color: #e8f7ee;">♀️</div>
+        <h3 class="text-lg font-semibold mb-2">Girls Only</h3>
+        <p class="text-sm text-gray-600">Female drivers can offer rides exclusively to verified women.</p>
+    </div>
 
-				<div class="p-5 text-center rounded-2xl border border-green-100 bg-white shadow-sm">
-					<div class="w-12 h-12 mx-auto mb-3 rounded-full flex items-center justify-center text-2xl" style="background-color: #e8f7ee;">🛡️</div>
-					<h3 class="text-lg font-semibold mb-2">Legality</h3>
-					<p class="text-sm text-gray-600">Verified profiles and manual validation for every driver.</p>
-				</div>
+    <div class="p-5 text-center rounded-2xl border border-green-100 bg-white shadow-sm">
+        <div class="w-12 h-12 mx-auto mb-3 rounded-full flex items-center justify-center text-2xl" style="background-color: #e8f7ee;">🛡️</div>
+        <h3 class="text-lg font-semibold mb-2">Legality</h3>
+        <p class="text-sm text-gray-600">Verified profiles and manual validation for every driver.</p>
+    </div>
 
 				<div class="p-5 text-center rounded-2xl border border-green-100 bg-white shadow-sm">
 					<div class="w-12 h-12 mx-auto mb-3 rounded-full flex items-center justify-center text-2xl" style="background-color: #e8f7ee;">⭐</div>
@@ -677,6 +626,7 @@
 
 <style>
 	.footer-logo-contrast {
+		/* Makes the green accent readable on the green footer background. */
 		filter: brightness(0) invert(1);
 	}
 </style>
