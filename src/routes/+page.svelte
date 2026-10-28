@@ -311,7 +311,7 @@
 					</svg>
 					<span class="leading-none">Search</span>
 				</button>
-			</form>
+			
 		</div>
 	</section>
 
