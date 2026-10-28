@@ -1,665 +1,204 @@
-import { json, type RequestHandler } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 import { createClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
 
-const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseAdmin = createClient(
+  env.PUBLIC_SUPABASE_URL ?? '',
+  env.SUPABASE_SERVICE_ROLE_KEY ?? ''
+);
 
-async function isRequesterAdmin(token: string): Promise<boolean> {
-	if (!supabaseUrl || !supabaseAnonKey) {
-		return false;
-	}
+async function requireAdmin(request: Request) {
+  const auth = request.headers.get('authorization') ?? '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  if (!token) return { error: 'Missing token', status: 401, userId: null };
 
-	const anonClient = createClient(supabaseUrl, supabaseAnonKey);
-	const {
-		data: { user },
-		error: userError
-	} = await anonClient.auth.getUser(token);
+  const { data, error } = await supabaseAdmin.auth.getUser(token);
+  if (error || !data.user) return { error: 'Invalid token', status: 401, userId: null };
 
-	if (userError || !user) {
-		return false;
-	}
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('is_admin')
+    .eq('id', data.user.id)
+    .maybeSingle();
 
-	const isHizliAccount = (user.email ?? '').toLowerCase() === 'hizli.carpooling@gmail.com';
-	if (isHizliAccount) {
-		return true;
-	}
+  const isSuperAdmin =
+    (data.user.email ?? '').toLowerCase() === 'hizli.carpooling@gmail.com';
 
-	const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
-	if (!serviceRoleKey) return false;
-	const adminClient = createClient(supabaseUrl, serviceRoleKey);
-	const { data: profile } = await adminClient
-		.from('profiles')
-		.select('is_admin')
-		.eq('id', user.id)
-		.maybeSingle();
-
-	return Boolean(profile?.is_admin);
+  if (!profile?.is_admin && !isSuperAdmin) {
+    return { error: 'Admin access required', status: 403, userId: null };
+  }
+  return { error: null, status: 200, userId: data.user.id };
 }
 
-function getBearerToken(request: Request): string | null {
-	const authHeader = request.headers.get('authorization');
-	if (!authHeader || !authHeader.startsWith('Bearer ')) {
-		return null;
-	}
-	return authHeader.slice(7);
-}
-
-const allowedTransactionStatuses = ['pending', 'succeeded', 'failed', 'canceled'] as const;
-const allowedRefundStatuses = ['none', 'pending', 'refunded', 'failed'] as const;
-const allowedAdminStatuses = ['awaiting_payout', 'validated', 'payout_done', 'dispute'] as const;
-
+// ---------------------------------------------------------------------------
+// GET /api/admin/transactions?provider=stripe&status=&refund_status=&from_date=&to_date=&search=
+// ---------------------------------------------------------------------------
 export const GET: RequestHandler = async ({ request, url }) => {
-	try {
-		if (!supabaseUrl || !supabaseAnonKey) {
-			return json({ error: 'Server configuration error' }, { status: 500 });
-		}
+  const auth = await requireAdmin(request);
+  if (auth.error) return json({ error: auth.error }, { status: auth.status });
 
-		const token = getBearerToken(request);
-		if (!token) {
-			return json({ error: 'Unauthorized' }, { status: 401 });
-		}
+  const provider = url.searchParams.get('provider') ?? 'stripe';
+  const status = url.searchParams.get('status');
+  const refundStatus = url.searchParams.get('refund_status');
+  const fromDate = url.searchParams.get('from_date');
+  const toDate = url.searchParams.get('to_date');
+  const search = url.searchParams.get('search')?.trim().toLowerCase();
 
-		const adminAllowed = await isRequesterAdmin(token);
-		if (!adminAllowed) {
-			return json({ error: 'Forbidden' }, { status: 403 });
-		}
+  let query = supabaseAdmin
+    .from('transactions')
+    .select(
+      'id, member_name, member_email, plan_name, amount, currency, status, period_end, refund_status, refund_method, refund_note, refunded_amount, created_at, external_reference'
+    )
+    .eq('provider', provider)
+    .order('created_at', { ascending: false });
 
-		const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
-		if (!serviceRoleKey) {
-			return json(
-				{
-					error:
-						'SUPABASE_SERVICE_ROLE_KEY is missing. Set it in your environment (.env.local for local dev, or Vercel Project Settings > Environment Variables for deployment) and redeploy/restart.'
-				},
-				{ status: 500 }
-			);
-		}
+  if (status) query = query.eq('status', status);
+  if (refundStatus) query = query.eq('refund_status', refundStatus);
+  if (fromDate) query = query.gte('created_at', fromDate);
+  if (toDate) query = query.lte('created_at', toDate + 'T23:59:59');
 
-		const adminClient = createClient(supabaseUrl, serviceRoleKey);
+  const { data, error } = await query;
+  if (error) {
+    return json({ error: error.message }, { status: 500 });
+  }
 
-		let query = adminClient
-			.from('transactions')
-			.select(
-				`id, booking_id, ride_id, user_id, seats_booked, amount, currency, status, refund_status,
-				commission_percent, commission_amount, driver_payout_amount,
-				admin_status, payout_at, external_reference, admin_notes,
-				provider, paypal_order_id, created_at, updated_at,
-				profiles!transactions_user_id_fkey(first_name, last_name, email)`
-			)
-			.order('created_at', { ascending: false });
+  let rows = data ?? [];
+  if (search) {
+    rows = rows.filter((row) => {
+      const haystack = [
+        row.id,
+        row.member_name,
+        row.member_email,
+        row.plan_name
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(search);
+    });
+  }
 
-		const status = (url.searchParams.get('status') ?? '').toLowerCase();
-		const refundStatus = (url.searchParams.get('refund_status') ?? '').toLowerCase();
-		const adminStatus = (url.searchParams.get('admin_status') ?? '').toLowerCase();
-		const fromDate = (url.searchParams.get('from_date') ?? '').trim();
-		const toDate = (url.searchParams.get('to_date') ?? '').trim();
-		const provider = (url.searchParams.get('provider') ?? '').trim().toLowerCase();
+  const transactions = rows.map((row) => ({
+    id: row.id,
+    member_name: row.member_name,
+    member_email: row.member_email,
+    plan_name: row.plan_name,
+    amount: Number(row.amount ?? 0),
+    currency: row.currency ?? 'USD',
+    status: row.status,
+    period_end: row.period_end,
+    refund_status: row.refund_status ?? 'none',
+    refund_method: row.refund_method,
+    refund_note: row.refund_note,
+    refunded_amount: Number(row.refunded_amount ?? 0),
+    created_at: row.created_at,
+    stripe_payment_intent_id: row.external_reference
+  }));
 
-		if (allowedTransactionStatuses.includes(status as (typeof allowedTransactionStatuses)[number])) {
-			query = query.eq('status', status);
-		}
-
-		if (allowedRefundStatuses.includes(refundStatus as (typeof allowedRefundStatuses)[number])) {
-			query = query.eq('refund_status', refundStatus);
-		}
-
-		if (allowedAdminStatuses.includes(adminStatus as (typeof allowedAdminStatuses)[number])) {
-			query = query.eq('admin_status', adminStatus);
-		}
-
-		if (fromDate) {
-			query = query.gte('created_at', `${fromDate}T00:00:00.000Z`);
-		}
-
-		if (toDate) {
-			query = query.lte('created_at', `${toDate}T23:59:59.999Z`);
-		}
-
-		if (provider) {
-			query = query.eq('provider', provider);
-		}
-
-		const { data, error } = await query;
-		if (error) {
-			if (error.message.toLowerCase().includes('relation') && error.message.toLowerCase().includes('transactions')) {
-				return json({ transactions: [] });
-			}
-			return json({ error: error.message }, { status: 500 });
-		}
-
-		const txList = data ?? [];
-
-		// Collect ride IDs to fetch driver info in one query
-		const rideIds = Array.from(new Set(txList.map((tx) => tx.ride_id).filter(Boolean)));
-		const rideDriverMap: Record<string, { driver_id: string; departure: string | null; arrival: string | null; ride_date: string | null }> = {};
-		const driverProfileMap: Record<string, { first_name: string | null; last_name: string | null; email: string | null }> = {};
-
-		if (rideIds.length > 0) {
-			const { data: ridesData } = await adminClient
-				.from('rides')
-				.select('id, driver_id, departure, arrival, ride_date')
-				.in('id', rideIds);
-
-			if (ridesData) {
-				for (const r of ridesData) {
-					rideDriverMap[r.id] = {
-						driver_id: r.driver_id,
-						departure: r.departure ?? null,
-						arrival: r.arrival ?? null,
-						ride_date: r.ride_date ?? null
-					};
-				}
-
-				const driverIds = Array.from(new Set(ridesData.map((r) => r.driver_id).filter(Boolean)));
-				if (driverIds.length > 0) {
-					const { data: driverProfiles } = await adminClient
-						.from('profiles')
-							.select('id, first_name, last_name, email')
-							.in('id', driverIds);
-
-						if (driverProfiles) {
-							for (const p of driverProfiles) {
-								driverProfileMap[p.id] = {
-									first_name: p.first_name ?? null,
-									last_name: p.last_name ?? null,
-									email: p.email ?? null
-							};
-						}
-					}
-				}
-			}
-		}
-
-		const enriched = txList.map((tx) => {
-			const rideInfo = tx.ride_id ? rideDriverMap[tx.ride_id] : null;
-			const driverProfile = rideInfo ? driverProfileMap[rideInfo.driver_id] ?? null : null;
-			const passenger = Array.isArray(tx.profiles) ? tx.profiles[0] : tx.profiles;
-
-			// Compute commission amounts if not stored yet
-			const amount = Number(tx.amount || 0);
-			const commissionPct = Number(tx.commission_percent ?? 0);
-			const commissionAmt = tx.commission_amount != null ? Number(tx.commission_amount) : Math.round(amount * commissionPct) / 100;
-			const payoutAmt = tx.driver_payout_amount != null ? Number(tx.driver_payout_amount) : Math.round(amount * (100 - commissionPct)) / 100;
-
-			return {
-				...tx,
-				renewal_at: tx.payout_at ?? null,
-				member_name: `${passenger?.first_name ?? ''} ${passenger?.last_name ?? ''}`.trim() || null,
-				profiles: undefined,
-				passenger_first_name: passenger?.first_name ?? null,
-				passenger_last_name: passenger?.last_name ?? null,
-				passenger_email: passenger?.email ?? null,
-				driver_first_name: driverProfile?.first_name ?? null,
-				driver_last_name: driverProfile?.last_name ?? null,
-				driver_email: driverProfile?.email ?? null,
-				ride_departure: rideInfo?.departure ?? null,
-				ride_arrival: rideInfo?.arrival ?? null,
-				ride_date: rideInfo?.ride_date ?? null,
-				passenger_profile: passenger ?? null,
-				driver_profile: driverProfile,
-				ride_info: rideInfo
-					? { departure: rideInfo.departure, arrival: rideInfo.arrival, ride_date: rideInfo.ride_date }
-					: null,
-				commission_amount: commissionAmt,
-				driver_payout_amount: payoutAmt,
-				commission_percent: commissionPct,
-				admin_status: tx.admin_status ?? 'awaiting_payout'
-			};
-		});
-
-		const format = (url.searchParams.get('format') ?? '').toLowerCase();
-		if (format === 'csv') {
-			const csvCols = [
-				'member_name',
-				'renewal_at',
-				'id', 'booking_id', 'ride_id', 'user_id', 'seats_booked', 'amount', 'currency',
-				'status', 'refund_status', 'admin_status', 'commission_percent', 'commission_amount',
-				'driver_payout_amount', 'provider', 'paypal_order_id', 'external_reference',
-				'admin_notes', 'payout_at', 'created_at', 'updated_at',
-				'passenger_first_name', 'passenger_last_name', 'passenger_email',
-				'driver_first_name', 'driver_last_name', 'driver_email',
-				'ride_departure', 'ride_arrival', 'ride_date'
-			];
-			const escape = (v: unknown) => {
-				if (v === null || v === undefined) return '';
-				return `"${String(v).replace(/"/g, '""')}"`;
-			};
-			const header = csvCols.map(escape).join(',');
-			const rows = enriched.map((tx) =>
-				csvCols.map((col) => escape((tx as Record<string, unknown>)[col])).join(',')
-			);
-			const csv = [header, ...rows].join('\n');
-			const date = new Date().toISOString().slice(0, 10);
-			return new Response(csv, {
-				headers: {
-					'Content-Type': 'text/csv; charset=utf-8',
-					'Content-Disposition': `attachment; filename="transactions-${date}.csv"`
-				}
-			});
-		}
-
-		return json({ transactions: enriched });
-	} catch (error) {
-		const message = error instanceof Error ? error.message : 'Internal server error';
-		return json({ error: message }, { status: 500 });
-	}
+  return json({ transactions });
 };
 
+// ---------------------------------------------------------------------------
+// PATCH /api/admin/transactions
+// Actions : refund_other (actif) | refund_card (désactivé pour l'instant)
+// ---------------------------------------------------------------------------
 export const PATCH: RequestHandler = async ({ request }) => {
-	try {
-		if (!supabaseUrl || !supabaseAnonKey) {
-			return json({ error: 'Server configuration error' }, { status: 500 });
-		}
+  const auth = await requireAdmin(request);
+  if (auth.error) return json({ error: auth.error }, { status: auth.status });
 
-		const token = getBearerToken(request);
-		if (!token) {
-			return json({ error: 'Unauthorized' }, { status: 401 });
-		}
+  const body = await request.json().catch(() => null);
+  if (!body || !body.transactionId || !body.action) {
+    return json({ error: 'transactionId and action are required' }, { status: 400 });
+  }
 
-		const adminAllowed = await isRequesterAdmin(token);
-		if (!adminAllowed) {
-			return json({ error: 'Forbidden' }, { status: 403 });
-		}
+  const { transactionId, action } = body;
 
-		const body = await request.json();
-		const transactionId = body?.transactionId as string | undefined;
-		const action = body?.action as string | undefined;
+  if (action === 'refund_other') {
+    const amount = Number(body.amount);
+    const note = String(body.note ?? '').trim();
 
-		if (!transactionId || !action) {
-			return json({ error: 'transactionId and action are required' }, { status: 400 });
-		}
+    if (!amount || amount <= 0) {
+      return json({ error: 'Amount must be greater than 0.' }, { status: 400 });
+    }
+    if (!note) {
+      return json(
+        { error: 'A note is required for "refunded another way".' },
+        { status: 400 }
+      );
+    }
 
-		const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
-		if (!serviceRoleKey) {
-			return json(
-				{
-					error:
-						'SUPABASE_SERVICE_ROLE_KEY is missing. Set it in your environment (.env.local for local dev, or Vercel Project Settings > Environment Variables for deployment) and redeploy/restart.'
-				},
-				{ status: 500 }
-			);
-		}
+    const { data: tx, error: txError } = await supabaseAdmin
+      .from('transactions')
+      .select('id, amount, refunded_amount, refund_status')
+      .eq('id', transactionId)
+      .maybeSingle();
 
-		const adminClient = createClient(supabaseUrl, serviceRoleKey);
-		const now = new Date().toISOString();
+    if (txError || !tx) {
+      return json({ error: 'Transaction not found.' }, { status: 404 });
+    }
 
-		if (action === 'refund') {
-			const { error } = await adminClient
-				.from('transactions')
-				.update({ refund_status: 'refunded', updated_at: now })
-				.eq('id', transactionId);
+    const alreadyRefunded = Number(tx.refunded_amount ?? 0);
+    const remaining = Number(tx.amount ?? 0) - alreadyRefunded;
 
-			if (error) {
-				return json({ error: error.message }, { status: 500 });
-			}
+    if (amount > remaining + 0.001) {
+      return json(
+        { error: `Amount exceeds remaining balance (${remaining.toFixed(2)}).` },
+        { status: 400 }
+      );
+    }
 
-			return json({ success: true });
-		}
+    const newRefundedTotal = alreadyRefunded + amount;
+    const newRefundStatus =
+      newRefundedTotal >= Number(tx.amount ?? 0) ? 'refunded' : 'partial';
 
-		if (action === 'set_admin_status') {
-			const newStatus = body?.admin_status as string | undefined;
-			if (!allowedAdminStatuses.includes(newStatus as (typeof allowedAdminStatuses)[number])) {
-				return json({ error: 'Invalid admin_status value' }, { status: 400 });
-			}
+    const { error: updateError } = await supabaseAdmin
+      .from('transactions')
+      .update({
+        refund_status: newRefundStatus,
+        refund_method: 'other',
+        refunded_amount: newRefundedTotal,
+        refund_note: note,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', transactionId);
 
-			const updatePayload: Record<string, unknown> = {
-				admin_status: newStatus,
-				updated_at: now
-			};
+    if (updateError) {
+      return json({ error: updateError.message }, { status: 500 });
+    }
 
-			// Automatically set payout_at when marking as payout_done
-			if (newStatus === 'payout_done' && body?.payout_at) {
-				updatePayload.payout_at = body.payout_at;
-			} else if (newStatus === 'payout_done') {
-				updatePayload.payout_at = now;
-			}
+    return json({ success: true, refund_status: newRefundStatus });
+  }
 
-			const { error } = await adminClient
-				.from('transactions')
-				.update(updatePayload)
-				.eq('id', transactionId);
+  if (action === 'refund_card') {
+    if (env.ENABLE_STRIPE_REFUND !== 'true') {
+      return json(
+        {
+          error:
+            'Stripe card refunds are disabled. Enable ENABLE_STRIPE_REFUND after test-mode validation.'
+        },
+        { status: 503 }
+      );
+    }
+    // À implémenter plus tard après test en mode Stripe test.
+    return json({ error: 'Not implemented yet.' }, { status: 501 });
+  }
 
-			if (error) {
-				return json({ error: error.message }, { status: 500 });
-			}
-
-			return json({ success: true, admin_status: newStatus, payout_at: updatePayload.payout_at ?? null });
-		}
-
-		if (action === 'set_statuses') {
-			const newStatus = (body?.status as string | undefined)?.toLowerCase();
-			const newRefundStatus = (body?.refund_status as string | undefined)?.toLowerCase();
-
-			if (!allowedTransactionStatuses.includes(newStatus as (typeof allowedTransactionStatuses)[number])) {
-				return json({ error: 'Invalid status value' }, { status: 400 });
-			}
-
-			if (!allowedRefundStatuses.includes(newRefundStatus as (typeof allowedRefundStatuses)[number])) {
-				return json({ error: 'Invalid refund_status value' }, { status: 400 });
-			}
-
-			const { error } = await adminClient
-				.from('transactions')
-				.update({ status: newStatus, refund_status: newRefundStatus, updated_at: now })
-				.eq('id', transactionId);
-
-			if (error) {
-				return json({ error: error.message }, { status: 500 });
-			}
-
-			return json({ success: true, status: newStatus, refund_status: newRefundStatus });
-		}
-
-		if (action === 'update_details') {
-			const amount = Number(body?.amount ?? 0);
-			const seatsBooked = Number(body?.seats_booked ?? 1);
-			const commissionPercent = Number(body?.commission_percent ?? 0);
-			const commissionAmount = Number(body?.commission_amount ?? 0);
-			const driverPayoutAmount = Number(body?.driver_payout_amount ?? 0);
-			const newStatus = (body?.status as string | undefined)?.toLowerCase();
-			const newRefundStatus = (body?.refund_status as string | undefined)?.toLowerCase();
-			const newAdminStatus = (body?.admin_status as string | undefined)?.toLowerCase();
-
-			if (!allowedTransactionStatuses.includes(newStatus as (typeof allowedTransactionStatuses)[number])) {
-				return json({ error: 'Invalid status value' }, { status: 400 });
-			}
-
-			if (!allowedRefundStatuses.includes(newRefundStatus as (typeof allowedRefundStatuses)[number])) {
-				return json({ error: 'Invalid refund_status value' }, { status: 400 });
-			}
-
-			if (!allowedAdminStatuses.includes(newAdminStatus as (typeof allowedAdminStatuses)[number])) {
-				return json({ error: 'Invalid admin_status value' }, { status: 400 });
-			}
-
-			const paymentAt = body?.payment_at ? new Date(body.payment_at).toISOString() : now;
-			const payoutAt = body?.payout_at ? new Date(body.payout_at).toISOString() : null;
-
-			const { data: txRow, error: txFetchError } = await adminClient
-				.from('transactions')
-				.select('id, user_id, ride_id')
-				.eq('id', transactionId)
-				.maybeSingle();
-
-			if (txFetchError) {
-				return json({ error: txFetchError.message }, { status: 500 });
-			}
-
-			if (!txRow) {
-				return json({ error: 'Transaction not found' }, { status: 404 });
-			}
-
-			const { error: txUpdateError } = await adminClient
-				.from('transactions')
-				.update({
-					booking_id: body?.booking_id ?? null,
-					amount,
-					currency: 'USD',
-					seats_booked: seatsBooked,
-					status: newStatus,
-					refund_status: newRefundStatus,
-					commission_percent: commissionPercent,
-					commission_amount: commissionAmount,
-					driver_payout_amount: driverPayoutAmount,
-					admin_status: newAdminStatus,
-					created_at: paymentAt,
-					payout_at: payoutAt,
-					external_reference: body?.external_reference ?? null,
-					admin_notes: body?.admin_notes ?? null,
-					provider: body?.provider ?? 'paypal',
-					paypal_order_id: body?.provider_order_id ?? null,
-					updated_at: now
-				})
-				.eq('id', transactionId);
-
-			if (txUpdateError) {
-				return json({ error: txUpdateError.message }, { status: 500 });
-			}
-
-			const passengerProfile = body?.passenger_profile as
-				| { first_name?: string | null; last_name?: string | null; email?: string | null }
-				| undefined;
-
-			if (txRow.user_id && passengerProfile) {
-				const { error: passengerError } = await adminClient
-					.from('profiles')
-					.update({
-						first_name: passengerProfile.first_name ?? null,
-						last_name: passengerProfile.last_name ?? null,
-						email: passengerProfile.email ?? null,
-						updated_at: now
-					})
-					.eq('id', txRow.user_id);
-
-				if (passengerError) {
-					return json({ error: passengerError.message }, { status: 500 });
-				}
-			}
-
-			const rideInfo = body?.ride_info as
-				| { departure?: string | null; arrival?: string | null; ride_date?: string | null }
-				| undefined;
-
-			if (txRow.ride_id && rideInfo) {
-				const { error: rideError } = await adminClient
-					.from('rides')
-					.update({
-						departure: rideInfo.departure ?? null,
-						arrival: rideInfo.arrival ?? null,
-						ride_date: rideInfo.ride_date ?? null,
-						updated_at: now
-					})
-					.eq('id', txRow.ride_id);
-
-				if (rideError) {
-					return json({ error: rideError.message }, { status: 500 });
-				}
-			}
-
-			const driverProfile = body?.driver_profile as
-				| { first_name?: string | null; last_name?: string | null; email?: string | null }
-				| undefined;
-
-			if (txRow.ride_id && driverProfile) {
-				const { data: rideRow, error: rideFetchError } = await adminClient
-					.from('rides')
-					.select('driver_id')
-					.eq('id', txRow.ride_id)
-					.maybeSingle();
-
-				if (rideFetchError) {
-					return json({ error: rideFetchError.message }, { status: 500 });
-				}
-
-				if (rideRow?.driver_id) {
-					const { error: driverError } = await adminClient
-						.from('profiles')
-						.update({
-							first_name: driverProfile.first_name ?? null,
-							last_name: driverProfile.last_name ?? null,
-							email: driverProfile.email ?? null,
-							updated_at: now
-						})
-						.eq('id', rideRow.driver_id);
-
-					if (driverError) {
-						return json({ error: driverError.message }, { status: 500 });
-					}
-				}
-			}
-
-			return json({ success: true });
-		}
-
-		if (action === 'update_notes') {
-			const notes = (body?.admin_notes as string | undefined) ?? null;
-			const ref = (body?.external_reference as string | undefined) ?? null;
-
-			const { error } = await adminClient
-				.from('transactions')
-				.update({ admin_notes: notes, external_reference: ref, updated_at: now })
-				.eq('id', transactionId);
-
-			if (error) {
-				return json({ error: error.message }, { status: 500 });
-			}
-
-			return json({ success: true });
-		}
-
-		if (action === 'notify_driver') {
-			// Driver email notifications are not yet operational — domain not configured.
-			// This action is a stub: it records the intent in admin_notes but sends no email.
-			const { error: noteError } = await adminClient
-				.from('transactions')
-				.update({
-					admin_notes: adminClient
-						? `[${now}] Payout notification attempted — domain not configured yet.`
-						: null,
-					updated_at: now
-				})
-				.eq('id', transactionId);
-
-			if (noteError) {
-				return json({ error: noteError.message }, { status: 500 });
-			}
-
-			return json({
-				success: false,
-				pending: true,
-				message: 'Driver notification not sent — email domain is not configured yet. The attempt has been logged in admin notes.'
-			});
-		}
-
-		return json({ error: `Unknown action: ${action}` }, { status: 400 });
-	} catch (error) {
-		const message = error instanceof Error ? error.message : 'Internal server error';
-		return json({ error: message }, { status: 500 });
-	}
+  return json({ error: 'Unknown action.' }, { status: 400 });
 };
 
-export const POST: RequestHandler = async ({ request }) => {
-	try {
-		if (!supabaseUrl || !supabaseAnonKey) {
-			return json({ error: 'Server configuration error' }, { status: 500 });
-		}
-
-		const token = getBearerToken(request);
-		if (!token) {
-			return json({ error: 'Unauthorized' }, { status: 401 });
-		}
-
-		const adminAllowed = await isRequesterAdmin(token);
-		if (!adminAllowed) {
-			return json({ error: 'Forbidden' }, { status: 403 });
-		}
-
-		const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
-		if (!serviceRoleKey) {
-			return json({ error: 'SUPABASE_SERVICE_ROLE_KEY is missing.' }, { status: 500 });
-		}
-
-		const adminClient = createClient(supabaseUrl, serviceRoleKey);
-		const body = await request.json();
-		const now = new Date().toISOString();
-
-		const amount = Number(body?.amount ?? 0);
-		const seatsBooked = Number(body?.seats_booked ?? 1);
-		const commissionPercent = Number(body?.commission_percent ?? 0);
-		const commissionAmount = Math.round(amount * (commissionPercent / 100) * 100) / 100;
-		const driverPayoutAmount = Math.round((amount - commissionAmount) * 100) / 100;
-
-		const newStatus = (body?.status as string | undefined)?.toLowerCase() ?? 'pending';
-		const newRefundStatus = (body?.refund_status as string | undefined)?.toLowerCase() ?? 'none';
-		const newAdminStatus = (body?.admin_status as string | undefined)?.toLowerCase() ?? 'awaiting_payout';
-
-		if (!allowedTransactionStatuses.includes(newStatus as (typeof allowedTransactionStatuses)[number])) {
-			return json({ error: 'Invalid status value' }, { status: 400 });
-		}
-		if (!allowedRefundStatuses.includes(newRefundStatus as (typeof allowedRefundStatuses)[number])) {
-			return json({ error: 'Invalid refund_status value' }, { status: 400 });
-		}
-		if (!allowedAdminStatuses.includes(newAdminStatus as (typeof allowedAdminStatuses)[number])) {
-			return json({ error: 'Invalid admin_status value' }, { status: 400 });
-		}
-
-		const { data: inserted, error: insertError } = await adminClient
-			.from('transactions')
-			.insert({
-				booking_id: body?.booking_id ?? null,
-				ride_id: body?.ride_id ?? null,
-				user_id: body?.user_id ?? null,
-				amount,
-				currency: 'USD',
-				seats_booked: seatsBooked,
-				status: newStatus,
-				refund_status: newRefundStatus,
-				commission_percent: commissionPercent,
-				commission_amount: commissionAmount,
-				driver_payout_amount: driverPayoutAmount,
-				admin_status: newAdminStatus,
-				provider: body?.provider ?? 'paypal',
-				paypal_order_id: body?.provider_order_id ?? null,
-				external_reference: body?.external_reference ?? null,
-				admin_notes: body?.admin_notes ?? null,
-				created_at: body?.payment_at ? new Date(body.payment_at).toISOString() : now,
-				updated_at: now
-			})
-			.select('id')
-			.maybeSingle();
-
-		if (insertError) {
-			return json({ error: insertError.message }, { status: 500 });
-		}
-
-		return json({ success: true, id: inserted?.id ?? null }, { status: 201 });
-	} catch (error) {
-		const message = error instanceof Error ? error.message : 'Internal server error';
-		return json({ error: message }, { status: 500 });
-	}
-};
-
+// ---------------------------------------------------------------------------
+// DELETE /api/admin/transactions?id=
+// ---------------------------------------------------------------------------
 export const DELETE: RequestHandler = async ({ request, url }) => {
-	try {
-		if (!supabaseUrl || !supabaseAnonKey) {
-			return json({ error: 'Server configuration error' }, { status: 500 });
-		}
+  const auth = await requireAdmin(request);
+  if (auth.error) return json({ error: auth.error }, { status: auth.status });
 
-		const token = getBearerToken(request);
-		if (!token) {
-			return json({ error: 'Unauthorized' }, { status: 401 });
-		}
+  const id = url.searchParams.get('id');
+  if (!id) return json({ error: 'Missing id.' }, { status: 400 });
 
-		const adminAllowed = await isRequesterAdmin(token);
-		if (!adminAllowed) {
-			return json({ error: 'Forbidden' }, { status: 403 });
-		}
+  const { error } = await supabaseAdmin.from('transactions').delete().eq('id', id);
+  if (error) return json({ error: error.message }, { status: 500 });
 
-		const transactionId = url.searchParams.get('id');
-		if (!transactionId) {
-			return json({ error: 'Missing transaction id' }, { status: 400 });
-		}
-
-		const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
-		if (!serviceRoleKey) {
-			return json({ error: 'SUPABASE_SERVICE_ROLE_KEY is missing.' }, { status: 500 });
-		}
-
-		const adminClient = createClient(supabaseUrl, serviceRoleKey);
-
-		const { error } = await adminClient
-			.from('transactions')
-			.delete()
-			.eq('id', transactionId);
-
-		if (error) {
-			return json({ error: error.message }, { status: 500 });
-		}
-
-		return json({ success: true });
-	} catch (error) {
-		const message = error instanceof Error ? error.message : 'Internal server error';
-		return json({ error: message }, { status: 500 });
-	}
+  return json({ success: true });
 };

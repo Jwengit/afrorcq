@@ -477,11 +477,58 @@ export const DELETE: RequestHandler = async ({ request }) => {
 
 		const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-		// First, manually cascade delete related data to avoid foreign key constraint violations
-		// This handles cases where ON DELETE CASCADE may not be properly configured
+		// First, manually cascade delete related data to avoid foreign key constraint violations.
+		// IMPORTANT: transactions are NEVER deleted. We preserve them with the member's
+		// name and email frozen in the row so admins can still issue refunds after
+		// the account is closed.
 		try {
-					// Delete only the reviews this user RECEIVED. Reviews they wrote about other
-			// members are kept (reviewer_id becomes NULL), so recipients are not penalized.
+			// 1) Capture the member's identity BEFORE deleting anything
+			const { data: profileBeforeDelete } = await adminClient
+				.from('profiles')
+				.select('first_name, last_name, email')
+				.eq('id', userId)
+				.maybeSingle();
+
+			let memberEmail = profileBeforeDelete?.email ?? null;
+			let memberName =
+				`${profileBeforeDelete?.first_name ?? ''} ${profileBeforeDelete?.last_name ?? ''}`.trim() ||
+				null;
+
+			// Fallback: pull from auth.users if the profile row was incomplete
+			if (!memberEmail || !memberName) {
+				const { data: authUserData } = await adminClient.auth.admin.getUserById(userId);
+				if (!memberEmail) {
+					memberEmail = authUserData?.user?.email ?? null;
+				}
+				if (!memberName) {
+					const meta = authUserData?.user?.user_metadata as Record<string, unknown> | undefined;
+					const fullName =
+						typeof meta?.full_name === 'string'
+							? meta.full_name
+							: typeof meta?.name === 'string'
+								? meta.name
+								: null;
+					memberName = fullName?.trim() || null;
+				}
+			}
+
+			// 2) Freeze name/email in transactions and detach from the account
+			const { error: preserveTxError } = await adminClient
+				.from('transactions')
+				.update({
+					member_name: memberName,
+					member_email: memberEmail,
+					user_id: null,
+					updated_at: new Date().toISOString()
+				})
+				.eq('user_id', userId);
+
+			if (preserveTxError) {
+				console.warn('Failed to preserve transaction identity:', preserveTxError.message);
+			}
+
+			// 3) Delete only the reviews this user RECEIVED. Reviews they wrote about
+			// other members are kept (reviewer_id becomes NULL).
 			await adminClient.from('reviews').delete().eq('reviewee_id', userId);
 
 			// Delete bookings where this user is the passenger
@@ -499,12 +546,8 @@ export const DELETE: RequestHandler = async ({ request }) => {
 			// Delete verification documents
 			await adminClient.from('verification_documents').delete().eq('user_id', userId);
 
-			// Delete transactions related to this user (if user_id column exists)
-			try {
-				await adminClient.from('transactions').delete().eq('user_id', userId);
-			} catch {
-				// Transactions table may not have user_id column or may not exist - continue anyway
-			}
+			// ⚠️ DO NOT delete transactions. They are preserved above (user_id = NULL,
+			// member_name / member_email frozen in the row).
 
 			// Now delete the profile (this may cascade or may need explicit deletion)
 			await adminClient.from('profiles').delete().eq('id', userId);
@@ -524,4 +567,4 @@ export const DELETE: RequestHandler = async ({ request }) => {
 		const message = error instanceof Error ? error.message : 'Internal server error';
 		return json({ error: message }, { status: 500 });
 	}
-}
+};
