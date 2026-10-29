@@ -1,4 +1,4 @@
-// VERSION: webhook period-end fix + account-closed skip 2026-10-28
+// VERSION: webhook member-details + refund-safe 2026-10-29
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
@@ -292,6 +292,14 @@ async function upsertSubscriptionPaymentTransaction(
 		throw new Error(existingError.message);
 	}
 
+	const { data: memberProfile } = await adminClient
+		.from('profiles')
+		.select('first_name, last_name, email, membership_plan')
+		.eq('id', userId)
+		.maybeSingle();
+	const memberName =
+		`${memberProfile?.first_name ?? ''} ${memberProfile?.last_name ?? ''}`.trim() || null;
+
 	const payload = {
 		booking_id: null,
 		ride_id: null,
@@ -300,12 +308,19 @@ async function upsertSubscriptionPaymentTransaction(
 		amount,
 		currency,
 		status: normalizedStatus,
-		refund_status: 'none',
 		commission_percent: 0,
 		commission_amount: 0,
 		driver_payout_amount: 0,
 		admin_status: 'validated',
 		payout_at: renewalAtIso,
+		period_end: renewalAtIso,
+		...(memberProfile
+			? {
+					member_name: memberName,
+					member_email: memberProfile.email ?? null,
+					plan_name: memberProfile.membership_plan ?? null
+				}
+			: {}),
 		external_reference: invoice.id,
 		admin_notes: `Stripe annual membership payment (${invoice.id})`,
 		provider: 'stripe',
@@ -326,7 +341,9 @@ async function upsertSubscriptionPaymentTransaction(
 		return;
 	}
 
-	const { error: insertError } = await adminClient.from('transactions').insert(payload);
+	const { error: insertError } = await adminClient
+		.from('transactions')
+		.insert({ ...payload, refund_status: 'none' });
 	if (insertError) {
 		throw new Error(insertError.message);
 	}

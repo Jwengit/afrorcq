@@ -330,11 +330,51 @@ export const DELETE: RequestHandler = async ({ request }) => {
 			// Delete verification documents
 			await adminClient.from('verification_documents').delete().eq('user_id', user.id);
 
-			// Delete transactions related to this user (if user_id column exists)
+			// Keep payment records (needed for refunds and accounting): detach them from the
+			// account instead of deleting them, and keep the member's name and email on the record.
 			try {
-				await adminClient.from('transactions').delete().eq('user_id', user.id);
-			} catch {
-				// Transactions table may not have user_id column or may not exist - continue anyway
+				const memberName =
+					`${profileBefore?.first_name ?? ''} ${profileBefore?.last_name ?? ''}`.trim() || null;
+				const closedAt = new Date().toISOString();
+
+				// The latest paid membership becomes "refund due" when the subscription was cancelled
+				if (stripeResult?.cancelled) {
+					const { data: latestPaid } = await adminClient
+						.from('transactions')
+						.select('id')
+						.eq('user_id', user.id)
+						.eq('provider', 'stripe')
+						.eq('status', 'succeeded')
+						.order('created_at', { ascending: false })
+						.limit(1)
+						.maybeSingle();
+					if (latestPaid?.id) {
+						await adminClient
+							.from('transactions')
+							.update({ refund_status: 'pending', updated_at: closedAt })
+							.eq('id', latestPaid.id)
+							.eq('refund_status', 'none');
+					}
+				}
+
+				const { error: detachError } = await adminClient
+					.from('transactions')
+					.update({
+						member_name: memberName,
+						member_email: user.email ?? null,
+						plan_name: profileBefore?.membership_plan ?? null,
+						account_closed_at: closedAt,
+						user_id: null
+					})
+					.eq('user_id', user.id);
+
+				if (detachError) {
+					// Fallback so the account can still be deleted (the admin email keeps the details)
+					console.error('Could not keep transactions after account deletion:', detachError.message);
+					await adminClient.from('transactions').delete().eq('user_id', user.id);
+				}
+			} catch (transactionError) {
+				console.warn('Transactions handling warning:', transactionError);
 			}
 
 			// Delete the profile
