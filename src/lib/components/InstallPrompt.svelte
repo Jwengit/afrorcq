@@ -231,14 +231,19 @@
 			<div class="mb-4 flex items-center gap-3">
 				<img src="/Logo sans phrase.png" alt="Hizli Carpooling" class="h-12 w-12 rounded-xl border border-gray-100 object-contain p-1" />
 				<div>
-					<p class="text-lg font-bold text-gray-900">Install Hizli Web-app</p>
-					<p class="text-sm text-gray-500">Get quick access and a smoother experience.</p>
+					{#if showIOSInstructions}
+						<p class="text-lg font-bold text-gray-900">Add Hizli to your Home Screen</p>
+						<p class="text-sm text-gray-500">Open Hizli in one tap, like an app.</p>
+					{:else}
+						<p class="text-lg font-bold text-gray-900">Install Hizli Web-app</p>
+						<p class="text-sm text-gray-500">Get quick access and a smoother experience.</p>
+					{/if}
 				</div>
 			</div>
 
 			{#if showIOSInstructions}
 				<div class="rounded-lg bg-green-50 p-4 text-sm text-green-900 space-y-3">
-					<p class="font-semibold">Install on your iPad or iPhone:</p>
+					<p class="font-semibold">How to add the shortcut on your iPad or iPhone:</p>
 					<ol class="list-decimal list-inside space-y-1.5">
 						<li>Open this website in <strong>Safari</strong>.</li>
 						<li>
@@ -253,10 +258,24 @@
 						<li>Scroll down and choose <strong>Add to Home Screen</strong>.</li>
 						<li>Tap <strong>Add</strong> to confirm.</li>
 					</ol>
+					<p class="text-xs text-green-800">
+						Tip: on iPad, the Share button is at the top right of Safari. On iPhone, it is at the bottom of the screen.
+					</p>
+				</div>
+			{:else if showFallbackInstructions}
+				<div class="rounded-lg bg-green-50 p-4 text-sm text-green-900">
+					<p class="font-semibold">To install Hizli:</p>
+					<p class="mt-2">
+						Open your browser menu and look for <strong>Install app</strong> or
+						<strong>Add to Home Screen</strong>. On a computer, the install option may also appear next to the address bar.
+					</p>
+					<p class="mt-2 text-xs text-green-800">
+						The option depends on your browser and may not be available.
+					</p>
 				</div>
 			{/if}
 
-			<div class="mt-5 grid grid-cols-1 gap-2 {showIOSInstructions ? '' : 'sm:grid-cols-2'}">
+			<div class="mt-5 grid grid-cols-1 gap-2 {showIOSInstructions || !deferredPrompt ? '' : 'sm:grid-cols-2'}">
 				{#if showIOSInstructions}
 					<button
 						on:click={acknowledgeIOS}
@@ -264,7 +283,7 @@
 					>
 						Got it
 					</button>
-				{:else}
+				{:else if deferredPrompt}
 					<button
 						on:click={install}
 						class="rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-700"
