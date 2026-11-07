@@ -209,7 +209,9 @@
 				on:submit|preventDefault={handleSearchSubmit}
 				class="mx-auto flex w-full max-w-5xl flex-wrap gap-2 rounded-xl bg-white p-4 text-gray-900 shadow-2xl md:flex-nowrap"
 			>
-				<div class="flex min-w-0 flex-1 items-center gap-2 rounded-lg p-2 hover:bg-gray-50">
+				<div
+					class="flex min-w-45 flex-1 items-center gap-2 rounded-lg p-2 hover:bg-gray-50 md:min-w-0"
+				>
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
 						viewBox="0 0 24 24"
@@ -230,7 +232,9 @@
 						class="w-full min-w-0 bg-transparent focus:outline-none"
 					/>
 				</div>
-				<div class="flex min-w-0 flex-1 items-center gap-2 rounded-lg p-2 hover:bg-gray-50">
+				<div
+					class="flex min-w-45 flex-1 items-center gap-2 rounded-lg p-2 hover:bg-gray-50 md:min-w-0"
+				>
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
 						viewBox="0 0 24 24"
@@ -251,7 +255,9 @@
 						class="w-full min-w-0 bg-transparent focus:outline-none"
 					/>
 				</div>
-				<div class="flex min-w-0 flex-1 items-center gap-2 rounded-lg p-2 hover:bg-gray-50">
+				<div
+					class="flex min-w-45 flex-1 items-center gap-2 rounded-lg p-2 hover:bg-gray-50 md:min-w-0"
+				>
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
 						viewBox="0 0 24 24"
@@ -327,12 +333,12 @@
 			<p class="mx-auto mb-10 max-w-2xl text-gray-600">
 				Post a trip or find a seat in our busiest travel corridors.
 			</p>
-			<div class="grid grid-cols-1 gap-6 text-gray-800 sm:grid-cols-2 lg:grid-cols-3">
+			<div class="grid grid-cols-1 gap-6 text-gray-800 md:grid-cols-3">
 				<div
 					class="rounded-2xl border border-green-200 bg-white p-6 shadow-sm transition hover:shadow-md"
 				>
 					<h3
-						class="mb-6 flex min-h-16 items-center justify-center text-2xl font-semibold text-gray-900"
+						class="mb-6 text-2xl font-semibold text-gray-900 md:flex md:min-h-16 md:items-center md:justify-center md:text-lg lg:text-2xl"
 					>
 						Utah &harr; Idaho
 					</h3>
@@ -340,14 +346,14 @@
 						<button
 							type="button"
 							on:click={() => handlePublishClick('Utah', 'Idaho')}
-							class="cursor-pointer rounded-lg border border-gray-300 bg-white px-6 py-3 text-center font-bold text-gray-900 transition hover:bg-gray-100"
+							class="cursor-pointer rounded-lg border border-gray-300 bg-white px-6 py-3 text-center font-bold text-gray-900 transition hover:bg-gray-100 md:px-2 lg:px-6"
 						>
 							Post
 						</button>
 						<button
 							type="button"
 							on:click={() => handlePopularRideSearch('Utah', 'Idaho')}
-							class="rounded-lg px-6 py-3 text-center font-bold text-white transition hover:opacity-90"
+							class="rounded-lg px-6 py-3 text-center font-bold text-white transition hover:opacity-90 md:px-2 lg:px-6"
 							style="background-color: #00B050;"
 						>
 							Search
@@ -359,7 +365,7 @@
 					class="rounded-2xl border border-green-200 bg-white p-6 shadow-sm transition hover:shadow-md"
 				>
 					<h3
-						class="mb-6 flex min-h-16 items-center justify-center text-2xl font-semibold text-gray-900"
+						class="mb-6 text-2xl font-semibold text-gray-900 md:flex md:min-h-16 md:items-center md:justify-center md:text-lg lg:text-2xl"
 					>
 						Utah &harr; California
 					</h3>
@@ -367,14 +373,14 @@
 						<button
 							type="button"
 							on:click={() => handlePublishClick('Utah', 'California')}
-							class="cursor-pointer rounded-lg border border-gray-300 bg-white px-6 py-3 text-center font-bold text-gray-900 transition hover:bg-gray-100"
+							class="cursor-pointer rounded-lg border border-gray-300 bg-white px-6 py-3 text-center font-bold text-gray-900 transition hover:bg-gray-100 md:px-2 lg:px-6"
 						>
 							Post
 						</button>
 						<button
 							type="button"
 							on:click={() => handlePopularRideSearch('Utah', 'California')}
-							class="rounded-lg px-6 py-3 text-center font-bold text-white transition hover:opacity-90"
+							class="rounded-lg px-6 py-3 text-center font-bold text-white transition hover:opacity-90 md:px-2 lg:px-6"
 							style="background-color: #00B050;"
 						>
 							Search
@@ -386,7 +392,7 @@
 					class="rounded-2xl border border-green-200 bg-white p-6 shadow-sm transition hover:shadow-md"
 				>
 					<h3
-						class="mb-6 flex min-h-16 items-center justify-center text-2xl font-semibold text-gray-900"
+						class="mb-6 text-2xl font-semibold text-gray-900 md:flex md:min-h-16 md:items-center md:justify-center md:text-lg lg:text-2xl"
 					>
 						Utah &harr; Nevada
 					</h3>
@@ -394,14 +400,14 @@
 						<button
 							type="button"
 							on:click={() => handlePublishClick('Utah', 'Nevada')}
-							class="cursor-pointer rounded-lg border border-gray-300 bg-white px-6 py-3 text-center font-bold text-gray-900 transition hover:bg-gray-100"
+							class="cursor-pointer rounded-lg border border-gray-300 bg-white px-6 py-3 text-center font-bold text-gray-900 transition hover:bg-gray-100 md:px-2 lg:px-6"
 						>
 							Post
 						</button>
 						<button
 							type="button"
 							on:click={() => handlePopularRideSearch('Utah', 'Nevada')}
-							class="rounded-lg px-6 py-3 text-center font-bold text-white transition hover:opacity-90"
+							class="rounded-lg px-6 py-3 text-center font-bold text-white transition hover:opacity-90 md:px-2 lg:px-6"
 							style="background-color: #00B050;"
 						>
 							Search
@@ -702,7 +708,7 @@
 	<!-- Footer -->
 	<footer class="mt-auto py-12 text-white" style="background-color: #2BB573;">
 		<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-			<div class="mb-8 grid grid-cols-1 items-start gap-8 sm:grid-cols-2 lg:grid-cols-5">
+			<div class="mb-8 grid grid-cols-1 items-start gap-8 md:grid-cols-2 lg:grid-cols-5">
 				<!-- Brand -->
 				<div class="col-span-1 md:col-span-1">
 					<div class="mb-4 flex items-center gap-2">
