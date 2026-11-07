@@ -159,8 +159,12 @@
 	}
 
 	function stripeLink(tx: Tx): string | null {
-		if (!tx.external_reference || !tx.external_reference.startsWith('in_')) return null;
-		return `https://dashboard.stripe.com${STRIPE_TEST_MODE ? '/test' : ''}/invoices/${tx.external_reference}`;
+		const reference = tx.external_reference;
+		if (!reference) return null;
+		const prefix = `https://dashboard.stripe.com${STRIPE_TEST_MODE ? '/test' : ''}`;
+		if (reference.startsWith('in_')) return `${prefix}/invoices/${reference}`;
+		if (reference.startsWith('pi_')) return `${prefix}/payments/${reference}`;
+		return null;
 	}
 
 	function openRefund(tx: Tx) {
@@ -432,8 +436,21 @@
 					/>
 				{/if}
 				<label class="flex items-start gap-2 text-sm text-slate-700">
-					<input type="radio" bind:group={refundMode} value="stripe" class="mt-1" />
-					<span>Refund to the member's card through Stripe (the money leaves now)</span>
+					<input
+						type="radio"
+						bind:group={refundMode}
+						value="stripe"
+						class="mt-1"
+						disabled={!stripeRefundEnabled}
+					/>
+					<span>
+						Refund to the member's card through Stripe (the money leaves now)
+						{#if !stripeRefundEnabled}
+							<span class="block text-xs text-amber-700">
+								Disabled. Set ENABLE_STRIPE_REFUND=true in Vercel once tested in test mode.
+							</span>
+						{/if}
+					</span>
 				</label>
 			</fieldset>
 
