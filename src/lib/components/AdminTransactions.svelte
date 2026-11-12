@@ -4,7 +4,7 @@
 	import { supabase } from '$lib/supabaseClient';
 
 	// Set to false when Stripe is switched to live mode (only used for the "Stripe" link)
-	const STRIPE_TEST_MODE = true;
+	const STRIPE_TEST_MODE = false;
 
 	type Tx = {
 		id: string;
